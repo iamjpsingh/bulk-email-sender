@@ -247,8 +247,17 @@ app.post("/send", async (c) => {
         new Uint8Array(arrayBuffer),
         filename
       );
-      contacts = await FileService.parseExcelFile(filePath);
-      console.log(`📋 Parsed ${contacts.length} contacts from Excel file`);
+      const allContacts = await FileService.parseExcelFile(filePath);
+      console.log(`📋 Parsed ${allContacts.length} contacts from Excel file`);
+
+      // Apply email range selection
+      const emailRangeStart = parseInt(formData.get("emailRangeStart") as string) || 0;
+      const emailRangeCount = parseInt(formData.get("emailRangeCount") as string) || allContacts.length;
+      
+      const endIndex = Math.min(emailRangeStart + emailRangeCount, allContacts.length);
+      contacts = allContacts.slice(emailRangeStart, endIndex);
+      
+      console.log(`📧 Email range selection: ${emailRangeStart + 1} to ${endIndex} (${contacts.length} contacts selected from ${allContacts.length} total)`);
     } catch (error) {
       console.error("Excel parsing error:", error);
       return c.json(

@@ -647,6 +647,50 @@
                   <span id="excelDetails"></span>
                 </div>
 
+                <!-- Email Range Selection -->
+                <div class="mb-3 d-none" id="emailRangeSection">
+                  <label class="form-label">📊 Email Range Selection</label>
+                  <div class="card border-info">
+                    <div class="card-body">
+                      <div class="row">
+                        <div class="col-md-6">
+                          <label class="form-label">Send Range</label>
+                          <select class="form-control" name="sendRange" id="sendRange">
+                            <option value="all">Send to All Contacts</option>
+                            <option value="first">Send to First N Contacts</option>
+                            <option value="range">Send to Specific Range</option>
+                          </select>
+                        </div>
+                        <div class="col-md-6" id="rangeControls" style="display: none;">
+                          <div id="firstNControls" style="display: none;">
+                            <label class="form-label">Number of Emails</label>
+                            <input type="number" class="form-control" name="firstN" id="firstN" min="1" placeholder="e.g., 50">
+                            <small class="text-muted">Send to first N contacts</small>
+                          </div>
+                          <div id="specificRangeControls" style="display: none;">
+                            <div class="row">
+                              <div class="col-6">
+                                <label class="form-label">From</label>
+                                <input type="number" class="form-control" name="rangeFrom" id="rangeFrom" min="1" placeholder="1">
+                              </div>
+                              <div class="col-6">
+                                <label class="form-label">To</label>
+                                <input type="number" class="form-control" name="rangeTo" id="rangeTo" min="1" placeholder="100">
+                              </div>
+                            </div>
+                            <small class="text-muted">Send to contacts from row X to row Y</small>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="mt-3">
+                        <div class="alert alert-info" id="rangePreview">
+                          <strong>📧 Email Preview:</strong> Will send to all <span id="totalContactsCount">0</span> contacts
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="mb-3">
                   <label class="form-label">HTML Template (Optional)</label>
                   <input

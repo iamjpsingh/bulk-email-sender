@@ -12,6 +12,9 @@ let currentUser = null;
 let userConfigs = [];
 let selectedConfigId = null;
 
+// Excel data variables
+window.totalContactsFromExcel = 0;
+
 // Variables for edit/view functionality
 let currentViewConfigId = null;
 let currentEditConfigId = null;
@@ -133,6 +136,27 @@ function initializeExistingFeatures() {
   const excelFileInput = document.querySelector('input[name="excelFile"]');
   if (excelFileInput) {
     excelFileInput.addEventListener("change", handleExcelFileChange);
+  }
+
+  // Add event listeners for email range selection
+  const sendRangeSelect = document.getElementById("sendRange");
+  if (sendRangeSelect) {
+    sendRangeSelect.addEventListener("change", handleRangeSelectionChange);
+  }
+
+  // Add event listeners for range inputs
+  const firstNInput = document.getElementById("firstN");
+  const rangeFromInput = document.getElementById("rangeFrom");
+  const rangeToInput = document.getElementById("rangeTo");
+
+  if (firstNInput) {
+    firstNInput.addEventListener("input", updateRangePreview);
+  }
+  if (rangeFromInput) {
+    rangeFromInput.addEventListener("input", updateRangePreview);
+  }
+  if (rangeToInput) {
+    rangeToInput.addEventListener("input", updateRangePreview);
   }
 
   // Add event listener for HTML template changes
@@ -567,6 +591,11 @@ async function sendEmails() {
     console.log(`🌍 Sending to server: ${utcTime} (UTC)`);
   }
 
+  // Add email range selection data
+  const emailRange = getSelectedEmailRange();
+  formData.set("emailRangeStart", emailRange.start.toString());
+  formData.set("emailRangeCount", emailRange.count.toString());
+
   // Add file inputs
   const excelFile = excelFileField.files[0];
   const htmlTemplate = htmlTemplateField.files[0];
@@ -604,9 +633,8 @@ async function sendEmails() {
         details = `Scheduled Time: ${new Date(
           result.scheduledTime
         ).toLocaleString()}<br>
-                  Mode: ${
-                    result.batchMode ? "Batch Processing" : "Normal Send"
-                  }<br>
+                  Mode: ${result.batchMode ? "Batch Processing" : "Normal Send"
+          }<br>
                   Configuration: ${selectedConfig.name}<br>
                   Job ID: ${result.jobId}`;
 
@@ -936,11 +964,10 @@ function displayConfigList() {
         <div>
           <h6 class="mb-1">
             ${config.name}
-            ${
-              config.isDefault
-                ? '<span class="config-badge ms-2">DEFAULT</span>'
-                : ""
-            }
+            ${config.isDefault
+          ? '<span class="config-badge ms-2">DEFAULT</span>'
+          : ""
+        }
           </h6>
           <small class="text-muted">
             ${config.host}:${config.port} • ${config.fromEmail}
@@ -952,25 +979,21 @@ function displayConfigList() {
             <i class="bi bi-three-dots"></i>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item" href="#" onclick="event.stopPropagation(); viewConfig('${
-              config.id
-            }')">
+            <li><a class="dropdown-item" href="#" onclick="event.stopPropagation(); viewConfig('${config.id
+        }')">
               <i class="bi bi-eye me-2"></i>View Details
             </a></li>
-            <li><a class="dropdown-item" href="#" onclick="event.stopPropagation(); editConfig('${
-              config.id
-            }')">
+            <li><a class="dropdown-item" href="#" onclick="event.stopPropagation(); editConfig('${config.id
+        }')">
               <i class="bi bi-pencil me-2"></i>Edit
             </a></li>
-            <li><a class="dropdown-item" href="#" onclick="event.stopPropagation(); setDefaultConfig('${
-              config.id
-            }')">
+            <li><a class="dropdown-item" href="#" onclick="event.stopPropagation(); setDefaultConfig('${config.id
+        }')">
               <i class="bi bi-star me-2"></i>Set as Default
             </a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item text-danger" href="#" onclick="event.stopPropagation(); deleteConfig('${
-              config.id
-            }')">
+            <li><a class="dropdown-item text-danger" href="#" onclick="event.stopPropagation(); deleteConfig('${config.id
+        }')">
               <i class="bi bi-trash me-2"></i>Delete
             </a></li>
           </ul>
@@ -1067,17 +1090,15 @@ function viewConfig(configId) {
         
         <div class="config-detail-item">
           <div class="config-detail-label">From Name</div>
-          <div class="config-detail-value">${
-            config.fromName || "<em>Not set</em>"
-          }</div>
+          <div class="config-detail-value">${config.fromName || "<em>Not set</em>"
+    }</div>
         </div>
         
         <div class="config-detail-item">
           <div class="config-detail-label">Default Configuration</div>
           <div class="config-detail-value">
-            <span class="badge ${
-              config.isDefault ? "bg-success" : "bg-secondary"
-            }">
+            <span class="badge ${config.isDefault ? "bg-success" : "bg-secondary"
+    }">
               ${config.isDefault ? "Yes" : "No"}
             </span>
           </div>
@@ -1089,8 +1110,8 @@ function viewConfig(configId) {
       <div class="config-detail-item">
         <div class="config-detail-label">Created</div>
         <div class="config-detail-value">${new Date(
-          config.createdAt
-        ).toLocaleString()}</div>
+      config.createdAt
+    ).toLocaleString()}</div>
       </div>
     </div>
   `;
@@ -1408,18 +1429,17 @@ function displayConfigsManagement() {
   container.innerHTML = `
     <div class="row">
       ${userConfigs
-        .map(
-          (config) => `
+      .map(
+        (config) => `
         <div class="col-md-6 col-lg-4 mb-4">
           <div class="card h-100 ${config.isDefault ? "border-success" : ""}">
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-start mb-3">
                 <h6 class="card-title mb-0">${config.name}</h6>
-                ${
-                  config.isDefault
-                    ? '<span class="badge bg-success">DEFAULT</span>'
-                    : ""
-                }
+                ${config.isDefault
+            ? '<span class="badge bg-success">DEFAULT</span>'
+            : ""
+          }
               </div>
               
               <div class="mb-3">
@@ -1434,9 +1454,8 @@ function displayConfigsManagement() {
               
               <div class="mb-3">
                 <small class="text-muted d-block">Security</small>
-                <span class="badge ${
-                  config.secure ? "bg-success" : "bg-warning"
-                }">
+                <span class="badge ${config.secure ? "bg-success" : "bg-warning"
+          }">
                   ${config.secure ? "TLS/SSL Enabled" : "No TLS/SSL"}
                 </span>
               </div>
@@ -1444,24 +1463,20 @@ function displayConfigsManagement() {
             
             <div class="card-footer bg-transparent">
               <div class="btn-group w-100">
-                <button class="btn btn-outline-info btn-sm" onclick="viewConfig('${
-                  config.id
-                }')" title="View Details">
+                <button class="btn btn-outline-info btn-sm" onclick="viewConfig('${config.id
+          }')" title="View Details">
                   <i class="bi bi-eye"></i>
                 </button>
-                <button class="btn btn-outline-primary btn-sm" onclick="setDefaultConfig('${
-                  config.id
-                }')" title="Set as Default">
+                <button class="btn btn-outline-primary btn-sm" onclick="setDefaultConfig('${config.id
+          }')" title="Set as Default">
                   <i class="bi bi-star"></i>
                 </button>
-                <button class="btn btn-outline-secondary btn-sm" onclick="editConfig('${
-                  config.id
-                }')" title="Edit">
+                <button class="btn btn-outline-secondary btn-sm" onclick="editConfig('${config.id
+          }')" title="Edit">
                   <i class="bi bi-pencil"></i>
                 </button>
-                <button class="btn btn-outline-danger btn-sm" onclick="deleteConfig('${
-                  config.id
-                }')" title="Delete">
+                <button class="btn btn-outline-danger btn-sm" onclick="deleteConfig('${config.id
+          }')" title="Delete">
                   <i class="bi bi-trash"></i>
                 </button>
               </div>
@@ -1469,8 +1484,8 @@ function displayConfigsManagement() {
           </div>
         </div>
       `
-        )
-        .join("")}
+      )
+      .join("")}
     </div>
   `;
 }
@@ -1638,6 +1653,8 @@ async function parseExcelFile(file) {
 
     if (result.success) {
       currentContacts = result.contacts;
+      // Store the total count separately since currentContacts is just a preview
+      window.totalContactsFromExcel = result.totalCount;
 
       // Show success status
       const statusDiv = document.getElementById("excelStatus");
@@ -1645,6 +1662,36 @@ async function parseExcelFile(file) {
       if (statusDiv && detailsSpan) {
         statusDiv.classList.remove("d-none");
         detailsSpan.textContent = `Found ${result.totalCount} contacts. Preview will use real data.`;
+      }
+
+      // Show email range selection section
+      const emailRangeSection = document.getElementById("emailRangeSection");
+      if (emailRangeSection) {
+        emailRangeSection.classList.remove("d-none");
+        document.getElementById("totalContactsCount").textContent = result.totalCount;
+
+        // Set max values and default values for range inputs
+        const firstNInput = document.getElementById("firstN");
+        const rangeFromInput = document.getElementById("rangeFrom");
+        const rangeToInput = document.getElementById("rangeTo");
+
+        if (firstNInput) {
+          firstNInput.max = result.totalCount;
+          firstNInput.placeholder = `e.g., ${Math.min(50, result.totalCount)}`;
+        }
+
+        if (rangeFromInput) {
+          rangeFromInput.max = result.totalCount;
+          rangeFromInput.value = "1";
+        }
+
+        if (rangeToInput) {
+          rangeToInput.max = result.totalCount;
+          rangeToInput.value = result.totalCount.toString();
+        }
+
+        // Initialize range preview
+        updateRangePreview();
       }
 
       showAlert(
@@ -1719,25 +1766,21 @@ function showBatchStatus(batchData) {
     progress.innerHTML = `
       <div class="row">
         <div class="col-md-6">
-          <strong>Job Status:</strong> <span class="badge bg-${statusColor}">${
-      job.status
-    }</span><br>
-          <strong>Progress:</strong> ${job.emailsSent + job.emailsFailed}/${
-      job.totalContacts
-    } (${progressPercent}%)<br>
+          <strong>Job Status:</strong> <span class="badge bg-${statusColor}">${job.status
+      }</span><br>
+          <strong>Progress:</strong> ${job.emailsSent + job.emailsFailed}/${job.totalContacts
+      } (${progressPercent}%)<br>
           <strong>Batch:</strong> ${job.currentBatch}/${job.totalBatches}<br>
           <strong>Job ID:</strong> <code>${job.id}</code>
         </div>
         <div class="col-md-6">
-          <strong>✅ Sent:</strong> <span class="text-success fs-5">${
-            job.emailsSent
-          }</span><br>
-          <strong>❌ Failed:</strong> <span class="text-danger fs-5">${
-            job.emailsFailed
-          }</span><br>
+          <strong>✅ Sent:</strong> <span class="text-success fs-5">${job.emailsSent
+      }</span><br>
+          <strong>❌ Failed:</strong> <span class="text-danger fs-5">${job.emailsFailed
+      }</span><br>
           <strong>⏰ Started:</strong> ${new Date(
-            job.startTime
-          ).toLocaleTimeString()}
+        job.startTime
+      ).toLocaleTimeString()}
         </div>
       </div>
       <div class="progress mt-3" style="height: 25px;">
@@ -1749,12 +1792,10 @@ function showBatchStatus(batchData) {
       ${nextBatchCountdown}
       <div class="alert alert-info mt-3">
         <strong>📋 Current Activity:</strong><br>
-        <small>Sending ${job.config.batchSize} emails with ${
-      job.config.emailDelay
-    }s delay between each email.<br>
-        After this batch completes, will wait ${
-          job.config.batchDelay
-        } minutes before next batch.</small>
+        <small>Sending ${job.config.batchSize} emails with ${job.config.emailDelay
+      }s delay between each email.<br>
+        After this batch completes, will wait ${job.config.batchDelay
+      } minutes before next batch.</small>
       </div>
     `;
 
@@ -1844,8 +1885,7 @@ function displayScheduledJobs(jobs) {
             ${job.notify_email ? `<br>📧 Notify: ${job.notify_email}` : ""}
           </small>
         </div>
-        <button class="btn btn-sm btn-danger" onclick="cancelScheduledJob('${
-          job.id
+        <button class="btn btn-sm btn-danger" onclick="cancelScheduledJob('${job.id
         }')" 
           ${job.status === "running" ? "disabled" : ""}>
           ❌
@@ -1907,9 +1947,8 @@ function updateJobDashboard(batchData, scheduledJobs) {
       <div class="list-group-item list-group-item-action">
         <div class="d-flex w-100 justify-content-between">
           <h6 class="mb-1">Batch Job: ${job.id}</h6>
-          <small class="badge bg-${
-            job.status === "Paused" ? "warning" : "primary"
-          }">${job.status}</small>
+          <small class="badge bg-${job.status === "Paused" ? "warning" : "primary"
+      }">${job.status}</small>
         </div>
         <p class="mb-1">
           Progress: ${job.emailsSent}/${job.totalContacts} 
@@ -1921,13 +1960,12 @@ function updateJobDashboard(batchData, scheduledJobs) {
             ${progressPercent}%
           </div>
         </div>
-        ${
-          job.nextBatchTime && job.status !== "Paused"
-            ? `<small class="text-warning">Next batch at: ${new Date(
-                job.nextBatchTime
-              ).toLocaleTimeString()}</small>`
-            : ""
-        }
+        ${job.nextBatchTime && job.status !== "Paused"
+        ? `<small class="text-warning">Next batch at: ${new Date(
+          job.nextBatchTime
+        ).toLocaleTimeString()}</small>`
+        : ""
+      }
       </div>
     `;
   } else {
@@ -1953,9 +1991,8 @@ function updateJobDashboard(batchData, scheduledJobs) {
               <small class="badge bg-warning">Scheduled</small>
             </div>
             <p class="mb-1">
-              ${job.contact_count} contacts • ${
-            job.use_batch ? "Batch mode" : "Normal"
-          }
+              ${job.contact_count} contacts • ${job.use_batch ? "Batch mode" : "Normal"
+            }
             </p>
             <small class="text-primary">
               📅 ${new Date(job.scheduled_time).toLocaleString()}
@@ -1993,13 +2030,12 @@ function updateJobTimeline() {
           event.timestamp
         ).toLocaleTimeString()}</small>
         <br>
-        <span class="badge bg-${
-          event.type === "started"
+        <span class="badge bg-${event.type === "started"
             ? "primary"
             : event.type === "completed"
-            ? "success"
-            : "info"
-        }">
+              ? "success"
+              : "info"
+          }">
           ${event.type}
         </span>
         ${event.message}
@@ -2118,9 +2154,8 @@ function displayLogs(logs) {
       (log) => `
     <tr>
         <td>${log.email}</td>
-        <td><span class="status-${log.status.toLowerCase()}">${
-        log.status
-      }</span></td>
+        <td><span class="status-${log.status.toLowerCase()}">${log.status
+        }</span></td>
         <td>${log.firstName || "-"}</td>
         <td>${log.company || "-"}</td>
         <td>${log.subject || "-"}</td>
@@ -2242,13 +2277,14 @@ function updateBatchPreview() {
   const emailDelay =
     parseInt(document.querySelector('input[name="emailDelay"]').value) || 45;
 
-  // Calculate based on current contacts if available
-  const totalContacts = currentContacts.length || 100; // Use 100 as example
+  // Calculate based on selected email range
+  const emailRange = getSelectedEmailRange();
+  const totalContacts = emailRange.count || 100; // Use 100 as example if no range selected
   const totalBatches = Math.ceil(totalContacts / batchSize);
   const totalTime = (totalBatches * batchDelay) / 60; // Convert to hours
 
   const preview = `
-    📊 <strong>${totalContacts} contacts</strong> → 
+    📊 <strong>${totalContacts} contacts</strong> (from selected range) → 
     <strong>${totalBatches} batches</strong> of ${batchSize} emails<br>
     ⏱️ Total time: ~${totalTime.toFixed(1)} hours 
     (${emailDelay}s between emails, ${batchDelay}min between batches)
@@ -2370,3 +2406,140 @@ console.log(
   "✨ No more unnecessary requests - only fetches when jobs are active"
 );
 console.log("🎮 Use window.debugPolling for manual control and testing");
+
+// =================== EMAIL RANGE SELECTION FUNCTIONS ===================
+
+// Handle range selection change
+function handleRangeSelectionChange() {
+  console.log("Range selection changed"); // Debug log
+  const sendRange = document.getElementById("sendRange").value;
+  const rangeControls = document.getElementById("rangeControls");
+  const firstNControls = document.getElementById("firstNControls");
+  const specificRangeControls = document.getElementById("specificRangeControls");
+
+  // Hide all controls first
+  rangeControls.style.display = "none";
+  firstNControls.style.display = "none";
+  specificRangeControls.style.display = "none";
+
+  if (sendRange === "first") {
+    rangeControls.style.display = "block";
+    firstNControls.style.display = "block";
+  } else if (sendRange === "range") {
+    rangeControls.style.display = "block";
+    specificRangeControls.style.display = "block";
+  }
+
+  updateRangePreview();
+}
+
+// Update range preview
+function updateRangePreview() {
+  console.log("Updating range preview..."); // Debug log
+  const sendRange = document.getElementById("sendRange").value;
+  const totalContacts = window.totalContactsFromExcel || parseInt(document.getElementById("totalContactsCount").textContent) || 0;
+  const rangePreview = document.getElementById("rangePreview");
+
+  console.log("Range preview data:", { sendRange, totalContacts }); // Debug log
+
+  let emailCount = totalContacts;
+  let previewText = "";
+
+  if (sendRange === "all") {
+    emailCount = totalContacts;
+    previewText = `📧 Will send to <strong>all ${totalContacts}</strong> contacts`;
+  } else if (sendRange === "first") {
+    const firstN = parseInt(document.getElementById("firstN").value) || 0;
+    emailCount = Math.min(firstN, totalContacts);
+    previewText = `📧 Will send to the <strong>first ${emailCount}</strong> contacts (out of ${totalContacts} total)`;
+
+    if (firstN > totalContacts) {
+      previewText += `<br><small class="text-warning">⚠️ You requested ${firstN} emails, but only ${totalContacts} contacts available</small>`;
+    }
+  } else if (sendRange === "range") {
+    const rangeFromInput = document.getElementById("rangeFrom");
+    const rangeToInput = document.getElementById("rangeTo");
+
+    const rangeFrom = parseInt(rangeFromInput?.value) || 1;
+    const rangeTo = parseInt(rangeToInput?.value) || totalContacts;
+
+    console.log("Range inputs:", { rangeFrom, rangeTo, totalContacts, timestamp: new Date().toISOString() }); // Debug log
+
+    // Simple logic: use exactly what user entered, only warn if out of bounds
+    let validFrom = rangeFrom;
+    let validTo = rangeTo;
+    let hasWarning = false;
+    let warningMsg = "";
+
+    // Check if user entered invalid ranges
+    if (rangeFrom < 1 || rangeFrom > totalContacts) {
+      hasWarning = true;
+      warningMsg = `From value ${rangeFrom} is out of range (1-${totalContacts})`;
+      validFrom = Math.max(1, Math.min(rangeFrom, totalContacts));
+    }
+
+    if (rangeTo < 1 || rangeTo > totalContacts) {
+      hasWarning = true;
+      warningMsg += (warningMsg ? ". " : "") + `To value ${rangeTo} is out of range (1-${totalContacts})`;
+      validTo = Math.max(1, Math.min(rangeTo, totalContacts));
+    }
+
+    if (rangeTo < rangeFrom) {
+      hasWarning = true;
+      warningMsg += (warningMsg ? ". " : "") + `To value (${rangeTo}) cannot be less than From value (${rangeFrom})`;
+      validTo = Math.max(validFrom, validTo);
+    }
+
+    emailCount = validTo - validFrom + 1;
+
+    // Show what user actually entered, not adjusted values
+    if (!hasWarning) {
+      previewText = `📧 Will send to contacts <strong>${rangeFrom} to ${rangeTo}</strong> (${emailCount} emails out of ${totalContacts} total)`;
+    } else {
+      previewText = `📧 Will send to contacts <strong>${validFrom} to ${validTo}</strong> (${emailCount} emails out of ${totalContacts} total)`;
+      previewText += `<br><small class="text-warning">⚠️ ${warningMsg}</small>`;
+    }
+  }
+
+  if (rangePreview) {
+    rangePreview.innerHTML = `<strong>📊 Email Preview:</strong> ${previewText}`;
+  }
+
+  // Update batch preview if batch mode is enabled
+  const useBatch = document.getElementById("useBatch");
+  if (useBatch && useBatch.checked) {
+    updateBatchPreview();
+  }
+}
+
+// Get selected email range for sending
+function getSelectedEmailRange() {
+  const sendRange = document.getElementById("sendRange").value;
+  const totalContacts = window.totalContactsFromExcel || parseInt(document.getElementById("totalContactsCount").textContent) || 0;
+
+  if (sendRange === "all") {
+    return { start: 0, count: totalContacts };
+  } else if (sendRange === "first") {
+    const firstN = parseInt(document.getElementById("firstN").value) || totalContacts;
+    return { start: 0, count: Math.min(firstN, totalContacts) };
+  } else if (sendRange === "range") {
+    const rangeFromInput = document.getElementById("rangeFrom");
+    const rangeToInput = document.getElementById("rangeTo");
+
+    const rangeFrom = parseInt(rangeFromInput?.value) || 1;
+    const rangeTo = parseInt(rangeToInput?.value) || totalContacts;
+
+    // Apply bounds only if necessary
+    let validFrom = Math.max(1, Math.min(rangeFrom, totalContacts));
+    let validTo = Math.max(validFrom, Math.min(rangeTo, totalContacts));
+
+    console.log("Email range for sending:", { rangeFrom, rangeTo, validFrom, validTo, totalContacts });
+
+    return {
+      start: validFrom - 1, // Convert to 0-based index (row 1 = index 0)
+      count: validTo - validFrom + 1
+    };
+  }
+
+  return { start: 0, count: totalContacts };
+}
