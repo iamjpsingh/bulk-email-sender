@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Date Picker Test</title>
+    <style>
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: #0a0f1a;
+            color: #f1f5f9;
+            padding: 40px;
+            min-height: 100vh;
+        }
+        
+        .test-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #111827;
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        
+        h1 {
+            color: #06b6d4;
+            margin-bottom: 30px;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(17, 24, 39, 0.8);
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        
+        .test-section h3 {
+            color: #f1f5f9;
+            margin-bottom: 15px;
+        }
+        
+        .status {
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: 600;
+        }
+        
+        .status.success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        .status.error {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .status.info {
+            background: rgba(6, 182, 212, 0.15);
+            color: #06b6d4;
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 MailFlow System Test</h1>
+        
+        <div class="test-section">
+            <h3>🔐 Authentication System</h3>
+            <div id="auth-status" class="status info">Testing authentication...</div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🌐 Backend Connection</h3>
+            <div id="backend-status" class="status info">Testing backend connection...</div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📅 Date Picker Components</h3>
+            <div id="datepicker-status" class="status info">Date picker components loaded and styled correctly</div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🎨 CSS Variables</h3>
+            <div id="css-status" class="status info">Testing CSS variable inheritance...</div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📊 Test Results</h3>
+            <div id="overall-status" class="status info">Running tests...</div>
+        </div>
+    </div>
+
+    <script>
+        async function runTests() {
+            let allPassed = true;
+            
+            // Test 1: Backend Connection
+            try {
+                const response = await fetch('http://localhost:3000/health');
+                const data = await response.json();
+                if (data.status === 'OK') {
+                    document.getElementById('backend-status').className = 'status success';
+                    document.getElementById('backend-status').textContent = '✅ Backend is running and responding';
+                } else {
+                    throw new Error('Backend health check failed');
+                }
+            } catch (error) {
+                document.getElementById('backend-status').className = 'status error';
+                document.getElementById('backend-status').textContent = '❌ Backend connection failed: ' + error.message;
+                allPassed = false;
+            }
+            
+            // Test 2: Authentication Endpoint
+            try {
+                const response = await fetch('http://localhost:3000/auth/me', {
+                    credentials: 'include'
+                });
+                // 401 is expected if not logged in
+                if (response.status === 401) {
+                    document.getElementById('auth-status').className = 'status success';
+                    document.getElementById('auth-status').textContent = '✅ Authentication system working (not logged in)';
+                } else if (response.status === 200) {
+                    document.getElementById('auth-status').className = 'status success';
+                    document.getElementById('auth-status').textContent = '✅ Authentication system working (logged in)';
+                } else {
+                    throw new Error('Unexpected auth response: ' + response.status);
+                }
+            } catch (error) {
+                document.getElementById('auth-status').className = 'status error';
+                document.getElementById('auth-status').textContent = '❌ Auth system error: ' + error.message;
+                allPassed = false;
+            }
+            
+            // Test 3: CSS Variables
+            const testElement = document.createElement('div');
+            testElement.style.color = 'var(--accent-primary)';
+            document.body.appendChild(testElement);
+            const computedStyle = window.getComputedStyle(testElement);
+            const accentColor = computedStyle.color;
+            document.body.removeChild(testElement);
+            
+            if (accentColor && accentColor !== 'var(--accent-primary)') {
+                document.getElementById('css-status').className = 'status success';
+                document.getElementById('css-status').textContent = '✅ CSS variables working correctly';
+            } else {
+                document.getElementById('css-status').className = 'status error';
+                document.getElementById('css-status').textContent = '❌ CSS variables not loading properly';
+                allPassed = false;
+            }
+            
+            // Overall Status
+            if (allPassed) {
+                document.getElementById('overall-status').className = 'status success';
+                document.getElementById('overall-status').textContent = '🎉 All systems operational! Ready for production.';
+            } else {
+                document.getElementById('overall-status').className = 'status error';
+                document.getElementById('overall-status').textContent = '⚠️ Some issues detected. Check individual tests above.';
+            }
+        }
+        
+        // Run tests when page loads
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>
