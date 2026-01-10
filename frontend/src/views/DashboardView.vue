@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useAuth } from '../stores/auth'
+import { useDashboardStats } from '../lib/query'
 import {
   Mail,
   CheckCircle,
@@ -18,38 +19,14 @@ import {
 
 const { user, logout } = useAuth()
 
-const stats = ref({
-  total: 0,
-  sent: 0,
-  failed: 0
-})
-const successRate = ref(0)
+// Use TanStack Query for dashboard data
+const { data: dashboardData, isLoading } = useDashboardStats()
 
-onMounted(async () => {
-  // Load dashboard data
-  await loadDashboardData()
+const stats = computed(() => dashboardData.value?.stats || { total: 0, sent: 0, failed: 0 })
+const successRate = computed(() => {
+  const s = stats.value
+  return s.total > 0 ? Math.round((s.sent / s.total) * 100) : 0
 })
-
-async function loadDashboardData() {
-  try {
-    // Load stats from API
-    const response = await fetch('/dashboard/stats', {
-      credentials: 'include'
-    })
-    
-    if (response.ok) {
-      const data = await response.json()
-      if (data.success) {
-        stats.value = data.stats || { total: 0, sent: 0, failed: 0 }
-        successRate.value = stats.value.total > 0 
-          ? Math.round((stats.value.sent / stats.value.total) * 100) 
-          : 0
-      }
-    }
-  } catch (err) {
-    console.error('Error loading dashboard data:', err)
-  }
-}
 
 async function handleLogout() {
   await logout()

@@ -1,145 +1,124 @@
-import { ref } from 'vue'
-import { api } from '../services/api'
+/**
+ * Email Store
+ * Uses TanStack Query for state management
+ */
+import { ref, computed } from 'vue'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import {
+  useLogs,
+  useStats,
+  useClearLogs,
+  useBatchStatus,
+  usePauseBatch,
+  useResumeBatch,
+  useCancelBatch,
+  useScheduledJobs,
+  useCancelScheduledJob,
+  queryKeys,
+} from '../lib/query'
+import { emailApi } from '../lib/api'
+import type { EmailLog, EmailStats, BatchStatus, ScheduledJob } from '../lib/api'
 
-export interface EmailLog {
-  id: string
-  email: string
-  status: 'Sent' | 'Failed' | 'Error'
-  message?: string
-  timestamp: string
-  messageId?: string
-  firstName?: string
-  company?: string
-  subject?: string
-}
+export type { EmailLog, EmailStats, BatchStatus, ScheduledJob }
 
-export interface EmailStats {
-  total: number
-  sent: number
-  failed: number
-}
-
-export interface BatchJob {
-  id: string
-  totalContacts: number
-  currentBatch: number
-  totalBatches: number
-  emailsSent: number
-  emailsFailed: number
-  status: string
-  nextBatchTime?: string
-}
-
-export interface BatchStatus {
-  isRunning: boolean
-  currentJob: BatchJob | null
-}
-
-export interface ScheduledJob {
-  id: string
-  scheduled_time: string
-  status: string
-  contact_count: number
-  subject: string
-  use_batch: boolean
-}
-
-// Reactive state
-const sending = ref(false)
-
-// Vue composable
+/**
+ * Email store composable
+ */
 export function useEmailStore() {
+  const queryClient = useQueryClient()
+
+  // Send mutation
+  const sendMutation = useMutation({
+    mutationFn: emailApi.send,
+    onSuccess: () => {
+      // Invalidate reports after sending
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats })
+    },
+  })
+
   async function sendEmails(formData: FormData) {
-    sending.value = true
-    try {
-      const res = await api.upload('/send', formData)
-      if (!res.success) {
-        throw new Error(res.message || 'Failed to send emails')
-      }
-      return res
-    } finally {
-      sending.value = false
-    }
+    return sendMutation.mutateAsync(formData)
   }
 
   return {
-    sending,
-    sendEmails
+    sending: computed(() => sendMutation.isPending.value),
+    sendEmails,
   }
 }
 
-// API functions for TanStack Query
-export const emailApi = {
-  getLogs: async (): Promise<{ logs: EmailLog[]; stats: EmailStats }> => {
-    try {
-      const res = await api.get('/report')
-      if (res.success) {
-        return {
-          logs: res.logs || [],
-          stats: res.stats || { total: 0, sent: 0, failed: 0 }
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load logs:', err)
-    }
-    return { logs: [], stats: { total: 0, sent: 0, failed: 0 } }
-  },
+/**
+ * Reports store composable
+ */
+export function useReportsStore(filters?: Record<string, any>) {
+  const { data, isLoading, refetch } = useLogs(filters)
+  const clearMutation = useClearLogs()
 
-  getBatchStatus: async (): Promise<BatchStatus> => {
-    try {
-      const res = await api.get('/batch-status')
-      if (res.success) {
-        return res.data || { isRunning: false, currentJob: null }
-      }
-    } catch (err) {
-      console.error('Failed to get batch status:', err)
-    }
-    return { isRunning: false, currentJob: null }
-  },
+  return {
+    logs: computed(() => data.value?.logs || []),
+    stats: computed(() => data.value?.stats || { total: 0, sent: 0, failed: 0 }),
+    pagination: computed(() => data.value?.pagination),
+    loading: isLoading,
+    refetch,
+    clearLogs: () => clearMutation.mutateAsync(),
+    isClearing: computed(() => clearMutation.isPending.value),
+  }
+}
 
-  getScheduledJobs: async (): Promise<ScheduledJob[]> => {
-    try {
-      const res = await api.get('/scheduled-jobs')
-      if (res.success) {
-        return res.data || []
-      }
-    } catch (err) {
-      console.error('Failed to get scheduled jobs:', err)
-    }
-    return []
-  },
+/**
+ * Batch store composable
+ */
+export function useBatchStore() {
+  const { data: status, isLoading, refetch } = useBatchStatus()
+  const pauseMutation = usePauseBatch()
+  const resumeMutation = useResumeBatch()
+  const cancelMutation = useCancelBatch()
 
-  sendEmails: async (formData: FormData): Promise<any> => {
-    const res = await api.upload('/send', formData)
-    if (!res.success) {
-      throw new Error(res.message || 'Failed to send emails')
-    }
-    return res
-  },
+  return {
+    status: computed(() => status.value || { isRunning: false, currentJob: null }),
+    isRunning: computed(() => status.value?.isRunning || false),
+    currentJob: computed(() => status.value?.currentJob),
+    loading: isLoading,
+    refetch,
+    pause: () => pauseMutation.mutateAsync(),
+    resume: () => resumeMutation.mutateAsync(),
+    cancel: () => cancelMutation.mutateAsync(),
+    isPausing: computed(() => pauseMutation.isPending.value),
+    isResuming: computed(() => resumeMutation.isPending.value),
+    isCancelling: computed(() => cancelMutation.isPending.value),
+  }
+}
 
-  clearLogs: async (): Promise<void> => {
-    const res = await api.delete('/report/clear')
-    if (!res.success) {
-      throw new Error(res.message || 'Failed to clear logs')
-    }
-  },
+/**
+ * Scheduled jobs store composable
+ */
+export function useScheduledStore() {
+  const { data: jobs, isLoading, refetch } = useScheduledJobs()
+  const cancelMutation = useCancelScheduledJob()
 
-  cancelScheduledJob: async (jobId: string): Promise<void> => {
-    const res = await api.delete(`/scheduled-jobs/${jobId}`)
-    if (!res.success) {
-      throw new Error(res.message || 'Failed to cancel job')
-    }
-  },
+  return {
+    jobs: computed(() => jobs.value || []),
+    loading: isLoading,
+    refetch,
+    cancelJob: (jobId: string) => cancelMutation.mutateAsync(jobId),
+    isCancelling: computed(() => cancelMutation.isPending.value),
+  }
+}
 
-  pauseBatch: async (): Promise<void> => {
-    await api.post('/batch-pause', {})
-  },
+/**
+ * Dashboard store composable
+ */
+export function useDashboardStore() {
+  const { data, isLoading, refetch } = useLogs()
+  const { data: batchStatus } = useBatchStatus()
+  const { data: scheduledJobs } = useScheduledJobs()
 
-  resumeBatch: async (): Promise<void> => {
-    await api.post('/batch-resume', {})
-  },
-
-  cancelBatch: async (): Promise<void> => {
-    await api.post('/batch-cancel', {})
+  return {
+    stats: computed(() => data.value?.stats || { total: 0, sent: 0, failed: 0 }),
+    recentLogs: computed(() => (data.value?.logs || []).slice(0, 10)),
+    batchStatus: computed(() => batchStatus.value),
+    scheduledJobs: computed(() => scheduledJobs.value || []),
+    loading: isLoading,
+    refetch,
   }
 }

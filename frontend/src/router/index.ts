@@ -43,7 +43,7 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const { isAuthenticated, isInitialized, initializeAuth } = useAuth()
   
-  // Initialize auth state if not already done
+  // Always initialize auth on first navigation
   if (!isInitialized.value) {
     await initializeAuth()
   }

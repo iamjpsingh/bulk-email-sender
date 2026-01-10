@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
-import { Mail, Clock } from 'lucide-vue-next'
+import { Mail, Clock, Eye } from 'lucide-vue-next'
 import 'quill/dist/quill.snow.css'
 
 const props = defineProps<{
@@ -10,7 +10,7 @@ const props = defineProps<{
   columns?: string[]
 }>()
 
-const emit = defineEmits(['update:subject', 'update:content', 'update:delay'])
+const emit = defineEmits(['update:subject', 'update:content', 'update:delay', 'preview'])
 
 const editorRef = ref<HTMLDivElement>()
 let quill: any = null
@@ -87,10 +87,20 @@ function insertPlaceholder(value: string) {
 
 <template>
   <div class="email-editor glass-card">
-    <h3>
-      <Mail :size="18" class="header-icon" />
-      Email Content
-    </h3>
+    <div class="editor-header">
+      <h3>
+        <Mail :size="18" class="header-icon" />
+        Email Content
+      </h3>
+      <button 
+        class="btn btn-secondary btn-sm preview-btn"
+        @click="emit('preview')"
+        :disabled="!props.subject && !props.content"
+      >
+        <Eye :size="16" />
+        Preview
+      </button>
+    </div>
     
     <!-- Subject -->
     <div class="form-group">
@@ -148,10 +158,17 @@ function insertPlaceholder(value: string) {
 .email-editor {
   padding: 24px;
   
+  .editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  
   h3 {
     font-size: 15px;
     font-weight: 600;
-    margin-bottom: 20px;
+    margin: 0;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -160,6 +177,12 @@ function insertPlaceholder(value: string) {
   
   .header-icon {
     color: var(--accent-primary);
+  }
+  
+  .preview-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 }
 

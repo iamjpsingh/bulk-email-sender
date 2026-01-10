@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../stores/auth'
+import { useConfigs } from '../lib/query'
+import { emailApi } from '../lib/api'
 import DateTimeInput from '../components/ui/DateTimeInput.vue'
 import EmailEditor from '../components/compose/EmailEditor.vue'
 import {
@@ -18,10 +20,17 @@ import {
   BarChart3,
   LogOut,
   Clock,
-  Zap
+  Zap,
+  Eye,
+  EyeOff,
+  TrendingUp
 } from 'lucide-vue-next'
 
 const { user, logout } = useAuth()
+
+// TanStack Query for configs
+const { data: configsData } = useConfigs()
+const smtpConfigs = computed(() => configsData.value || [])
 
 // Form data
 const subject = ref('')
@@ -32,7 +41,6 @@ const columns = ref<string[]>([])
 const delay = ref(20)
 
 // SMTP Config
-const smtpConfigs = ref<any[]>([])
 const selectedConfigId = ref('')
 
 // Batch settings
@@ -55,6 +63,90 @@ const rangeTo = ref(100)
 const sending = ref(false)
 const result = ref<any>(null)
 
+// Preview state
+const showPreview = ref(false)
+const previewContactIndex = ref(0)
+
+// Get preview contact (first contact or sample)
+const previewContact = computed(() => {
+  if (contacts.value.length > 0) {
+    return contacts.value[previewContactIndex.value] || contacts.value[0]
+  }
+  // Sample contact if no contacts loaded
+  return {
+    Email: 'john@example.com',
+    FirstName: 'John',
+    LastName: 'Doe',
+    Company: 'Acme Inc',
+    Name: 'John Doe'
+  }
+})
+
+// Find email field in contact (could be Email, email, E-mail, etc.)
+const getContactEmail = (contact: Record<string, any>): string => {
+  const emailKeys = ['Email', 'email', 'EMAIL', 'E-mail', 'e-mail', 'EmailAddress', 'email_address']
+  for (const key of emailKeys) {
+    if (contact[key] && contact[key].includes('@')) {
+      return contact[key]
+    }
+  }
+  // Fallback: find any field with @ symbol
+  for (const value of Object.values(contact)) {
+    if (typeof value === 'string' && value.includes('@')) {
+      return value
+    }
+  }
+  return ''
+}
+
+// Find name field in contact
+const getContactName = (contact: Record<string, any>): string => {
+  if (contact.FirstName) {
+    return `${contact.FirstName} ${contact.LastName || ''}`.trim()
+  }
+  if (contact.Name) return contact.Name
+  if (contact.name) return contact.name
+  if (contact.FullName) return contact.FullName
+  if (contact.full_name) return contact.full_name
+  return ''
+}
+
+const previewToEmail = computed(() => getContactEmail(previewContact.value))
+const previewToName = computed(() => getContactName(previewContact.value))
+
+// Replace placeholders in content for preview
+const previewSubject = computed(() => {
+  return replacePlaceholders(subject.value, previewContact.value)
+})
+
+const previewContent = computed(() => {
+  return replacePlaceholders(htmlContent.value, previewContact.value)
+})
+
+function replacePlaceholders(text: string, contact: Record<string, any>): string {
+  if (!text) return ''
+  let result = text
+  for (const [key, value] of Object.entries(contact)) {
+    const placeholder = `{{${key}}}`
+    result = result.split(placeholder).join(value || '')
+  }
+  return result
+}
+
+function nextPreviewContact() {
+  if (contacts.value.length > 0) {
+    previewContactIndex.value = (previewContactIndex.value + 1) % contacts.value.length
+  }
+}
+
+function prevPreviewContact() {
+  if (contacts.value.length > 0) {
+    previewContactIndex.value = previewContactIndex.value === 0 
+      ? contacts.value.length - 1 
+      : previewContactIndex.value - 1
+  }
+}
+
 const selectedCount = computed(() => {
   if (contacts.value.length === 0) return 0
   if (rangeType.value === 'all') return contacts.value.length
@@ -68,31 +160,6 @@ const canSend = computed(() => {
          contacts.value.length > 0 &&
          htmlContent.value.trim()
 })
-
-onMounted(async () => {
-  await loadConfigs()
-})
-
-async function loadConfigs() {
-  try {
-    const response = await fetch('/config/list', {
-      credentials: 'include'
-    })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-    
-    const data = await response.json()
-    if (data.success) {
-      smtpConfigs.value = data.configs || []
-    } else {
-      throw new Error(data.message || 'Failed to load configs')
-    }
-  } catch (err) {
-    console.error('Error loading configs:', err)
-  }
-}
 
 async function handleLogout() {
   await logout()
@@ -246,16 +313,10 @@ async function handleSend() {
   }
   
   try {
-    const response = await fetch('/send', {
-      method: 'POST',
-      credentials: 'include',
-      body: formData
-    })
-    
-    const data = await response.json()
-    result.value = data
+    const response = await emailApi.send(formData)
+    result.value = response
   } catch (err: any) {
-    result.value = { success: false, message: 'Network error: ' + err.message }
+    result.value = { success: false, message: err.message || 'Failed to send emails' }
   } finally {
     sending.value = false
   }
@@ -337,20 +398,23 @@ const navItems = [
         <div class="compose-grid">
           <!-- Left column -->
           <div class="compose-left">
-            <!-- SMTP Config selector -->
+            <!-- Email Config selector -->
             <div class="section glass-card">
               <h3>
                 <Settings :size="18" class="header-icon" />
-                SMTP Configuration
+                Email Configuration
               </h3>
               <select v-model="selectedConfigId" class="form-select">
-                <option value="">Select SMTP config...</option>
+                <option value="">Select config...</option>
                 <option v-for="config in smtpConfigs" :key="config.id" :value="config.id">
-                  {{ config.name }} ({{ config.host }})
+                  {{ config.name }} 
+                  <template v-if="config.provider_type === 'google'">(Gmail)</template>
+                  <template v-else-if="config.provider_type === 'microsoft'">(Outlook)</template>
+                  <template v-else>({{ config.host }})</template>
                 </option>
               </select>
               <p v-if="smtpConfigs.length === 0" class="text-muted" style="font-size: 13px; margin-top: 8px;">
-                No SMTP configs found. <router-link to="/configs" class="text-accent">Create one</router-link>
+                No configs found. <router-link to="/configs" class="text-accent">Create one</router-link>
               </p>
             </div>
             
@@ -469,6 +533,7 @@ const navItems = [
               v-model:content="htmlContent"
               v-model:delay="delay"
               :columns="columns"
+              @preview="showPreview = true"
             />
             
             <!-- Send button -->
@@ -495,6 +560,80 @@ const navItems = [
         </div>
       </div>
     </main>
+    
+    <!-- Email Preview Modal -->
+    <Teleport to="body">
+      <div v-if="showPreview" class="preview-overlay" @click.self="showPreview = false">
+        <div class="preview-modal">
+          <div class="preview-header">
+            <h2>
+              <Eye :size="20" />
+              Email Preview
+            </h2>
+            <button class="btn btn-ghost btn-sm" @click="showPreview = false">
+              <X :size="20" />
+            </button>
+          </div>
+          
+          <!-- Contact selector -->
+          <div class="preview-contact-selector" v-if="contacts.length > 0">
+            <button class="btn btn-ghost btn-sm" @click="prevPreviewContact" :disabled="contacts.length <= 1">
+              ←
+            </button>
+            <span class="contact-info">
+              <strong>{{ previewToName || previewToEmail || 'Contact' }}</strong>
+              <span class="text-muted">({{ previewContactIndex + 1 }} of {{ contacts.length }})</span>
+            </span>
+            <button class="btn btn-ghost btn-sm" @click="nextPreviewContact" :disabled="contacts.length <= 1">
+              →
+            </button>
+          </div>
+          <div v-else class="preview-contact-selector sample">
+            <span class="text-muted">Using sample data (upload contacts to preview with real data)</span>
+          </div>
+          
+          <!-- Email preview -->
+          <div class="preview-email">
+            <div class="preview-email-header">
+              <div class="preview-row">
+                <span class="preview-label">From:</span>
+                <span>{{ smtpConfigs.find(c => c.id === selectedConfigId)?.from_name || smtpConfigs.find(c => c.id === selectedConfigId)?.name || 'Your Name' }} &lt;{{ smtpConfigs.find(c => c.id === selectedConfigId)?.from_email || smtpConfigs.find(c => c.id === selectedConfigId)?.oauth_email || 'you@example.com' }}&gt;</span>
+              </div>
+              <div class="preview-row">
+                <span class="preview-label">To:</span>
+                <span v-if="previewToEmail">
+                  <template v-if="previewToName">
+                    {{ previewToName }} &lt;{{ previewToEmail }}&gt;
+                  </template>
+                  <template v-else>
+                    {{ previewToEmail }}
+                  </template>
+                </span>
+                <span v-else class="text-muted">(No email found in contact)</span>
+              </div>
+              <div class="preview-row">
+                <span class="preview-label">Subject:</span>
+                <span class="preview-subject">{{ previewSubject || '(No subject)' }}</span>
+              </div>
+            </div>
+            
+            <div class="preview-email-body">
+              <div v-if="previewContent" v-html="previewContent"></div>
+              <div v-else class="preview-empty">
+                <Mail :size="48" />
+                <p>No content yet. Start writing your email!</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="preview-footer">
+            <button class="btn btn-secondary" @click="showPreview = false">
+              Close Preview
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -771,5 +910,184 @@ const navItems = [
 .send-hint {
   margin-top: 12px;
   font-size: 13px;
+}
+
+// Preview Modal
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.preview-modal {
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    margin: 0;
+    color: var(--text-primary);
+  }
+}
+
+.preview-contact-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  
+  &.sample {
+    padding: 16px 24px;
+  }
+  
+  .contact-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+  }
+}
+
+.preview-email {
+  flex: 1;
+  overflow-y: auto;
+  background: #ffffff;
+}
+
+.preview-email-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.preview-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #374151;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.preview-label {
+  font-weight: 600;
+  color: #6b7280;
+  min-width: 60px;
+}
+
+.preview-subject {
+  font-weight: 600;
+  color: #111827;
+}
+
+.preview-email-body {
+  padding: 24px;
+  min-height: 300px;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.6;
+  
+  // Reset styles for email content
+  h1, h2, h3, h4, h5, h6 {
+    color: #111827;
+    margin-bottom: 12px;
+  }
+  
+  p {
+    margin-bottom: 12px;
+    color: #374151;
+  }
+  
+  a {
+    color: #2563eb;
+  }
+  
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  ul, ol {
+    margin-bottom: 12px;
+    padding-left: 24px;
+  }
+  
+  blockquote {
+    border-left: 4px solid #e5e7eb;
+    padding-left: 16px;
+    margin: 16px 0;
+    color: #6b7280;
+  }
+}
+
+.preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #9ca3af;
+  
+  p {
+    margin-top: 16px;
+    color: #9ca3af;
+  }
+}
+
+.preview-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  display: flex;
+  justify-content: flex-end;
 }
 </style>
