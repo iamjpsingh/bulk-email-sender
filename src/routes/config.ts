@@ -1,327 +1,390 @@
-// src/routes/config.ts - UPDATED FOR USER MANAGEMENT
-import { Hono } from "hono";
-import { userDatabase, UserSMTPConfig } from "../services/userDatabase";
-import { requireAuth } from "../middleware/auth";
-import type { SMTPDefaults } from "../types";
+/**
+ * Configuration Routes
+ * SMTP and OAuth configuration management
+ */
+import { Hono } from 'hono'
+import { d1UserDatabase } from '../services/d1UserDatabase'
+import { requireAuth } from '../middleware/auth'
+import { success, error } from '../utils/response'
+import { validateSMTPConfig } from '../utils/validation'
 
-// Global environment config (fallback for admin or demo mode)
-const envConfig: SMTPDefaults = {
-  host: process.env.SMTP_HOST || "",
-  port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587,
-  secure: process.env.SMTP_SECURE === "true",
-  user: process.env.SMTP_USER || "",
-  pass: process.env.SMTP_PASS || "",
-  fromEmail: process.env.FROM_EMAIL || "",
-  fromName: process.env.FROM_NAME || "",
-};
+const app = new Hono()
 
-const hasEnvConfig = !!(
-  process.env.SMTP_HOST &&
-  process.env.SMTP_USER &&
-  process.env.SMTP_PASS
-);
+// ============================================================================
+// List Configurations
+// ============================================================================
 
-const app = new Hono();
+/**
+ * List all user configurations
+ * GET /config/list
+ */
+app.get('/config/list', async (c) => {
+  const user = requireAuth(c)
+  const configs = await d1UserDatabase.getUserSMTPConfigs(user.id)
 
-// GET user's SMTP configurations
-app.get("/config/smtp", (c) => {
-  const user = requireAuth(c);
+  return success(c, {
+    configs: configs.map(formatConfig),
+  })
+})
 
-  // Get all user configurations
-  const userConfigs = userDatabase.getUserSMTPConfigs(user.id);
-  const defaultConfig = userDatabase.getUserDefaultSMTPConfig(user.id);
+/**
+ * Get SMTP configurations (legacy endpoint)
+ * GET /config/smtp
+ */
+app.get('/config/smtp', async (c) => {
+  const user = requireAuth(c)
+  const configs = await d1UserDatabase.getUserSMTPConfigs(user.id)
+  const defaultConfig = await d1UserDatabase.getUserDefaultSMTPConfig(user.id)
 
-  // Convert UserSMTPConfig to SMTPDefaults format for compatibility
-  const activeConfig = defaultConfig
-    ? {
-        host: defaultConfig.host,
-        port: defaultConfig.port,
-        secure: !!defaultConfig.secure,
-        user: defaultConfig.user,
-        pass: defaultConfig.pass,
-        fromEmail: defaultConfig.from_email,
-        fromName: defaultConfig.from_name,
-      }
-    : hasEnvConfig
-    ? envConfig
-    : null;
+  return success(c, {
+    data: defaultConfig ? formatConfigLegacy(defaultConfig) : null,
+    hasConfig: !!defaultConfig,
+    userConfigs: configs.map(formatConfigLegacy),
+    userId: user.id,
+  })
+})
 
-  return c.json({
-    success: true,
-    data: activeConfig,
-    hasConfig: !!activeConfig,
-    hasEnvConfig,
-    currentMode: defaultConfig ? "user" : "env",
-    envConfig: hasEnvConfig ? envConfig : null,
-    userConfigs: userConfigs.map((config) => ({
-      id: config.id,
-      name: config.name,
+/**
+ * Get active configuration
+ * GET /config/smtp/active
+ */
+app.get('/config/smtp/active', async (c) => {
+  const user = requireAuth(c)
+  const config = await d1UserDatabase.getUserDefaultSMTPConfig(user.id)
+
+  return success(c, {
+    data: config ? formatConfigLegacy(config) : null,
+    configId: config?.id,
+    configName: config?.name,
+  })
+})
+
+// ============================================================================
+// Create Configuration
+// ============================================================================
+
+/**
+ * Create new SMTP configuration
+ * POST /config/smtp
+ */
+app.post('/config/smtp', async (c) => {
+  try {
+    const user = requireAuth(c)
+    const body = await c.req.json()
+
+    // Validate
+    const validation = validateSMTPConfig(body)
+    if (!validation.valid) {
+      return error(c, validation.errors.join(', '), 400)
+    }
+
+    const configId = await d1UserDatabase.createSMTPConfig({
+      user_id: user.id,
+      name: body.name || 'Default Configuration',
+      host: body.host,
+      port: body.port || 587,
+      secure: !!body.secure,
+      username: body.user,
+      password: body.pass,
+      from_email: body.fromEmail || body.from_email,
+      from_name: body.fromName || body.from_name || '',
+      provider_type: 'smtp',
+      is_default: !!body.isDefault || !!body.is_default,
+    })
+
+    if (!configId) {
+      return error(c, 'Failed to create configuration', 500)
+    }
+
+    return success(c, { configId }, '✅ Configuration saved')
+  } catch (err) {
+    console.error('Error creating config:', err)
+    return error(c, 'Failed to save configuration', 500)
+  }
+})
+
+/**
+ * Create configuration (frontend-compatible)
+ * POST /config/create
+ */
+app.post('/config/create', async (c) => {
+  try {
+    const user = requireAuth(c)
+    const body = await c.req.json()
+
+    // Validate
+    const validation = validateSMTPConfig(body)
+    if (!validation.valid) {
+      return error(c, validation.errors.join(', '), 400)
+    }
+
+    const configId = await d1UserDatabase.createSMTPConfig({
+      user_id: user.id,
+      name: body.name || 'Default Configuration',
+      host: body.host,
+      port: body.port || 587,
+      secure: !!body.secure,
+      username: body.user,
+      password: body.pass,
+      from_email: body.from_email || body.fromEmail,
+      from_name: body.from_name || body.fromName || '',
+      provider_type: 'smtp',
+      is_default: !!body.is_default || !!body.isDefault,
+    })
+
+    return success(c, { configId }, configId ? '✅ Created' : 'Failed')
+  } catch (err) {
+    console.error('Error creating config:', err)
+    return error(c, 'Failed to create', 500)
+  }
+})
+
+// ============================================================================
+// Update Configuration
+// ============================================================================
+
+/**
+ * Update SMTP configuration
+ * PUT /config/smtp/:configId
+ */
+app.put('/config/smtp/:configId', async (c) => {
+  try {
+    const user = requireAuth(c)
+    const configId = c.req.param('configId')
+    const body = await c.req.json()
+
+    const updates = buildUpdates(body)
+    if (Object.keys(updates).length === 0) {
+      return error(c, 'No valid fields to update', 400)
+    }
+
+    const updated = await d1UserDatabase.updateSMTPConfig(configId, user.id, updates)
+    if (!updated) {
+      return error(c, 'Configuration not found', 404)
+    }
+
+    return success(c, undefined, '✅ Configuration updated')
+  } catch (err) {
+    console.error('Error updating config:', err)
+    return error(c, 'Failed to update configuration', 500)
+  }
+})
+
+/**
+ * Update configuration (frontend-compatible)
+ * POST /config/update/:configId
+ */
+app.post('/config/update/:configId', async (c) => {
+  try {
+    const user = requireAuth(c)
+    const configId = c.req.param('configId')
+    const body = await c.req.json()
+
+    const updates = buildUpdates(body)
+    const updated = await d1UserDatabase.updateSMTPConfig(configId, user.id, updates)
+
+    return success(c, undefined, updated ? '✅ Updated' : 'Not found')
+  } catch (err) {
+    console.error('Error updating config:', err)
+    return error(c, 'Failed to update', 500)
+  }
+})
+
+// ============================================================================
+// Delete Configuration
+// ============================================================================
+
+/**
+ * Delete SMTP configuration
+ * DELETE /config/smtp/:configId
+ */
+app.delete('/config/smtp/:configId', async (c) => {
+  try {
+    const user = requireAuth(c)
+    const configId = c.req.param('configId')
+
+    const deleted = await d1UserDatabase.deleteSMTPConfig(configId, user.id)
+    if (!deleted) {
+      return error(c, 'Configuration not found', 404)
+    }
+
+    return success(c, undefined, '✅ Configuration deleted')
+  } catch (err) {
+    console.error('Error deleting config:', err)
+    return error(c, 'Failed to delete configuration', 500)
+  }
+})
+
+/**
+ * Delete configuration (frontend-compatible)
+ * DELETE /config/delete/:configId
+ */
+app.delete('/config/delete/:configId', async (c) => {
+  try {
+    const user = requireAuth(c)
+    const configId = c.req.param('configId')
+
+    const deleted = await d1UserDatabase.deleteSMTPConfig(configId, user.id)
+    return success(c, undefined, deleted ? '✅ Deleted' : 'Not found')
+  } catch (err) {
+    console.error('Error deleting config:', err)
+    return error(c, 'Failed to delete', 500)
+  }
+})
+
+// ============================================================================
+// Set Default & Test
+// ============================================================================
+
+/**
+ * Set default configuration
+ * POST /config/smtp/:configId/default
+ */
+app.post('/config/smtp/:configId/default', async (c) => {
+  try {
+    const user = requireAuth(c)
+    const configId = c.req.param('configId')
+
+    const updated = await d1UserDatabase.updateSMTPConfig(configId, user.id, { is_default: true })
+    if (!updated) {
+      return error(c, 'Configuration not found', 404)
+    }
+
+    return success(c, undefined, '✅ Default configuration updated')
+  } catch (err) {
+    console.error('Error setting default:', err)
+    return error(c, 'Failed to set default', 500)
+  }
+})
+
+/**
+ * Test SMTP connection
+ * POST /config/smtp/test
+ */
+app.post('/config/smtp/test', async (c) => {
+  try {
+    const body = await c.req.json()
+    const { emailService } = await import('../services/emailService')
+
+    const isValid = await emailService.testConnection({
+      host: body.host,
+      port: body.port || 587,
+      secure: !!body.secure,
+      auth: { user: body.user, pass: body.pass },
+    })
+
+    return success(
+      c,
+      { valid: isValid },
+      isValid ? '✅ Connection successful' : '❌ Connection failed'
+    )
+  } catch (err) {
+    console.error('Connection test error:', err)
+    return error(c, 'Connection test failed', 500)
+  }
+})
+
+/**
+ * Test configuration by ID
+ * POST /config/test/:configId
+ */
+app.post('/config/test/:configId', async (c) => {
+  try {
+    const user = requireAuth(c)
+    const configId = c.req.param('configId')
+
+    const configs = await d1UserDatabase.getUserSMTPConfigs(user.id)
+    const config = configs.find((cfg) => cfg.id === configId)
+
+    if (!config) {
+      return error(c, 'Not found', 404)
+    }
+
+    if (config.provider_type !== 'smtp') {
+      return error(c, 'Use OAuth test for OAuth configs', 400)
+    }
+
+    const { emailService } = await import('../services/emailService')
+    const isValid = await emailService.testConnection({
       host: config.host,
       port: config.port,
-      secure: !!config.secure,
-      user: config.user,
-      fromEmail: config.from_email,
-      fromName: config.from_name,
-      isDefault: !!config.is_default,
-      createdAt: config.created_at,
-    })),
-    userId: user.id,
-    userName: user.name,
-  });
-});
+      secure: config.secure,
+      auth: { user: config.username, pass: config.password || '' },
+    })
 
-// POST - Create new SMTP configuration for user
-app.post("/config/smtp", async (c) => {
-  try {
-    const user = requireAuth(c);
-    const body = await c.req.json();
-
-    const configData = {
-      name: body.name || "Default Configuration",
-      host: body.host,
-      port: body.port || 587,
-      secure: !!body.secure,
-      user: body.user,
-      pass: body.pass,
-      from_email: body.fromEmail,
-      from_name: body.fromName || "",
-      is_default: !!body.isDefault,
-    };
-
-    // Validate required fields
-    if (
-      !configData.host ||
-      !configData.user ||
-      !configData.pass ||
-      !configData.from_email
-    ) {
-      return c.json(
-        {
-          success: false,
-          message:
-            "Missing required fields: host, user, password, and from_email are required",
-        },
-        400
-      );
-    }
-
-    const configId = await userDatabase.createSMTPConfig(user.id, configData);
-
-    console.log(
-      `📧 SMTP config created for user ${user.email}: ${configData.name}`
-    );
-
-    return c.json({
-      success: true,
-      data: { ...configData, id: configId },
-      message: "✅ SMTP configuration saved successfully",
-      configId,
-    });
-  } catch (error) {
-    console.error("Error creating SMTP config:", error);
-    return c.json(
-      {
-        success: false,
-        message: "❌ Failed to save SMTP configuration",
-      },
-      500
-    );
+    return success(
+      c,
+      { valid: isValid },
+      isValid ? '✅ Success' : '❌ Failed'
+    )
+  } catch (err) {
+    console.error('Test error:', err)
+    return error(c, 'Test failed', 500)
   }
-});
+})
 
-// PUT - Update existing SMTP configuration
-app.put("/config/smtp/:configId", async (c) => {
-  try {
-    const user = requireAuth(c);
-    const configId = c.req.param("configId");
-    const body = await c.req.json();
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
-    const updates = {
-      name: body.name,
-      host: body.host,
-      port: body.port,
-      secure: body.secure,
-      user: body.user,
-      pass: body.pass,
-      from_email: body.fromEmail,
-      from_name: body.fromName,
-      is_default: body.isDefault,
-    };
-
-    // Remove undefined values
-    Object.keys(updates).forEach((key) => {
-      if (updates[key as keyof typeof updates] === undefined) {
-        delete updates[key as keyof typeof updates];
-      }
-    });
-
-    const updated = userDatabase.updateSMTPConfig(configId, user.id, updates);
-
-    if (!updated) {
-      return c.json(
-        {
-          success: false,
-          message: "Configuration not found or no changes made",
-        },
-        404
-      );
-    }
-
-    console.log(`📧 SMTP config updated for user ${user.email}: ${configId}`);
-
-    return c.json({
-      success: true,
-      message: "✅ SMTP configuration updated successfully",
-    });
-  } catch (error) {
-    console.error("Error updating SMTP config:", error);
-    return c.json(
-      {
-        success: false,
-        message: "❌ Failed to update SMTP configuration",
-      },
-      500
-    );
+/**
+ * Format config for API response
+ */
+function formatConfig(config: any) {
+  return {
+    id: config.id,
+    name: config.name,
+    provider_type: config.provider_type || 'smtp',
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    user: config.username,
+    from_email: config.from_email,
+    from_name: config.from_name,
+    is_default: config.is_default,
+    oauth_email: config.oauth_email,
+    created_at: config.created_at,
   }
-});
+}
 
-// DELETE - Delete SMTP configuration
-app.delete("/config/smtp/:configId", async (c) => {
-  try {
-    const user = requireAuth(c);
-    const configId = c.req.param("configId");
-
-    const deleted = userDatabase.deleteSMTPConfig(configId, user.id);
-
-    if (!deleted) {
-      return c.json(
-        {
-          success: false,
-          message: "Configuration not found",
-        },
-        404
-      );
-    }
-
-    console.log(`🗑️ SMTP config deleted for user ${user.email}: ${configId}`);
-
-    return c.json({
-      success: true,
-      message: "✅ SMTP configuration deleted successfully",
-    });
-  } catch (error) {
-    console.error("Error deleting SMTP config:", error);
-    return c.json(
-      {
-        success: false,
-        message: "❌ Failed to delete SMTP configuration",
-      },
-      500
-    );
+/**
+ * Format config for legacy API response
+ */
+function formatConfigLegacy(config: any) {
+  return {
+    id: config.id,
+    name: config.name,
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    user: config.username,
+    fromEmail: config.from_email,
+    fromName: config.from_name,
+    isDefault: config.is_default,
+    createdAt: config.created_at,
   }
-});
+}
 
-// POST - Set default configuration
-app.post("/config/smtp/:configId/default", async (c) => {
-  try {
-    const user = requireAuth(c);
-    const configId = c.req.param("configId");
+/**
+ * Build updates object from request body
+ */
+function buildUpdates(body: Record<string, any>) {
+  const updates: Record<string, any> = {}
 
-    const updated = userDatabase.updateSMTPConfig(configId, user.id, {
-      is_default: true,
-    });
+  if (body.name !== undefined) updates.name = body.name
+  if (body.host !== undefined) updates.host = body.host
+  if (body.port !== undefined) updates.port = body.port
+  if (body.secure !== undefined) updates.secure = body.secure
+  if (body.user !== undefined) updates.username = body.user
+  if (body.pass) updates.password = body.pass
+  if (body.fromEmail !== undefined) updates.from_email = body.fromEmail
+  if (body.from_email !== undefined) updates.from_email = body.from_email
+  if (body.fromName !== undefined) updates.from_name = body.fromName
+  if (body.from_name !== undefined) updates.from_name = body.from_name
+  if (body.isDefault !== undefined) updates.is_default = body.isDefault
+  if (body.is_default !== undefined) updates.is_default = body.is_default
 
-    if (!updated) {
-      return c.json(
-        {
-          success: false,
-          message: "Configuration not found",
-        },
-        404
-      );
-    }
+  return updates
+}
 
-    return c.json({
-      success: true,
-      message: "✅ Default configuration updated",
-    });
-  } catch (error) {
-    console.error("Error setting default config:", error);
-    return c.json(
-      {
-        success: false,
-        message: "❌ Failed to set default configuration",
-      },
-      500
-    );
-  }
-});
-
-// GET active config for sending emails (backward compatibility)
-app.get("/config/smtp/active", (c) => {
-  const user = requireAuth(c);
-
-  const defaultConfig = userDatabase.getUserDefaultSMTPConfig(user.id);
-  const activeConfig = defaultConfig
-    ? {
-        host: defaultConfig.host,
-        port: defaultConfig.port,
-        secure: !!defaultConfig.secure,
-        user: defaultConfig.user,
-        pass: defaultConfig.pass,
-        fromEmail: defaultConfig.from_email,
-        fromName: defaultConfig.from_name,
-      }
-    : hasEnvConfig
-    ? envConfig
-    : null;
-
-  return c.json({
-    success: true,
-    data: activeConfig,
-    mode: defaultConfig ? "user" : "env",
-    configId: defaultConfig?.id,
-    configName: defaultConfig?.name,
-  });
-});
-
-// GET - Test SMTP connection
-app.post("/config/smtp/test", async (c) => {
-  try {
-    const user = requireAuth(c);
-    const body = await c.req.json();
-
-    // Import email service for testing
-    const { emailService } = await import("../services/emailService");
-
-    const testConfig = {
-      host: body.host,
-      port: body.port || 587,
-      secure: !!body.secure,
-      auth: {
-        user: body.user,
-        pass: body.pass,
-      },
-    };
-
-    const isValid = await emailService.testConnection(testConfig);
-
-    return c.json({
-      success: isValid,
-      message: isValid
-        ? "✅ SMTP connection successful"
-        : "❌ SMTP connection failed",
-    });
-  } catch (error) {
-    console.error("SMTP test error:", error);
-    return c.json(
-      {
-        success: false,
-        message: "❌ SMTP connection test failed",
-      },
-      500
-    );
-  }
-});
-
-export default app;
+export default app

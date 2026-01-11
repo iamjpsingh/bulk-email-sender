@@ -72,6 +72,11 @@ class LogService {
     this.saveLogs();
   }
 
+  deleteLog(id: string) {
+    this.logs = this.logs.filter(log => log.id !== id);
+    this.saveLogs();
+  }
+
   getStats() {
     const total = this.logs.length;
     const sent = this.logs.filter((log) => log.status === "Sent").length;

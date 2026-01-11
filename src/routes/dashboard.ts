@@ -1,173 +1,205 @@
-// src/routes/dashboard.ts - CREATE THIS NEW FILE
-import { Hono } from "hono";
-import { requireAuth } from "../middleware/auth";
+/**
+ * Dashboard Routes
+ * Stats, polling status, and real-time data
+ */
+import { Hono } from 'hono'
+import { requireAuth } from '../middleware/auth'
+import { logService } from '../services/logService'
+import { success, error } from '../utils/response'
 
-// Simple in-memory cache for dashboard state
-let dashboardState = {
+// Lazy-loaded services
+let batchService: any = null
+let schedulerService: any = null
+
+/**
+ * Get batch service (lazy load)
+ */
+function getBatchService() {
+  if (!batchService) {
+    try {
+      batchService = require('../services/batchService').batchService
+    } catch {
+      return null
+    }
+  }
+  return batchService
+}
+
+/**
+ * Get scheduler service (lazy load)
+ */
+function getSchedulerService() {
+  if (!schedulerService) {
+    try {
+      schedulerService = require('../services/schedulerService').schedulerService
+    } catch {
+      return null
+    }
+  }
+  return schedulerService
+}
+
+// Dashboard state cache
+const dashboardCache = {
   lastBatchCheck: 0,
   lastScheduledCheck: 0,
   hasBatchJobs: false,
   hasScheduledJobs: false,
-  cacheValidFor: 5000, // Cache valid for 5 seconds
-};
+  cacheValidFor: 5000, // 5 seconds
+}
 
-const app = new Hono();
+const app = new Hono()
 
-// NEW: Lightweight endpoint to check if polling is needed
-app.get("/dashboard/poll-status", (c) => {
-  const user = requireAuth(c);
+/**
+ * Get dashboard stats
+ * GET /dashboard/stats
+ */
+app.get('/dashboard/stats', (c) => {
+  requireAuth(c)
 
   try {
-    const now = Date.now();
-    let hasActiveBatch = false;
-    let hasScheduledJobs = false;
-    let hasRunningScheduledJobs = false;
+    const batch = getBatchService()
+    const scheduler = getSchedulerService()
 
-    // Use cached values if recent enough
-    if (now - dashboardState.lastBatchCheck < dashboardState.cacheValidFor) {
-      hasActiveBatch = dashboardState.hasBatchJobs;
+    const batchStatus = batch?.getBatchStatus() ?? null
+    const scheduledJobs = scheduler?.getScheduledJobs() ?? []
+    const allLogs = logService.getLogs() ?? []
+
+    return success(c, {
+      stats: logService.getStats(),
+      batch: batchStatus,
+      scheduledJobs,
+      recentLogs: allLogs.slice(0, 10),
+      timestamp: new Date().toISOString(),
+    })
+  } catch (err) {
+    console.error('Dashboard stats error:', err)
+    return success(c, {
+      stats: { sent: 0, failed: 0, total: 0 },
+      batch: null,
+      scheduledJobs: [],
+      recentLogs: [],
+      timestamp: new Date().toISOString(),
+    })
+  }
+})
+
+/**
+ * Get polling status (lightweight)
+ * GET /dashboard/poll-status
+ */
+app.get('/dashboard/poll-status', (c) => {
+  requireAuth(c)
+
+  try {
+    const now = Date.now()
+    let hasActiveBatch = false
+    let hasScheduledJobs = false
+    let hasRunningScheduledJobs = false
+
+    // Check batch status (with cache)
+    if (now - dashboardCache.lastBatchCheck < dashboardCache.cacheValidFor) {
+      hasActiveBatch = dashboardCache.hasBatchJobs
     } else {
-      // Check batch status (only import when needed)
-      try {
-        const { batchService } = require("../services/batchService");
-        const batchStatus = batchService.getBatchStatus();
-        hasActiveBatch = batchStatus.isRunning;
-        dashboardState.hasBatchJobs = hasActiveBatch;
-        dashboardState.lastBatchCheck = now;
-      } catch (error) {
-        console.warn("Batch service not available:", error.message);
-        hasActiveBatch = false;
+      const batch = getBatchService()
+      if (batch) {
+        const status = batch.getBatchStatus()
+        hasActiveBatch = status?.isRunning ?? false
+        dashboardCache.hasBatchJobs = hasActiveBatch
+        dashboardCache.lastBatchCheck = now
       }
     }
 
-    // Use cached values if recent enough
-    if (
-      now - dashboardState.lastScheduledCheck <
-      dashboardState.cacheValidFor
-    ) {
-      hasScheduledJobs = dashboardState.hasScheduledJobs;
+    // Check scheduled jobs (with cache)
+    if (now - dashboardCache.lastScheduledCheck < dashboardCache.cacheValidFor) {
+      hasScheduledJobs = dashboardCache.hasScheduledJobs
     } else {
-      // Check scheduled jobs (only import when needed)
-      try {
-        const { schedulerService } = require("../services/schedulerService");
-        const scheduledJobs = schedulerService.getScheduledJobs();
-        hasScheduledJobs = scheduledJobs && scheduledJobs.length > 0;
-        hasRunningScheduledJobs =
-          scheduledJobs &&
-          scheduledJobs.some((job) => job.status === "running");
-        dashboardState.hasScheduledJobs = hasScheduledJobs;
-        dashboardState.lastScheduledCheck = now;
-      } catch (error) {
-        console.warn("Scheduler service not available:", error.message);
-        hasScheduledJobs = false;
+      const scheduler = getSchedulerService()
+      if (scheduler) {
+        const jobs = scheduler.getScheduledJobs() ?? []
+        hasScheduledJobs = jobs.length > 0
+        hasRunningScheduledJobs = jobs.some((j: any) => j.status === 'running')
+        dashboardCache.hasScheduledJobs = hasScheduledJobs
+        dashboardCache.lastScheduledCheck = now
       }
     }
 
-    // Determine if polling is needed and at what interval
-    let pollNeeded = false;
-    let pollInterval = 30000; // Default 30 seconds (slow polling)
+    // Determine polling interval
+    let pollNeeded = false
+    let pollInterval = 30000 // Default: 30s
 
     if (hasActiveBatch) {
-      pollNeeded = true;
-      pollInterval = 3000; // Fast polling for active batch jobs (3 seconds)
+      pollNeeded = true
+      pollInterval = 3000 // Fast: 3s for active batch
     } else if (hasRunningScheduledJobs) {
-      pollNeeded = true;
-      pollInterval = 10000; // Medium polling for running scheduled jobs (10 seconds)
+      pollNeeded = true
+      pollInterval = 10000 // Medium: 10s for running scheduled
     } else if (hasScheduledJobs) {
-      pollNeeded = true;
-      pollInterval = 30000; // Slow polling for pending scheduled jobs (30 seconds)
+      pollNeeded = true
+      pollInterval = 30000 // Slow: 30s for pending scheduled
     }
 
-    return c.json({
-      success: true,
-      data: {
-        pollNeeded,
-        pollInterval,
-        hasActiveBatch,
-        hasScheduledJobs,
-        hasRunningScheduledJobs,
-        activeBatchCount: hasActiveBatch ? 1 : 0,
-        scheduledJobCount: hasScheduledJobs ? 1 : 0, // Simplified count
-        lastUpdated: new Date().toISOString(),
-        cached: true,
-      },
-    });
-  } catch (error) {
-    console.error("Poll status error:", error);
-    return c.json({
-      success: true,
-      data: {
-        pollNeeded: false,
-        pollInterval: 30000,
-        hasActiveBatch: false,
-        hasScheduledJobs: false,
-        hasRunningScheduledJobs: false,
-        activeBatchCount: 0,
-        scheduledJobCount: 0,
-        lastUpdated: new Date().toISOString(),
-        error: "Service unavailable",
-      },
-    });
+    return success(c, {
+      pollNeeded,
+      pollInterval,
+      hasActiveBatch,
+      hasScheduledJobs,
+      hasRunningScheduledJobs,
+      activeBatchCount: hasActiveBatch ? 1 : 0,
+      scheduledJobCount: hasScheduledJobs ? 1 : 0,
+      lastUpdated: new Date().toISOString(),
+      cached: true,
+    })
+  } catch (err) {
+    console.error('Poll status error:', err)
+    return success(c, {
+      pollNeeded: false,
+      pollInterval: 30000,
+      hasActiveBatch: false,
+      hasScheduledJobs: false,
+      hasRunningScheduledJobs: false,
+      activeBatchCount: 0,
+      scheduledJobCount: 0,
+      lastUpdated: new Date().toISOString(),
+      error: 'Service unavailable',
+    })
   }
-});
+})
 
-// NEW: Optimized dashboard data endpoint (only called when needed)
-app.get("/dashboard/data", (c) => {
-  const user = requireAuth(c);
+/**
+ * Get dashboard data (optimized)
+ * GET /dashboard/data
+ */
+app.get('/dashboard/data', (c) => {
+  requireAuth(c)
 
   try {
-    let batchStatus = null;
-    let scheduledJobs = null;
+    let batchStatus = null
+    let scheduledJobs: any[] = []
 
-    // Only fetch batch data if we know there are active jobs
-    if (dashboardState.hasBatchJobs) {
-      try {
-        const { batchService } = require("../services/batchService");
-        batchStatus = batchService.getBatchStatus();
-      } catch (error) {
-        console.warn("Batch service unavailable:", error.message);
-      }
+    // Only fetch if we know there's data
+    if (dashboardCache.hasBatchJobs) {
+      const batch = getBatchService()
+      batchStatus = batch?.getBatchStatus() ?? null
     }
 
-    // Only fetch scheduled jobs if we know there are any
-    if (dashboardState.hasScheduledJobs) {
-      try {
-        const { schedulerService } = require("../services/schedulerService");
-        const allJobs = schedulerService.getScheduledJobs();
-        // Filter to only return relevant ones and limit to 5
-        scheduledJobs = allJobs
-          .filter(
-            (job) => job.status === "scheduled" || job.status === "running"
-          )
-          .slice(0, 5);
-      } catch (error) {
-        console.warn("Scheduler service unavailable:", error.message);
-      }
+    if (dashboardCache.hasScheduledJobs) {
+      const scheduler = getSchedulerService()
+      const allJobs = scheduler?.getScheduledJobs() ?? []
+      scheduledJobs = allJobs
+        .filter((j: any) => j.status === 'scheduled' || j.status === 'running')
+        .slice(0, 5)
     }
 
-    return c.json({
-      success: true,
-      data: {
-        batch: batchStatus,
-        scheduledJobs: scheduledJobs || [],
-        timestamp: new Date().toISOString(),
-      },
-    });
-  } catch (error) {
-    console.error("Dashboard data error:", error);
-    return c.json(
-      {
-        success: false,
-        message: "Failed to fetch dashboard data",
-        data: {
-          batch: null,
-          scheduledJobs: [],
-          timestamp: new Date().toISOString(),
-        },
-      },
-      500
-    );
+    return success(c, {
+      batch: batchStatus,
+      scheduledJobs,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (err) {
+    console.error('Dashboard data error:', err)
+    return error(c, 'Failed to fetch dashboard data', 500)
   }
-});
+})
 
-export default app;
+export default app

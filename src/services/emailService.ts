@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { logService } from "./logService";
 import { FileService } from "./fileService";
+import { d1Service } from "./d1Service";
 import type { EmailConfig, Contact, EmailJob } from "../types";
 
 export class EmailService {
@@ -103,6 +104,13 @@ export class EmailService {
       email?: string;
       userId?: string;
       configName?: string;
+    },
+    trackingOptions?: {
+      userId: string;
+      campaignId?: string;
+      sendType?: 'direct' | 'batch' | 'scheduled';
+      providerType?: 'smtp' | 'google' | 'microsoft';
+      configName?: string;
     }
   ): Promise<void> {
     if (!this.transporter) {
@@ -115,12 +123,15 @@ export class EmailService {
     let sentCount = 0;
     let failedCount = 0;
 
+    // Generate campaign ID for tracking
+    const campaignId = trackingOptions?.campaignId || d1Service.generateCampaignId();
+
     for (let i = 0; i < job.contacts.length; i++) {
       const contact = job.contacts[i];
 
       try {
         // Replace placeholders in HTML content
-        const personalizedContent = FileService.replacePlaceholders(
+        let personalizedContent = FileService.replacePlaceholders(
           job.htmlContent,
           contact
         );
@@ -128,6 +139,27 @@ export class EmailService {
           job.subject,
           contact
         );
+
+        // Register with tracking service and inject tracking pixel/links
+        if (d1Service.isConfigured() && trackingOptions?.userId) {
+          const trackingResult = await d1Service.registerEmail({
+            userId: trackingOptions.userId,
+            campaignId,
+            campaignName: `Campaign ${new Date().toLocaleDateString()}`,
+            subject: personalizedSubject,
+            fromEmail: job.fromEmail,
+            fromName: job.fromName,
+            recipientEmail: contact.Email,
+            recipientName: (contact.FirstName || String(contact['Name'] || '')),
+            sendType: trackingOptions.sendType || 'direct',
+            providerType: trackingOptions.providerType || 'smtp',
+            configName: trackingOptions.configName || ''
+          });
+
+          if (trackingResult) {
+            personalizedContent = d1Service.injectTracking(personalizedContent, trackingResult.trackingId);
+          }
+        }
 
         const mailOptions = {
           from: `${job.fromName} <${job.fromEmail}>`,
@@ -186,7 +218,11 @@ export class EmailService {
     if (notificationSettings?.email && notificationSettings?.userId) {
       await this.sendBulkCompletionNotification(
         job,
-        notificationSettings,
+        {
+          email: notificationSettings.email,
+          userId: notificationSettings.userId,
+          configName: notificationSettings.configName
+        },
         startTime,
         sentCount,
         failedCount

@@ -1,13 +1,14 @@
-// src/services/batchService.ts - COMPLETE FIX WITH NOTIFICATION SUPPORT
+// src/services/batchService.ts - COMPLETE FIX WITH NOTIFICATION + TRACKING SUPPORT
 import { emailService } from "./emailService";
 import { logService } from "./logService";
 import { FileService } from "./fileService";
+import { d1Service } from "./d1Service";
 import type {
   BatchJob,
   BatchConfig,
   EmailJob,
   Contact,
-  BatchStatus,
+  BatchStatusInfo,
 } from "../types";
 
 class BatchService {
@@ -115,7 +116,7 @@ class BatchService {
     }
   }
 
-  getBatchStatus(): BatchStatus {
+  getBatchStatus(): BatchStatusInfo {
     return {
       isRunning: this.isRunning,
       currentJob: this.currentJob,
@@ -174,6 +175,10 @@ class BatchService {
   ): Promise<void> {
     const { emailJob, config } = job;
 
+    // Generate campaign ID for this batch job (reuse across all batches)
+    const campaignId = (job as any).campaignId || d1Service.generateCampaignId();
+    (job as any).campaignId = campaignId;
+
     for (let i = 0; i < contacts.length; i++) {
       if (!this.isRunning) {
         break; // Stop if paused or cancelled
@@ -183,7 +188,7 @@ class BatchService {
 
       try {
         // Replace placeholders in HTML content
-        const personalizedContent = FileService.replacePlaceholders(
+        let personalizedContent = FileService.replacePlaceholders(
           emailJob.htmlContent,
           contact
         );
@@ -191,6 +196,27 @@ class BatchService {
           emailJob.subject,
           contact
         );
+
+        // Register with tracking service and inject tracking
+        if (d1Service.isConfigured() && job.userId) {
+          const trackingResult = await d1Service.registerEmail({
+            userId: job.userId,
+            campaignId,
+            campaignName: `Batch Campaign ${new Date().toLocaleDateString()}`,
+            subject: personalizedSubject,
+            fromEmail: emailJob.fromEmail,
+            fromName: emailJob.fromName,
+            recipientEmail: contact.Email,
+            recipientName: (contact.FirstName || String(contact['Name'] || '')),
+            sendType: 'batch',
+            providerType: 'smtp',
+            configName: job.configName || ''
+          });
+
+          if (trackingResult) {
+            personalizedContent = d1Service.injectTracking(personalizedContent, trackingResult.trackingId);
+          }
+        }
 
         const mailOptions = {
           from: `${emailJob.fromName} <${emailJob.fromEmail}>`,

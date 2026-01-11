@@ -3,7 +3,7 @@ import Database from "bun:sqlite";
 import { existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { hash, verify } from "argon2";
-import { createHmac, randomBytes } from "crypto";
+import { randomBytes, createHmac } from "crypto";
 
 export interface User {
   id: string;
@@ -23,10 +23,13 @@ export interface UserSession {
   created_at: string;
 }
 
+export type EmailProvider = "google" | "microsoft" | "smtp";
+
 export interface UserSMTPConfig {
   id: string;
   user_id: string;
   name: string; // Config name (e.g., "Gmail Account", "Work Email")
+  provider_type: EmailProvider; // NEW: Provider type
   host: string;
   port: number;
   secure: boolean;
@@ -37,6 +40,11 @@ export interface UserSMTPConfig {
   is_default: boolean;
   created_at: string;
   updated_at: string;
+  // OAuth fields (for google/microsoft)
+  oauth_email?: string;
+  oauth_access_token?: string;
+  oauth_refresh_token?: string;
+  oauth_expires_at?: number;
 }
 
 class UserDatabase {
@@ -101,25 +109,33 @@ class UserDatabase {
       )
     `);
 
-    // User SMTP configs table
+    // User SMTP configs table (with OAuth support)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS user_smtp_configs (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
-        host TEXT NOT NULL,
-        port INTEGER NOT NULL,
-        secure INTEGER NOT NULL,
-        user TEXT NOT NULL,
-        pass TEXT NOT NULL,
+        provider_type TEXT DEFAULT 'smtp',
+        host TEXT,
+        port INTEGER,
+        secure INTEGER,
+        user TEXT,
+        pass TEXT,
         from_email TEXT NOT NULL,
         from_name TEXT,
         is_default INTEGER DEFAULT 0,
+        oauth_email TEXT,
+        oauth_access_token TEXT,
+        oauth_refresh_token TEXT,
+        oauth_expires_at INTEGER,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       )
     `);
+
+    // Migration: Add OAuth columns if they don't exist
+    this.migrateOAuthColumns();
 
     // Create indexes
     this.db.exec(
@@ -133,6 +149,92 @@ class UserDatabase {
     );
 
     console.log("✅ User database initialized with enhanced security");
+  }
+
+  // Migration for OAuth columns
+  private migrateOAuthColumns() {
+    const columns = [
+      { name: "provider_type", sql: "ALTER TABLE user_smtp_configs ADD COLUMN provider_type TEXT DEFAULT 'smtp'" },
+      { name: "oauth_email", sql: "ALTER TABLE user_smtp_configs ADD COLUMN oauth_email TEXT" },
+      { name: "oauth_access_token", sql: "ALTER TABLE user_smtp_configs ADD COLUMN oauth_access_token TEXT" },
+      { name: "oauth_refresh_token", sql: "ALTER TABLE user_smtp_configs ADD COLUMN oauth_refresh_token TEXT" },
+      { name: "oauth_expires_at", sql: "ALTER TABLE user_smtp_configs ADD COLUMN oauth_expires_at INTEGER" },
+    ];
+
+    for (const col of columns) {
+      try {
+        this.db.exec(col.sql);
+        console.log(`✅ Added ${col.name} column to user_smtp_configs`);
+      } catch {
+        // Column already exists
+      }
+    }
+
+    // Fix NOT NULL constraints for OAuth support - recreate table if needed
+    this.fixNullConstraints();
+  }
+
+  // Fix NOT NULL constraints on host/port/user/pass for OAuth configs
+  private fixNullConstraints() {
+    try {
+      // Check if we need to fix by trying to insert a test row
+      const testStmt = this.db.prepare(`
+        SELECT sql FROM sqlite_master WHERE type='table' AND name='user_smtp_configs'
+      `);
+      const result = testStmt.get() as { sql: string } | undefined;
+      
+      if (result?.sql && result.sql.includes('host TEXT NOT NULL')) {
+        console.log("🔄 Migrating database to support OAuth (nullable host/port/user/pass)...");
+        
+        // Create new table with correct schema
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS user_smtp_configs_new (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            provider_type TEXT DEFAULT 'smtp',
+            host TEXT,
+            port INTEGER,
+            secure INTEGER,
+            user TEXT,
+            pass TEXT,
+            from_email TEXT NOT NULL,
+            from_name TEXT,
+            is_default INTEGER DEFAULT 0,
+            oauth_email TEXT,
+            oauth_access_token TEXT,
+            oauth_refresh_token TEXT,
+            oauth_expires_at INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+          )
+        `);
+
+        // Copy data from old table
+        this.db.exec(`
+          INSERT INTO user_smtp_configs_new 
+          SELECT id, user_id, name, 
+                 COALESCE(provider_type, 'smtp'), 
+                 host, port, secure, user, pass, 
+                 from_email, from_name, is_default,
+                 oauth_email, oauth_access_token, oauth_refresh_token, oauth_expires_at,
+                 created_at, updated_at
+          FROM user_smtp_configs
+        `);
+
+        // Drop old table and rename new one
+        this.db.exec(`DROP TABLE user_smtp_configs`);
+        this.db.exec(`ALTER TABLE user_smtp_configs_new RENAME TO user_smtp_configs`);
+
+        // Recreate index
+        this.db.exec(`CREATE INDEX IF NOT EXISTS idx_smtp_configs_user_id ON user_smtp_configs(user_id)`);
+
+        console.log("✅ Database migration completed");
+      }
+    } catch (error) {
+      console.error("Migration error (may be safe to ignore):", error);
+    }
   }
 
   // SECURE: Generate cryptographically secure signed tokens
@@ -345,10 +447,10 @@ class UserDatabase {
     this.db.prepare(`DELETE FROM user_sessions WHERE token = ?`).run(token);
   }
 
-  // SMTP Config management per user (unchanged)
+  // SMTP Config management per user
   async createSMTPConfig(
     userId: string,
-    config: Omit<UserSMTPConfig, "id" | "user_id" | "created_at" | "updated_at">
+    config: Omit<UserSMTPConfig, "id" | "user_id" | "created_at" | "updated_at" | "oauth_email" | "oauth_access_token" | "oauth_refresh_token" | "oauth_expires_at">
   ): Promise<string> {
     const configId = `smtp_${Date.now()}`;
 
@@ -367,14 +469,15 @@ class UserDatabase {
       .prepare(
         `
       INSERT INTO user_smtp_configs 
-      (id, user_id, name, host, port, secure, user, pass, from_email, from_name, is_default)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, user_id, name, provider_type, host, port, secure, user, pass, from_email, from_name, is_default)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
       )
       .run(
         configId,
         userId,
         config.name,
+        config.provider_type || "smtp",
         config.host,
         config.port,
         config.secure ? 1 : 0,
@@ -447,11 +550,11 @@ class UserDatabase {
     }
 
     const setClause = updateFields.map((field) => `${field} = ?`).join(", ");
-    const values = updateFields.map((field) => {
+    const values: (string | number | boolean)[] = updateFields.map((field) => {
       if (field === "secure" || field === "is_default") {
         return updates[field as keyof UserSMTPConfig] ? 1 : 0;
       }
-      return updates[field as keyof UserSMTPConfig];
+      return updates[field as keyof UserSMTPConfig] as string | number | boolean;
     });
 
     const result = this.db
@@ -477,6 +580,90 @@ class UserDatabase {
       .run(configId, userId);
 
     return result.changes > 0;
+  }
+
+  // Create OAuth email config (Google/Microsoft)
+  async createOAuthConfig(
+    userId: string,
+    provider: EmailProvider,
+    name: string,
+    oauthEmail: string,
+    accessToken: string,
+    refreshToken: string,
+    expiresAt: number,
+    isDefault: boolean = false
+  ): Promise<string> {
+    const configId = `oauth_${Date.now()}`;
+
+    // If this is set as default, unset other defaults for this user
+    if (isDefault) {
+      this.db
+        .prepare(`UPDATE user_smtp_configs SET is_default = 0 WHERE user_id = ?`)
+        .run(userId);
+    }
+
+    this.db
+      .prepare(
+        `
+      INSERT INTO user_smtp_configs 
+      (id, user_id, name, provider_type, from_email, from_name, is_default, oauth_email, oauth_access_token, oauth_refresh_token, oauth_expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+      )
+      .run(
+        configId,
+        userId,
+        name,
+        provider,
+        oauthEmail,
+        name,
+        isDefault ? 1 : 0,
+        oauthEmail,
+        accessToken,
+        refreshToken,
+        expiresAt
+      );
+
+    console.log(`🔐 OAuth config created for user: ${provider} - ${oauthEmail}`);
+    return configId;
+  }
+
+  // Update OAuth tokens (for refresh)
+  updateOAuthTokens(
+    configId: string,
+    userId: string,
+    accessToken: string,
+    expiresAt: number
+  ): boolean {
+    const result = this.db
+      .prepare(
+        `
+      UPDATE user_smtp_configs 
+      SET oauth_access_token = ?, oauth_expires_at = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ? AND user_id = ?
+    `
+      )
+      .run(accessToken, expiresAt, configId, userId);
+
+    return result.changes > 0;
+  }
+
+  // Get OAuth config by ID
+  getOAuthConfig(configId: string, userId: string): UserSMTPConfig | null {
+    return this.db
+      .prepare(
+        `
+      SELECT * FROM user_smtp_configs 
+      WHERE id = ? AND user_id = ? AND provider_type IN ('google', 'microsoft')
+    `
+      )
+      .get(configId, userId) as UserSMTPConfig | null;
+  }
+
+  // Check if OAuth token needs refresh (expires in less than 5 minutes)
+  needsTokenRefresh(config: UserSMTPConfig): boolean {
+    if (!config.oauth_expires_at) return false;
+    return config.oauth_expires_at < Date.now() + 5 * 60 * 1000;
   }
 
   // Clean expired sessions

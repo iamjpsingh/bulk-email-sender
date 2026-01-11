@@ -1,6 +1,6 @@
 // src/services/notificationService.ts - UPDATED WITH PROFESSIONAL ICONS
 import nodemailer from "nodemailer";
-import { userDatabase, UserSMTPConfig } from "./userDatabase";
+import { d1UserDatabase, type D1SMTPConfig } from "./d1UserDatabase";
 import { logService } from "./logService";
 import type { EmailLog, NotificationConfig } from "../types";
 
@@ -65,13 +65,6 @@ class NotificationService {
     configUsed: string
   ): Promise<boolean> {
     try {
-      // Get user details
-      const user = userDatabase.getUserById(userId);
-      if (!user) {
-        console.error("❌ User not found for notification");
-        return false;
-      }
-
       // Calculate additional stats
       const successRate =
         jobStats.total > 0 ? (jobStats.sent / jobStats.total) * 100 : 0;
@@ -94,14 +87,14 @@ class NotificationService {
       };
 
       // Try to use user's SMTP config first
-      const userConfig = userDatabase.getUserDefaultSMTPConfig(userId);
+      const userConfig = await d1UserDatabase.getUserDefaultSMTPConfig(userId);
       if (userConfig) {
         return await this.sendWithUserConfig(
           userConfig,
           notifyEmail,
           completeJobStats,
           completeJobDetails,
-          user
+          { name: 'User', email: notifyEmail }
         );
       }
 
@@ -111,7 +104,7 @@ class NotificationService {
           notifyEmail,
           completeJobStats,
           completeJobDetails,
-          user
+          { name: 'User', email: notifyEmail }
         );
       }
 
@@ -127,7 +120,7 @@ class NotificationService {
    * Send notification using user's SMTP configuration
    */
   private async sendWithUserConfig(
-    userConfig: UserSMTPConfig,
+    userConfig: D1SMTPConfig,
     notifyEmail: string,
     jobStats: JobStats,
     jobDetails: JobDetails,
@@ -140,8 +133,8 @@ class NotificationService {
         port: userConfig.port,
         secure: !!userConfig.secure,
         auth: {
-          user: userConfig.user,
-          pass: userConfig.pass,
+          user: userConfig.username,
+          pass: userConfig.password,
         },
       });
 

@@ -1,14 +1,33 @@
-import { Hono } from "hono";
-import { serveStatic } from "hono/bun";
+/**
+ * Root Routes
+ * API information and documentation endpoint
+ */
+import { Hono } from 'hono'
+import { API, SERVER } from '../config'
+import { ROUTE_GROUPS } from '../config/routes'
 
-const app = new Hono();
+const app = new Hono()
 
-// Serve static files
-app.use("/public/*", serveStatic({ root: "./" }));
-app.use("/css/*", serveStatic({ root: "./public" }));
-app.use("/js/*", serveStatic({ root: "./public" }));
+/**
+ * GET /
+ * API information and available endpoints
+ */
+app.get('/', (c) => {
+  return c.json({
+    success: true,
+    name: API.NAME,
+    version: API.VERSION,
+    documentation: {
+      message: 'API is running. Use the Vue frontend for the UI.',
+      frontend: SERVER.FRONTEND_URL,
+    },
+    endpoints: Object.fromEntries(
+      Object.entries(ROUTE_GROUPS).map(([key, group]) => [
+        key.toLowerCase(),
+        `${group.prefix}/*`,
+      ])
+    ),
+  })
+})
 
-// Home route - serve the main HTML file
-app.get("/", serveStatic({ path: "./public/index.html" }));
-
-export default app;
+export default app

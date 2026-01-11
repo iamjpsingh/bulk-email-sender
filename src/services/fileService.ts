@@ -69,28 +69,12 @@ export class FileService {
             const cleanHeader = header.trim();
             const value = row[index] ? String(row[index]).trim() : "";
 
-            // Map common column names
-            if (cleanHeader.toLowerCase().includes("email")) {
+            // Store with ORIGINAL column name exactly as in Excel
+            contact[cleanHeader] = value;
+
+            // Set Email field for validation (find any email-like column)
+            if (cleanHeader.toLowerCase().includes("email") && value.includes("@")) {
               contact.Email = value;
-            } else if (
-              cleanHeader.toLowerCase().includes("firstname") ||
-              cleanHeader.toLowerCase().includes("first_name") ||
-              cleanHeader.toLowerCase() === "first"
-            ) {
-              contact.FirstName = value;
-            } else if (
-              cleanHeader.toLowerCase().includes("lastname") ||
-              cleanHeader.toLowerCase().includes("last_name") ||
-              cleanHeader.toLowerCase() === "last"
-            ) {
-              contact.LastName = value;
-            } else if (cleanHeader.toLowerCase().includes("company")) {
-              contact.Company = value;
-            } else if (cleanHeader.toLowerCase().includes("subject")) {
-              contact.Subject = value;
-            } else {
-              // Store any other columns as-is
-              contact[cleanHeader] = value;
             }
           }
         });
@@ -190,25 +174,13 @@ export class FileService {
 
     let result = template;
 
-    // Replace common placeholders
-    result = result.replace(/\{\{FirstName\}\}/g, contact.FirstName || "");
-    result = result.replace(/\{\{LastName\}\}/g, contact.LastName || "");
-    result = result.replace(/\{\{Company\}\}/g, contact.Company || "");
-    result = result.replace(/\{\{Email\}\}/g, contact.Email || "");
-    result = result.replace(/\{\{Subject\}\}/g, contact.Subject || "");
-
-    // Replace any other custom fields from the Excel file
-    Object.keys(contact).forEach((key) => {
-      if (
-        key !== "Email" &&
-        key !== "FirstName" &&
-        key !== "LastName" &&
-        key !== "Company" &&
-        key !== "Subject"
-      ) {
-        const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, "g");
-        result = result.replace(placeholder, String(contact[key] || ""));
+    // Replace placeholders with exact key match
+    // Match {{anything}} pattern
+    result = result.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+      if (contact[key] !== undefined) {
+        return String(contact[key] || "");
       }
+      return match;
     });
 
     return result;
