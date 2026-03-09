@@ -16,7 +16,7 @@ Track email opens and clicks using Cloudflare Workers + D1.
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Cloudflare Worker (mailflow-tracker.workers.dev)               │
+│  Cloudflare Worker (dispatch-tracker.workers.dev)               │
 │                                                                 │
 │  /o/:id     → Return 1x1 pixel, record open in D1              │
 │  /c/:id     → Record click in D1, redirect to original URL     │
@@ -57,7 +57,7 @@ wrangler login
 
 ```bash
 cd tracking-worker
-wrangler d1 create mailflow
+wrangler d1 create dispatch
 ```
 
 Copy the `database_id` from output and paste in `wrangler.toml`:
@@ -65,14 +65,14 @@ Copy the `database_id` from output and paste in `wrangler.toml`:
 ```toml
 [[d1_databases]]
 binding = "DB"
-database_name = "mailflow"
+database_name = "dispatch"
 database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # ← Paste here
 ```
 
 ### 4. Initialize Database
 
 ```bash
-wrangler d1 execute mailflow --file=schema.sql
+wrangler d1 execute dispatch --file=schema.sql
 ```
 
 ### 5. Deploy Worker
@@ -82,14 +82,14 @@ bun install  # or npm install
 wrangler deploy
 ```
 
-You'll get a URL like: `https://mailflow-tracker.your-subdomain.workers.dev`
+You'll get a URL like: `https://dispatch-tracker.your-subdomain.workers.dev`
 
 ### 6. Configure Your App
 
 Add to `.env`:
 
 ```env
-TRACKING_WORKER_URL=https://mailflow-tracker.thedevimapro.workers.dev
+TRACKING_WORKER_URL=https://dispatch-tracker.thedevimapro.workers.dev
 ```
 
 ### 7. Restart App
@@ -206,10 +206,10 @@ wrangler tail  # View live logs
 
 ```bash
 # Check database
-wrangler d1 execute mailflow --command "SELECT COUNT(*) FROM emails"
+wrangler d1 execute dispatch --command "SELECT COUNT(*) FROM emails"
 
 # Re-run schema
-wrangler d1 execute mailflow --file=schema.sql
+wrangler d1 execute dispatch --file=schema.sql
 ```
 
 ## Without Tracking

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useAuth } from '../stores/auth'
-import { useDashboardStats } from '../lib/query'
+import { useDashboardStats, usePauseJob, useResumeJob, useCancelJob } from '../lib/query'
+// Queue types come from dashboardData
 import {
   Mail,
   CheckCircle,
@@ -14,19 +15,58 @@ import {
   Download,
   LayoutDashboard,
   LogOut,
-  Send
+  Send,
+  Pause,
+  Play,
+  X,
+  Loader2,
+  Clock,
+  Inbox
 } from 'lucide-vue-next'
 
 const { user, logout } = useAuth()
 
 // Use TanStack Query for dashboard data
-const { data: dashboardData, isLoading } = useDashboardStats()
+const { data: dashboardData } = useDashboardStats()
 
 const stats = computed(() => dashboardData.value?.stats || { total: 0, sent: 0, failed: 0 })
 const successRate = computed(() => {
   const s = stats.value
   return s.total > 0 ? Math.round((s.sent / s.total) * 100) : 0
 })
+
+// Queue data
+const queueData = computed(() => dashboardData.value?.queue || { stats: { pending: 0, running: 0, paused: 0, completed: 0, failed: 0, cancelled: 0, total_sent: 0, total_failed: 0, dead_letters: 0 }, activeJobs: [], pendingJobs: [], recentJobs: [] })
+const hasQueueActivity = computed(() => {
+  const q = queueData.value.stats
+  return q.running > 0 || q.pending > 0 || q.paused > 0
+})
+const allVisibleJobs = computed(() => {
+  const active = queueData.value.activeJobs || []
+  const pending = queueData.value.pendingJobs || []
+  return [...active, ...pending].slice(0, 5)
+})
+
+// Job control mutations
+const pauseJob = usePauseJob()
+const resumeJob = useResumeJob()
+const cancelJob = useCancelJob()
+
+function handlePause(jobId: string) { pauseJob.mutate(jobId) }
+function handleResume(jobId: string) { resumeJob.mutate(jobId) }
+function handleCancel(jobId: string) { cancelJob.mutate(jobId) }
+
+function statusLabel(status: string) {
+  switch (status) {
+    case 'running': return 'Running'
+    case 'pending': return 'Queued'
+    case 'paused': return 'Paused'
+    case 'completed': return 'Done'
+    case 'failed': return 'Failed'
+    case 'cancelled': return 'Cancelled'
+    default: return status
+  }
+}
 
 async function handleLogout() {
   await logout()
@@ -47,7 +87,7 @@ const navItems = [
       <div class="sidebar-header">
         <div class="logo">
           <Send class="logo-icon" :size="28" />
-          <span class="logo-text">MailFlow</span>
+          <span class="logo-text">Dispatch</span>
         </div>
       </div>
       
@@ -139,9 +179,67 @@ const navItems = [
           </div>
         </div>
         
+        <!-- Job Queue Status -->
+        <div v-if="hasQueueActivity || allVisibleJobs.length > 0" class="queue-section glass-card">
+          <div class="queue-header">
+            <h3>
+              <Inbox :size="20" />
+              Job Queue
+            </h3>
+            <div class="queue-badges">
+              <span v-if="queueData.stats.running > 0" class="badge badge-running">
+                <Loader2 :size="12" class="spin" />
+                {{ queueData.stats.running }} running
+              </span>
+              <span v-if="queueData.stats.pending > 0" class="badge badge-pending">
+                <Clock :size="12" />
+                {{ queueData.stats.pending }} queued
+              </span>
+              <span v-if="queueData.stats.paused > 0" class="badge badge-paused">
+                <Pause :size="12" />
+                {{ queueData.stats.paused }} paused
+              </span>
+            </div>
+          </div>
+
+          <div v-if="allVisibleJobs.length > 0" class="job-list">
+            <div v-for="job in allVisibleJobs" :key="job.id" class="job-item">
+              <div class="job-info">
+                <div class="job-subject">{{ job.subject || 'Untitled' }}</div>
+                <div class="job-meta">
+                  <span class="job-status" :class="'status-' + job.status">{{ statusLabel(job.status) }}</span>
+                  <span class="job-count">{{ job.sent_count }}/{{ job.total_count }} sent</span>
+                  <span v-if="job.config_name" class="job-config">{{ job.config_name }}</span>
+                </div>
+              </div>
+              <div class="job-progress-wrap">
+                <div class="job-progress-bar">
+                  <div class="job-progress-fill" :class="'fill-' + job.status" :style="{ width: job.progress + '%' }"></div>
+                </div>
+                <span class="job-progress-text mono">{{ job.progress }}%</span>
+              </div>
+              <div class="job-actions">
+                <button v-if="job.status === 'running'" class="btn-icon" title="Pause" @click="handlePause(job.id)">
+                  <Pause :size="14" />
+                </button>
+                <button v-if="job.status === 'paused'" class="btn-icon" title="Resume" @click="handleResume(job.id)">
+                  <Play :size="14" />
+                </button>
+                <button v-if="job.status === 'running' || job.status === 'paused' || job.status === 'pending'" class="btn-icon btn-danger" title="Cancel" @click="handleCancel(job.id)">
+                  <X :size="14" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="queue-empty">
+            <p class="text-muted">No active jobs</p>
+          </div>
+        </div>
+
         <!-- Welcome Message -->
         <div class="welcome-card glass-card">
-          <h3>Welcome to MailFlow!</h3>
+          <h3>Welcome to Dispatch!</h3>
           <p class="text-muted">Get started by creating your first email campaign or configuring your SMTP settings.</p>
           <div class="welcome-actions">
             <router-link to="/compose" class="btn btn-primary">
@@ -502,5 +600,197 @@ const navItems = [
 .action-label {
   font-size: 14px;
   font-weight: 500;
+}
+
+// Queue Section
+.queue-section {
+  padding: 24px;
+  margin-bottom: 32px;
+}
+
+.queue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+
+  h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 18px;
+    margin: 0;
+  }
+}
+
+.queue-badges {
+  display: flex;
+  gap: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+
+  &-running {
+    background: rgba(6, 182, 212, 0.15);
+    color: var(--accent-primary);
+  }
+
+  &-pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+  }
+
+  &-paused {
+    background: rgba(107, 114, 128, 0.15);
+    color: #9ca3af;
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.job-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.job-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: border-color 0.2s;
+
+  &:hover {
+    border-color: var(--border-glow);
+  }
+}
+
+.job-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.job-subject {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.job-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.job-status {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 11px;
+
+  &.status-running { color: var(--accent-primary); }
+  &.status-pending { color: #f59e0b; }
+  &.status-paused { color: #9ca3af; }
+  &.status-completed { color: var(--success); }
+  &.status-failed { color: var(--danger); }
+}
+
+.job-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.job-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.job-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+
+  &.fill-running {
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+  }
+  &.fill-pending {
+    background: #f59e0b;
+  }
+  &.fill-paused {
+    background: #6b7280;
+  }
+}
+
+.job-progress-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  width: 36px;
+  text-align: right;
+}
+
+.job-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+  }
+
+  &.btn-danger:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+  }
+}
+
+.queue-empty {
+  text-align: center;
+  padding: 16px;
 }
 </style>

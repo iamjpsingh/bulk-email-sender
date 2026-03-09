@@ -1,5 +1,5 @@
 /**
- * MailFlow Worker - Complete D1 Backend
+ * Dispatch Worker - Complete D1 Backend
  * All data stored in Cloudflare D1
  * 
  * Auth APIs:
@@ -685,7 +685,7 @@ function generateToken(): string {
 
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
-  const data = encoder.encode(password + 'mailflow_salt_2024');
+  const data = encoder.encode(password + 'dispatch_salt_2024');
   const hash = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }

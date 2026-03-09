@@ -1,7 +1,7 @@
 {
-  "name": "bulk-email-sender",
+  "name": "dispatch",
   "version": "2.0.0",
-  "description": "Web-based bulk email sender with user management and WYSIWYG editor",
+  "description": "Open-source email marketing and automation platform",
   "main": "src/app.ts",
   "scripts": {
     "dev": "bun run --watch src/app.ts",

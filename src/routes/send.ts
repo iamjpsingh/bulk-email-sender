@@ -7,6 +7,7 @@ import { emailService } from '../services/emailService'
 import { batchService } from '../services/batchService'
 import { schedulerService } from '../services/schedulerService'
 import { notificationService } from '../services/notificationService'
+import { queueEngine } from '../services/queueEngine'
 import { ProviderDetection } from '../services/providerLimits'
 import { FileService } from '../services/fileService'
 import { d1UserDatabase, type D1SMTPConfig } from '../services/d1UserDatabase'
@@ -303,26 +304,58 @@ app.delete('/scheduled-jobs/:id', async (c) => {
 })
 
 // ============================================================================
-// Batch Control
+// Batch Control (delegates to queue engine, legacy endpoints preserved)
 // ============================================================================
 
 app.get('/batch-status', (c) => {
-  return success(c, batchService.getBatchStatus())
+  const user = requireAuth(c)
+  const activeIds = queueEngine.getActiveJobIds()
+  const runningJobs = queueEngine.getJobs(user.id, 'running', 5)
+
+  // Map to legacy BatchStatus format for backward compatibility
+  const currentJob = runningJobs[0] || null
+  return success(c, {
+    isRunning: runningJobs.length > 0,
+    currentJob: currentJob ? {
+      id: currentJob.id,
+      totalContacts: currentJob.total_count,
+      currentBatch: Math.ceil(currentJob.last_processed_index / (currentJob.batch_size || 20)),
+      totalBatches: Math.ceil(currentJob.total_count / (currentJob.batch_size || 20)),
+      emailsSent: currentJob.sent_count,
+      emailsFailed: currentJob.failed_count,
+      status: currentJob.status === 'running' ? 'Running' : currentJob.status,
+      nextBatchTime: undefined,
+    } : null,
+    totalJobs: runningJobs.length + activeIds.length,
+    completedJobs: 0,
+  })
 })
 
 app.post('/batch-pause', async (c) => {
-  await batchService.pauseCurrentJob()
-  return success(c, undefined, 'Batch job paused')
+  const user = requireAuth(c)
+  const runningJobs = queueEngine.getJobs(user.id, 'running', 1)
+  if (runningJobs.length > 0) {
+    queueEngine.pause(runningJobs[0].id)
+  }
+  return success(c, undefined, 'Job paused')
 })
 
 app.post('/batch-resume', async (c) => {
-  await batchService.resumeCurrentJob()
-  return success(c, undefined, 'Batch job resumed')
+  const user = requireAuth(c)
+  const pausedJobs = queueEngine.getJobs(user.id, 'paused', 1)
+  if (pausedJobs.length > 0) {
+    queueEngine.resume(pausedJobs[0].id)
+  }
+  return success(c, undefined, 'Job resumed')
 })
 
 app.delete('/batch-cancel', async (c) => {
-  await batchService.cancelCurrentJob()
-  return success(c, undefined, 'Batch job cancelled')
+  const user = requireAuth(c)
+  const runningJobs = queueEngine.getJobs(user.id, 'running', 1)
+  if (runningJobs.length > 0) {
+    queueEngine.cancel(runningJobs[0].id)
+  }
+  return success(c, undefined, 'Job cancelled')
 })
 
 // ============================================================================
@@ -614,54 +647,38 @@ async function handleSmtpSend(c: any, params: any) {
     useBatch, batchSize, batchDelay, emailDelay, delay, notifyEmail, fromEmail, fromName,
   } = params
 
-  const emailJob: EmailJob = {
-    contacts,
+  // Enqueue to persistent job queue (replaces in-memory batchService)
+  const jobId = queueEngine.enqueue(user.id, emailConfig, contacts, {
+    type: useBatch ? 'batch' : 'direct',
     htmlContent,
     subject: subject.trim(),
     fromEmail,
     fromName,
-    config: emailConfig,
-    delay: useBatch ? emailDelay : delay,
-  }
+    configName: userConfig.name,
+    notifyEmail: notifyEmail || undefined,
+    batchSize: useBatch ? batchSize : contacts.length,
+    emailDelaySec: useBatch ? emailDelay : delay,
+    batchDelayMin: useBatch ? batchDelay : 0,
+    priority: 5,
+  })
 
-  const notificationSettings = notifyEmail
-    ? { email: notifyEmail, userId: user.id, configName: userConfig.name }
-    : undefined
+  console.log(`📦 Job ${jobId} enqueued: ${contacts.length} contacts (${useBatch ? 'batch' : 'direct'} mode)`)
 
   if (useBatch) {
-    console.log(`⚡ Starting BATCH email job: ${contacts.length} contacts in batches of ${batchSize}`)
-
-    const batchConfig: BatchConfig = { batchSize, emailDelay, batchDelay, enabled: true }
-    const jobId = await batchService.startBatchJob(emailJob, batchConfig, notificationSettings)
-
     return success(c, {
       jobId,
       contactCount: contacts.length,
       batchMode: true,
-      batchConfig,
+      batchConfig: { batchSize, emailDelay, batchDelay, enabled: true },
       configUsed: userConfig.name,
-    }, `Batch email job started! Will send ${batchSize} emails every ${batchDelay} minutes.`)
+    }, `Job queued! ${contacts.length} contacts in batches of ${batchSize}.`)
   }
-
-  // Normal bulk sending
-  console.log(`🚀 Starting normal bulk email job: ${contacts.length} contacts`)
-  emailService.createTransport(emailConfig)
-
-  const trackingOptions = {
-    userId: user.id,
-    sendType: 'direct' as const,
-    providerType: 'smtp' as const,
-    configName: userConfig.name,
-  }
-
-  emailService.sendBulkEmails(emailJob, notificationSettings, trackingOptions).catch((err) => {
-    console.error('Bulk email sending failed:', err)
-  })
 
   return success(c, {
+    jobId,
     contactCount: contacts.length,
     configUsed: userConfig.name,
-  }, `Email sending started for ${contacts.length} contacts`)
+  }, `Job queued for ${contacts.length} contacts`)
 }
 
 // ============================================================================

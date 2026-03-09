@@ -5,29 +5,12 @@
 import { Hono } from 'hono'
 import { requireAuth } from '../middleware/auth'
 import { logService } from '../services/logService'
+import { queueEngine } from '../services/queueEngine'
 import { success, error } from '../utils/response'
 
 // Lazy-loaded services
-let batchService: any = null
 let schedulerService: any = null
 
-/**
- * Get batch service (lazy load)
- */
-function getBatchService() {
-  if (!batchService) {
-    try {
-      batchService = require('../services/batchService').batchService
-    } catch {
-      return null
-    }
-  }
-  return batchService
-}
-
-/**
- * Get scheduler service (lazy load)
- */
 function getSchedulerService() {
   if (!schedulerService) {
     try {
@@ -39,15 +22,6 @@ function getSchedulerService() {
   return schedulerService
 }
 
-// Dashboard state cache
-const dashboardCache = {
-  lastBatchCheck: 0,
-  lastScheduledCheck: 0,
-  hasBatchJobs: false,
-  hasScheduledJobs: false,
-  cacheValidFor: 5000, // 5 seconds
-}
-
 const app = new Hono()
 
 /**
@@ -55,19 +29,27 @@ const app = new Hono()
  * GET /dashboard/stats
  */
 app.get('/dashboard/stats', (c) => {
-  requireAuth(c)
+  const user = requireAuth(c)
 
   try {
-    const batch = getBatchService()
     const scheduler = getSchedulerService()
-
-    const batchStatus = batch?.getBatchStatus() ?? null
     const scheduledJobs = scheduler?.getScheduledJobs() ?? []
     const allLogs = logService.getLogs() ?? []
 
+    // Queue stats from persistent engine
+    const queueStats = queueEngine.getStats(user.id)
+    const activeJobs = queueEngine.getJobs(user.id, 'running', 10)
+    const pendingJobs = queueEngine.getJobs(user.id, 'pending', 10)
+    const recentJobs = queueEngine.getJobs(user.id, undefined, 5)
+
     return success(c, {
       stats: logService.getStats(),
-      batch: batchStatus,
+      queue: {
+        stats: queueStats,
+        activeJobs: activeJobs.map(formatJobSummary),
+        pendingJobs: pendingJobs.map(formatJobSummary),
+        recentJobs: recentJobs.map(formatJobSummary),
+      },
       scheduledJobs,
       recentLogs: allLogs.slice(0, 10),
       timestamp: new Date().toISOString(),
@@ -76,7 +58,7 @@ app.get('/dashboard/stats', (c) => {
     console.error('Dashboard stats error:', err)
     return success(c, {
       stats: { sent: 0, failed: 0, total: 0 },
-      batch: null,
+      queue: { stats: { pending: 0, running: 0, paused: 0, completed: 0, failed: 0, cancelled: 0, total_sent: 0, total_failed: 0, dead_letters: 0 }, activeJobs: [], pendingJobs: [], recentJobs: [] },
       scheduledJobs: [],
       recentLogs: [],
       timestamp: new Date().toISOString(),
@@ -89,79 +71,63 @@ app.get('/dashboard/stats', (c) => {
  * GET /dashboard/poll-status
  */
 app.get('/dashboard/poll-status', (c) => {
-  requireAuth(c)
+  const user = requireAuth(c)
 
   try {
-    const now = Date.now()
-    let hasActiveBatch = false
-    let hasScheduledJobs = false
-    let hasRunningScheduledJobs = false
+    const scheduler = getSchedulerService()
+    const scheduledJobs = scheduler?.getScheduledJobs() ?? []
 
-    // Check batch status (with cache)
-    if (now - dashboardCache.lastBatchCheck < dashboardCache.cacheValidFor) {
-      hasActiveBatch = dashboardCache.hasBatchJobs
-    } else {
-      const batch = getBatchService()
-      if (batch) {
-        const status = batch.getBatchStatus()
-        hasActiveBatch = status?.isRunning ?? false
-        dashboardCache.hasBatchJobs = hasActiveBatch
-        dashboardCache.lastBatchCheck = now
-      }
-    }
-
-    // Check scheduled jobs (with cache)
-    if (now - dashboardCache.lastScheduledCheck < dashboardCache.cacheValidFor) {
-      hasScheduledJobs = dashboardCache.hasScheduledJobs
-    } else {
-      const scheduler = getSchedulerService()
-      if (scheduler) {
-        const jobs = scheduler.getScheduledJobs() ?? []
-        hasScheduledJobs = jobs.length > 0
-        hasRunningScheduledJobs = jobs.some((j: any) => j.status === 'running')
-        dashboardCache.hasScheduledJobs = hasScheduledJobs
-        dashboardCache.lastScheduledCheck = now
-      }
-    }
+    const queueStats = queueEngine.getStats(user.id)
+    const hasActiveJobs = queueStats.running > 0
+    const hasPendingJobs = queueStats.pending > 0
+    const hasScheduledJobs = scheduledJobs.length > 0
+    const hasRunningScheduledJobs = scheduledJobs.some((j: any) => j.status === 'running')
 
     // Determine polling interval
     let pollNeeded = false
-    let pollInterval = 30000 // Default: 30s
+    let pollInterval = 30000
 
-    if (hasActiveBatch) {
+    if (hasActiveJobs) {
       pollNeeded = true
-      pollInterval = 3000 // Fast: 3s for active batch
+      pollInterval = 3000 // Fast: 3s for active jobs
+    } else if (hasPendingJobs) {
+      pollNeeded = true
+      pollInterval = 5000 // 5s for pending
     } else if (hasRunningScheduledJobs) {
       pollNeeded = true
-      pollInterval = 10000 // Medium: 10s for running scheduled
+      pollInterval = 10000
     } else if (hasScheduledJobs) {
       pollNeeded = true
-      pollInterval = 30000 // Slow: 30s for pending scheduled
+      pollInterval = 30000
     }
 
     return success(c, {
       pollNeeded,
       pollInterval,
-      hasActiveBatch,
+      hasActiveJobs,
+      hasPendingJobs,
       hasScheduledJobs,
       hasRunningScheduledJobs,
-      activeBatchCount: hasActiveBatch ? 1 : 0,
-      scheduledJobCount: hasScheduledJobs ? 1 : 0,
+      activeJobCount: queueStats.running,
+      pendingJobCount: queueStats.pending,
+      pausedJobCount: queueStats.paused,
+      scheduledJobCount: scheduledJobs.length,
       lastUpdated: new Date().toISOString(),
-      cached: true,
     })
   } catch (err) {
     console.error('Poll status error:', err)
     return success(c, {
       pollNeeded: false,
       pollInterval: 30000,
-      hasActiveBatch: false,
+      hasActiveJobs: false,
+      hasPendingJobs: false,
       hasScheduledJobs: false,
       hasRunningScheduledJobs: false,
-      activeBatchCount: 0,
+      activeJobCount: 0,
+      pendingJobCount: 0,
+      pausedJobCount: 0,
       scheduledJobCount: 0,
       lastUpdated: new Date().toISOString(),
-      error: 'Service unavailable',
     })
   }
 })
@@ -171,28 +137,22 @@ app.get('/dashboard/poll-status', (c) => {
  * GET /dashboard/data
  */
 app.get('/dashboard/data', (c) => {
-  requireAuth(c)
+  const user = requireAuth(c)
 
   try {
-    let batchStatus = null
-    let scheduledJobs: any[] = []
+    const scheduler = getSchedulerService()
+    const scheduledJobs = (scheduler?.getScheduledJobs() ?? [])
+      .filter((j: any) => j.status === 'scheduled' || j.status === 'running')
+      .slice(0, 5)
 
-    // Only fetch if we know there's data
-    if (dashboardCache.hasBatchJobs) {
-      const batch = getBatchService()
-      batchStatus = batch?.getBatchStatus() ?? null
-    }
-
-    if (dashboardCache.hasScheduledJobs) {
-      const scheduler = getSchedulerService()
-      const allJobs = scheduler?.getScheduledJobs() ?? []
-      scheduledJobs = allJobs
-        .filter((j: any) => j.status === 'scheduled' || j.status === 'running')
-        .slice(0, 5)
-    }
+    const activeJobs = queueEngine.getJobs(user.id, 'running', 5)
+    const pendingJobs = queueEngine.getJobs(user.id, 'pending', 5)
 
     return success(c, {
-      batch: batchStatus,
+      queue: {
+        activeJobs: activeJobs.map(formatJobSummary),
+        pendingJobs: pendingJobs.map(formatJobSummary),
+      },
       scheduledJobs,
       timestamp: new Date().toISOString(),
     })
@@ -201,5 +161,27 @@ app.get('/dashboard/data', (c) => {
     return error(c, 'Failed to fetch dashboard data', 500)
   }
 })
+
+/**
+ * Format job for dashboard display (strip large fields)
+ */
+function formatJobSummary(job: any) {
+  return {
+    id: job.id,
+    type: job.type,
+    status: job.status,
+    subject: job.subject,
+    from_email: job.from_email,
+    config_name: job.config_name,
+    total_count: job.total_count,
+    sent_count: job.sent_count,
+    failed_count: job.failed_count,
+    last_processed_index: job.last_processed_index,
+    progress: job.total_count > 0 ? Math.round((job.last_processed_index / job.total_count) * 100) : 0,
+    created_at: job.created_at,
+    started_at: job.started_at,
+    last_error: job.last_error,
+  }
+}
 
 export default app

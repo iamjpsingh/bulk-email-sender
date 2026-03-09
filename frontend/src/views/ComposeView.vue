@@ -337,7 +337,7 @@ const navItems = [
       <div class="sidebar-header">
         <div class="logo">
           <Send class="logo-icon" :size="28" />
-          <span class="logo-text">MailFlow</span>
+          <span class="logo-text">Dispatch</span>
         </div>
       </div>
       

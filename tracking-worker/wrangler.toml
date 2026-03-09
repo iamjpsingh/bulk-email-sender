@@ -1,9 +1,9 @@
-name = "mailflow-tracker"
+name = "dispatch-tracker"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 # D1 Database binding
 [[d1_databases]]
 binding = "DB"
-database_name = "mailflow"
+database_name = "dispatch"
 database_id = "04636489-ef6e-4adc-a9e4-112292231c49"

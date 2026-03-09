@@ -214,6 +214,14 @@ export interface Campaign {
 
 export type CampaignStatus = 'draft' | 'sending' | 'completed' | 'failed'
 
+// ============================================================================
+// Queue Types
+// ============================================================================
+
+export type JobType = 'direct' | 'batch' | 'scheduled' | 'automation'
+export type JobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+export type SmtpErrorType = 'rate_limit' | 'temporary' | 'permanent' | 'network'
+
 export interface CampaignStats {
   campaign_id: string
   total_sent: number

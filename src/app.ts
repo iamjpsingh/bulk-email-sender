@@ -29,6 +29,11 @@ import reportRoutes from './routes/report'
 import configRoutes from './routes/config'
 import dashboardRoutes from './routes/dashboard'
 import trackingRoutes from './routes/tracking'
+import queueRoutes from './routes/queue'
+import contactsRoutes from './routes/contacts'
+
+// Queue Engine
+import { queueEngine } from './services/queueEngine'
 
 // ============================================================================
 // Application Setup
@@ -82,6 +87,8 @@ const routes = [
   configRoutes,
   dashboardRoutes,
   trackingRoutes,
+  queueRoutes,
+  contactsRoutes,
 ]
 
 routes.forEach((route) => app.route('/', route))
@@ -148,6 +155,10 @@ async function initialize() {
   // Initialize tracking service
   const trackingConfigured = d1Service.initialize()
 
+  // Initialize queue engine: recover interrupted jobs and start worker
+  const recovered = queueEngine.recoverInterruptedJobs()
+  queueEngine.startWorker(5000) // Poll every 5 seconds
+
   // Log startup info
   console.log(`\n🚀 ${API.NAME} v${API.VERSION}\n`)
   console.log('📧 Providers:')
@@ -155,6 +166,8 @@ async function initialize() {
   console.log(`   ${OAUTH.MICROSOFT.isConfigured() ? '✅' : '⚠️ '} Microsoft Outlook`)
   console.log('\n📊 Tracking:')
   console.log(`   ${trackingConfigured ? '✅' : '⚠️ '} Cloudflare Worker ${trackingConfigured ? '' : '(set TRACKING_WORKER_URL)'}`)
+  console.log('\n📦 Queue:')
+  console.log(`   ✅ Persistent job queue (SQLite)${recovered > 0 ? ` — recovered ${recovered} interrupted job(s)` : ''}`)
   console.log(`\n🌐 API: http://localhost:${SERVER.PORT}`)
   console.log(`🖥️  Frontend: ${SERVER.FRONTEND_URL}`)
   console.log('\n✅ Ready\n')

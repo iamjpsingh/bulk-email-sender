@@ -56,7 +56,7 @@ function toggleMode() {
       <div class="login-header">
         <div class="logo-large">
           <Send class="logo-icon" :size="40" />
-          <span class="logo-text">MailFlow</span>
+          <span class="logo-text">Dispatch</span>
         </div>
         <p class="tagline">Bulk email campaigns, simplified</p>
       </div>
@@ -66,7 +66,7 @@ function toggleMode() {
         <div class="card-header">
           <h2>{{ mode === 'login' ? 'Welcome back' : 'Create account' }}</h2>
           <p class="text-muted">
-            {{ mode === 'login' ? 'Sign in to your account' : 'Get started with MailFlow' }}
+            {{ mode === 'login' ? 'Sign in to your account' : 'Get started with Dispatch' }}
           </p>
         </div>
         
