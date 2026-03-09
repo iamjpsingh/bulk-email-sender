@@ -1,4 +1,4 @@
-# OAuth Setup Guide for MailFlow
+# OAuth Setup Guide for Dispatch
 
 This guide explains how to set up Google and Microsoft OAuth for sending emails via their APIs.
 
@@ -27,7 +27,7 @@ This guide explains how to set up Google and Microsoft OAuth for sending emails 
 1. Go to "APIs & Services" → "OAuth consent screen"
 2. Select "External" user type (or "Internal" for Google Workspace)
 3. Fill in required fields:
-   - App name: "MailFlow" (or your app name)
+   - App name: "Dispatch" (or your app name)
    - User support email: your email
    - Developer contact: your email
 4. Add scopes:
@@ -41,7 +41,7 @@ This guide explains how to set up Google and Microsoft OAuth for sending emails 
 1. Go to "APIs & Services" → "Credentials"
 2. Click "Create Credentials" → "OAuth client ID"
 3. Application type: "Web application"
-4. Name: "MailFlow"
+4. Name: "Dispatch"
 5. Authorized redirect URIs:
    - `http://localhost:3000/auth/google/callback` (development)
    - `https://yourdomain.com/auth/google/callback` (production)
@@ -66,7 +66,7 @@ GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
 2. Navigate to "Azure Active Directory" → "App registrations"
 3. Click "New registration"
 4. Fill in:
-   - Name: "MailFlow"
+   - Name: "Dispatch"
    - Supported account types: "Accounts in any organizational directory and personal Microsoft accounts"
    - Redirect URI: Web → `http://localhost:3000/auth/microsoft/callback`
 5. Click "Register"
@@ -88,7 +88,7 @@ GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
 
 1. Go to "Certificates & secrets"
 2. Click "New client secret"
-3. Add description: "MailFlow Secret"
+3. Add description: "Dispatch Secret"
 4. Select expiration (recommend 24 months)
 5. Click "Add"
 6. **Copy the secret value immediately** (you won't see it again!)

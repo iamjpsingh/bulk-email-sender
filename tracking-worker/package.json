@@ -1,13 +1,13 @@
 {
-    "name": "mailflow-tracker",
+    "name": "dispatch-tracker",
     "version": "1.0.0",
     "private": true,
     "scripts": {
         "dev": "wrangler dev",
         "deploy": "wrangler deploy",
-        "db:create": "wrangler d1 create mailflow",
-        "db:init": "wrangler d1 execute mailflow --file=schema.sql",
-        "db:local": "wrangler d1 execute mailflow --local --file=schema.sql",
+        "db:create": "wrangler d1 create dispatch",
+        "db:init": "wrangler d1 execute dispatch --file=schema.sql",
+        "db:local": "wrangler d1 execute dispatch --local --file=schema.sql",
         "tail": "wrangler tail"
     },
     "devDependencies": {

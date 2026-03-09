@@ -8,7 +8,8 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Send
+  Send,
+  Users
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -18,6 +19,7 @@ const auth = useAuthStore()
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/compose', label: 'Compose', icon: Mail },
+  { path: '/contacts', label: 'Contacts', icon: Users },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
   { path: '/configs', label: 'Configs', icon: Settings }
 ]
@@ -42,7 +44,7 @@ onMounted(() => {
       <div class="sidebar-header">
         <div class="logo">
           <Send class="logo-icon" :size="28" />
-          <span class="logo-text">MailFlow</span>
+          <span class="logo-text">Dispatch</span>
         </div>
       </div>
       

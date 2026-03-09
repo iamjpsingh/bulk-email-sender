@@ -1,6 +1,6 @@
-# Bulk Email Sender
+# Dispatch
 
-A web-based email campaign tool built with **Bun**, **Hono**, and **TypeScript**. It supports importing contacts from Excel, personalized templates, scheduling, and detailed delivery reports. User accounts with individual SMTP profiles allow multiple people to use the system securely.
+An open-source email marketing and automation platform built with **Bun**, **Hono**, **Vue 3**, and **TypeScript**. Send bulk campaigns, manage contacts, automate sequences, score engagement, and track everything — self-hosted and privacy-first.
 
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
 ![Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=for-the-badge&logo=bun&logoColor=white)

@@ -11,7 +11,10 @@ import {
   dashboardApi,
   batchApi,
   scheduledApi,
+  queueApi,
+  contactsApi,
   type SMTPConfig,
+  type ContactInput,
 } from './api'
 
 // ============================================================================
@@ -43,6 +46,19 @@ export const queryKeys = {
   },
   scheduled: {
     list: ['scheduled', 'list'] as const,
+  },
+  queue: {
+    jobs: (status?: string) => ['queue', 'jobs', status] as const,
+    stats: ['queue', 'stats'] as const,
+    job: (id: string) => ['queue', 'job', id] as const,
+  },
+  contacts: {
+    all: ['contacts'] as const,
+    lists: () => [...queryKeys.contacts.all, 'lists'] as const,
+    list: (listId: string) => [...queryKeys.contacts.all, 'list', listId] as const,
+    contacts: (listId: string, filters?: Record<string, any>) => [...queryKeys.contacts.all, 'contacts', listId, filters] as const,
+    search: (q: string) => [...queryKeys.contacts.all, 'search', q] as const,
+    importHistory: () => [...queryKeys.contacts.all, 'import-history'] as const,
   },
 }
 
@@ -337,5 +353,229 @@ export function useCancelScheduledJob() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.scheduled.list })
     },
+  })
+}
+
+// ============================================================================
+// Queue Composables
+// ============================================================================
+
+export function useQueueJobs(status?: string) {
+  return useQuery({
+    queryKey: queryKeys.queue.jobs(status),
+    queryFn: () => queueApi.getJobs(status),
+    staleTime: 5 * 1000,
+    refetchInterval: 10 * 1000,
+  })
+}
+
+export function useQueueStats() {
+  return useQuery({
+    queryKey: queryKeys.queue.stats,
+    queryFn: queueApi.getStats,
+    staleTime: 5 * 1000,
+    refetchInterval: 15 * 1000,
+  })
+}
+
+export function usePauseJob() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: queueApi.pauseJob,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats })
+    },
+  })
+}
+
+export function useResumeJob() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: queueApi.resumeJob,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats })
+    },
+  })
+}
+
+export function useCancelJob() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: queueApi.cancelJob,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats })
+    },
+  })
+}
+
+// ============================================================================
+// Contacts Composables
+// ============================================================================
+
+export function useContactLists() {
+  return useQuery({
+    queryKey: queryKeys.contacts.lists(),
+    queryFn: contactsApi.getLists,
+    staleTime: 30 * 1000,
+  })
+}
+
+export function useCreateContactList() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ name, description }: { name: string; description?: string }) =>
+      contactsApi.createList(name, description),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all })
+    },
+  })
+}
+
+export function useUpdateContactList() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, name, description }: { id: string; name: string; description?: string }) =>
+      contactsApi.updateList(id, name, description),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all })
+    },
+  })
+}
+
+export function useDeleteContactList() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: contactsApi.deleteList,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all })
+    },
+  })
+}
+
+type ContactFilters = {
+  search?: string
+  status?: string
+  tags?: string
+  page?: number
+  limit?: number
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
+}
+
+export function useContacts(listId: Ref<string>, filters?: Ref<ContactFilters> | ComputedRef<ContactFilters>) {
+  const resolvedFilters = computed<ContactFilters | undefined>(() => {
+    if (!filters) return undefined
+    return filters.value
+  })
+
+  return useQuery({
+    queryKey: computed(() => queryKeys.contacts.contacts(listId.value, resolvedFilters.value)),
+    queryFn: () => contactsApi.getContacts(listId.value, resolvedFilters.value),
+    staleTime: 10 * 1000,
+    enabled: computed(() => !!listId.value),
+  })
+}
+
+export function useAddContact() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ listId, contact }: { listId: string; contact: ContactInput }) =>
+      contactsApi.addContact(listId, contact),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all })
+    },
+  })
+}
+
+export function useUpdateContact() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<ContactInput> }) =>
+      contactsApi.updateContact(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all })
+    },
+  })
+}
+
+export function useBulkDeleteContacts() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: contactsApi.bulkDelete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all })
+    },
+  })
+}
+
+export function useBulkTagContacts() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ ids, tags }: { ids: string[]; tags: string[] }) =>
+      contactsApi.bulkTag(ids, tags),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all })
+    },
+  })
+}
+
+export function useBulkMoveContacts() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ ids, targetListId }: { ids: string[]; targetListId: string }) =>
+      contactsApi.bulkMove(ids, targetListId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all })
+    },
+  })
+}
+
+export function useImportContacts() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ listId, file, fieldMapping, skipDuplicates }: {
+      listId: string
+      file: File
+      fieldMapping?: Record<string, string>
+      skipDuplicates?: boolean
+    }) => contactsApi.importContacts(listId, file, fieldMapping, skipDuplicates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all })
+    },
+  })
+}
+
+export function useImportHistory() {
+  return useQuery({
+    queryKey: queryKeys.contacts.importHistory(),
+    queryFn: contactsApi.getImportHistory,
+    staleTime: 30 * 1000,
+  })
+}
+
+export function useValidateEmails() {
+  return useMutation({
+    mutationFn: contactsApi.validateEmails,
+  })
+}
+
+export function useValidateSingleEmail() {
+  return useMutation({
+    mutationFn: contactsApi.validateSingle,
   })
 }

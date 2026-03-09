@@ -101,7 +101,7 @@ export const DIRECTORIES = {
 // API Configuration
 export const API = {
   VERSION: '2.0.0',
-  NAME: 'MailFlow API',
+  NAME: 'Dispatch API',
 } as const
 
 // Cloudflare Tracking Worker Configuration

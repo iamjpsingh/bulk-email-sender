@@ -1,5 +1,5 @@
--- MailFlow D1 Schema - Complete Database
--- Run: wrangler d1 execute mailflow --file=schema.sql --remote
+-- Dispatch D1 Schema - Complete Database
+-- Run: wrangler d1 execute dispatch --file=schema.sql --remote
 
 -- ============================================================================
 -- USER MANAGEMENT
