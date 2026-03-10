@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import { useAuth } from './stores/auth'
 import ToastContainer from './components/ui/ToastContainer.vue'
 
+const route = useRoute()
 const { initializeAuth } = useAuth()
 
 onMounted(async () => {
@@ -13,7 +14,7 @@ onMounted(async () => {
 
 <template>
   <div id="app">
-    <RouterView v-slot="{ Component }">
+    <RouterView v-slot="{ Component }" :key="route.fullPath">
       <component :is="Component" />
     </RouterView>
     <ToastContainer />

@@ -65,7 +65,7 @@
           },
           {
             "type": "command",
-            "command": "node E:/Developmet/Projects/bulk-email-sender/.claude/helpers/auto-memory-hook.mjs import",
+            "command": "node .claude/helpers/auto-memory-hook.mjs import",
             "timeout": 8000
           }
         ]
@@ -87,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node E:/Developmet/Projects/bulk-email-sender/.claude/helpers/auto-memory-hook.mjs sync",
+            "command": "node .claude/helpers/auto-memory-hook.mjs sync",
             "timeout": 10000
           }
         ]
@@ -174,7 +174,7 @@
     ]
   },
   "attribution": {
-    "commit": "Co-Authored-By: claude-flow <ruv@ruv.net>",
+    "commit": "Co-Authored-By: v9dev <99959044+v9dev@users.noreply.github.com>",
     "pr": "🤖 Generated with [claude-flow](https://github.com/ruvnet/claude-flow)"
   },
   "env": {

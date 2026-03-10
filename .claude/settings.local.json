@@ -16,7 +16,12 @@
       "Read(//e/Developmet/Projects/bulk-email-sender/frontend/**)",
       "Bash(done)",
       "Bash(sed:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git config:*)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "claude-flow"
+  ]
 }

@@ -26,7 +26,7 @@ export async function csrfTokenIssuer(c: Context, next: Next) {
     const token = generateToken()
     setCookie(c, CSRF_COOKIE, token, {
       httpOnly: false,  // Must be readable by JS
-      sameSite: 'Strict',
+      sameSite: 'Lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60,
     })
