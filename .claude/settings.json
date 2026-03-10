@@ -65,7 +65,7 @@
           },
           {
             "type": "command",
-            "command": "node .claude/helpers/auto-memory-hook.mjs import",
+            "command": "node E:/Developmet/Projects/bulk-email-sender/.claude/helpers/auto-memory-hook.mjs import",
             "timeout": 8000
           }
         ]
@@ -87,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/helpers/auto-memory-hook.mjs sync",
+            "command": "node E:/Developmet/Projects/bulk-email-sender/.claude/helpers/auto-memory-hook.mjs sync",
             "timeout": 10000
           }
         ]

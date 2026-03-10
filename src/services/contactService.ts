@@ -3,6 +3,7 @@
 import Database from 'bun:sqlite';
 import { existsSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
+import { logger } from '../utils/logger';
 
 // ============================================================================
 // Types
@@ -156,7 +157,7 @@ class ContactService {
       );
     `);
 
-    console.log('✅ Contacts database initialized (data/contacts.db)');
+    logger.info('Contacts database initialized (data/contacts.db)');
   }
 
   // --------------------------------------------------------------------------

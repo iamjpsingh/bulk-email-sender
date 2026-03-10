@@ -2,7 +2,8 @@ import { createApp } from 'vue'
 import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
 import router from './router'
 import App from './App.vue'
-import './styles/main.scss'
+import './styles/tailwind.css'   // Design system (single source of truth)
+import './styles/main.scss'     // Quill editor overrides only
 
 // Create query client with better error handling
 const queryClient = new QueryClient({

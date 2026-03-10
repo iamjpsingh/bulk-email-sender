@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import { X } from 'lucide-vue-next'
 
 interface Props {
@@ -38,6 +38,14 @@ function handleEscapeKey(event: KeyboardEvent) {
   }
 }
 
+watch(() => props.show, (newVal) => {
+  if (newVal) {
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = ''
+  }
+})
+
 onMounted(() => {
   document.addEventListener('keydown', handleEscapeKey)
   if (props.show) {
@@ -49,18 +57,6 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleEscapeKey)
   document.body.style.overflow = ''
 })
-
-// Watch for show prop changes
-function updateBodyOverflow() {
-  if (props.show) {
-    document.body.style.overflow = 'hidden'
-  } else {
-    document.body.style.overflow = ''
-  }
-}
-
-// Update body overflow when show prop changes
-$: updateBodyOverflow()
 </script>
 
 <template>
@@ -70,6 +66,9 @@ $: updateBodyOverflow()
         v-if="show"
         class="modal-overlay"
         @click="handleOverlayClick"
+        role="dialog"
+        :aria-modal="true"
+        :aria-label="title"
       >
         <div
           :class="[
@@ -85,16 +84,17 @@ $: updateBodyOverflow()
               v-if="closable"
               class="modal-close"
               @click="handleClose"
+              aria-label="Close dialog"
             >
               <X :size="20" />
             </button>
           </div>
-          
+
           <!-- Content -->
           <div class="modal-content">
             <slot />
           </div>
-          
+
           <!-- Footer -->
           <div v-if="$slots.footer" class="modal-footer">
             <slot name="footer" />
@@ -112,7 +112,7 @@ $: updateBodyOverflow()
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
@@ -122,48 +122,33 @@ $: updateBodyOverflow()
 }
 
 .modal-container {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.6);
   max-height: 90vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  
-  &.modal-sm {
-    width: 100%;
-    max-width: 400px;
-  }
-  
-  &.modal-md {
-    width: 100%;
-    max-width: 500px;
-  }
-  
-  &.modal-lg {
-    width: 100%;
-    max-width: 700px;
-  }
-  
-  &.modal-xl {
-    width: 100%;
-    max-width: 900px;
-  }
+
+  &.modal-sm { width: 100%; max-width: 400px; }
+  &.modal-md { width: 100%; max-width: 500px; }
+  &.modal-lg { width: 100%; max-width: 700px; }
+  &.modal-xl { width: 100%; max-width: 900px; }
 }
 
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 24px 0 24px;
-  margin-bottom: 20px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .modal-title {
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   margin: 0;
 }
 
@@ -175,44 +160,46 @@ $: updateBodyOverflow()
   height: 32px;
   border: none;
   background: transparent;
-  color: var(--text-muted);
-  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  
+  transition: all 0.15s ease;
+
   &:hover {
     background: rgba(239, 68, 68, 0.1);
-    color: var(--danger);
+    color: var(--color-danger);
   }
 }
 
 .modal-content {
   flex: 1;
-  padding: 0 24px;
+  padding: 24px;
   overflow-y: auto;
 }
 
 .modal-footer {
-  padding: 20px 24px 24px 24px;
-  border-top: 1px solid var(--border-color);
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
 }
 
-// Transitions
-.modal-enter-active,
-.modal-leave-active {
-  transition: all 0.3s ease;
+// Transition
+.modal-enter-active {
+  transition: opacity 0.25s ease;
+  .modal-container { transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease; }
 }
-
-.modal-enter-from,
+.modal-leave-active {
+  transition: opacity 0.15s ease;
+  .modal-container { transition: transform 0.15s ease, opacity 0.15s ease; }
+}
+.modal-enter-from {
+  opacity: 0;
+  .modal-container { transform: scale(0.95) translateY(10px); opacity: 0; }
+}
 .modal-leave-to {
   opacity: 0;
-}
-
-.modal-enter-from .modal-container,
-.modal-leave-to .modal-container {
-  transform: scale(0.9) translateY(-20px);
+  .modal-container { transform: scale(0.97); opacity: 0; }
 }
 </style>

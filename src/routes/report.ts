@@ -3,11 +3,48 @@
  * Email logs, stats, and exports
  */
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { d1Service } from '../services/d1Service'
 import { logService } from '../services/logService'
 import { requireAuth } from '../middleware/auth'
 import { success, error } from '../utils/response'
+import { logger } from '../utils/logger'
 import { parseIntSafe } from '../utils/validation'
+
+// ============================================================================
+// Types
+// ============================================================================
+
+interface LogFilters {
+  status?: string
+  sendType?: string
+  provider?: string
+  campaignId?: string
+  search?: string
+  startDate?: string
+  endDate?: string
+  page: number
+  limit: number
+}
+
+interface EmailLogRecord {
+  id?: string
+  tracking_id?: string
+  recipient_email?: string
+  email?: string
+  recipient_name?: string
+  firstName?: string
+  subject?: string
+  status: string
+  send_type?: string
+  provider_type?: string
+  config_name?: string
+  sent_at?: string
+  timestamp?: string
+  opened_at?: string
+  open_count?: number
+  click_count?: number
+}
 
 const app = new Hono()
 
@@ -35,7 +72,7 @@ app.get('/report/logs', async (c) => {
         })
       }
     } catch (err) {
-      console.error('Worker API error:', err)
+      logger.error('Worker API error:', err)
     }
   }
 
@@ -60,7 +97,7 @@ app.get('/report/stats', async (c) => {
         return success(c, stats)
       }
     } catch (err) {
-      console.error('Worker API error:', err)
+      logger.error('Worker API error:', err)
     }
   }
 
@@ -81,7 +118,7 @@ app.get('/report', async (c) => {
         return success(c, { logs: result.logs, stats: result.stats })
       }
     } catch (err) {
-      console.error('Worker API error:', err)
+      logger.error('Worker API error:', err)
     }
   }
 
@@ -106,10 +143,12 @@ app.get('/report/export/csv', async (c) => {
   const csv = generateCSV(logs)
   const filename = `email-logs-${new Date().toISOString().split('T')[0]}.csv`
 
-  c.header('Content-Type', 'text/csv')
-  c.header('Content-Disposition', `attachment; filename="${filename}"`)
-
-  return c.text(csv)
+  return new Response(csv, {
+    headers: {
+      'Content-Type': 'text/csv; charset=UTF-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    },
+  })
 })
 
 /**
@@ -122,10 +161,12 @@ app.get('/report/export/json', async (c) => {
 
   const filename = `email-logs-${new Date().toISOString().split('T')[0]}.json`
 
-  c.header('Content-Type', 'application/json')
-  c.header('Content-Disposition', `attachment; filename="${filename}"`)
-
-  return c.text(JSON.stringify(logs, null, 2))
+  return new Response(JSON.stringify(logs, null, 2), {
+    headers: {
+      'Content-Type': 'application/json; charset=UTF-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    },
+  })
 })
 
 // ============================================================================
@@ -139,16 +180,16 @@ app.get('/report/export/json', async (c) => {
 app.delete('/report/logs/:id', async (c) => {
   const user = requireAuth(c)
   const logId = c.req.param('id')
-  
-  console.log(`🗑️ Delete request: logId=${logId}, userId=${user.id}`)
+
+  logger.debug(`Delete request: logId=${logId}, userId=${user.id}`)
 
   if (d1Service.isConfigured()) {
     try {
       const result = await d1Service.deleteLog(user.id, logId)
-      console.log(`🗑️ Delete result: ${result}`)
+      logger.debug(`Delete result: ${result}`)
       return success(c, undefined, 'Log deleted')
     } catch (err) {
-      console.error('Delete log error:', err)
+      logger.error('Delete log error:', err)
       return error(c, 'Failed to delete log', 500)
     }
   }
@@ -176,13 +217,13 @@ app.post('/report/logs/delete-bulk', async (c) => {
       await d1Service.deleteLogs(user.id, ids)
       return success(c, { deleted: ids.length }, `${ids.length} logs deleted`)
     } catch (err) {
-      console.error('Bulk delete error:', err)
+      logger.error('Bulk delete error:', err)
       return error(c, 'Failed to delete logs', 500)
     }
   }
 
   // Local fallback
-  ids.forEach(id => logService.deleteLog(id))
+  ids.forEach((id) => logService.deleteLog(id))
   return success(c, { deleted: ids.length }, `${ids.length} logs deleted`)
 })
 
@@ -193,7 +234,7 @@ app.post('/report/logs/delete-bulk', async (c) => {
 /**
  * Extract filter parameters from request
  */
-function extractFilters(c: any) {
+function extractFilters(c: Context): LogFilters {
   return {
     status: c.req.query('status'),
     sendType: c.req.query('send_type'),
@@ -210,7 +251,7 @@ function extractFilters(c: any) {
 /**
  * Fetch logs for export (shared logic)
  */
-async function fetchLogsForExport(userId: string, c: any): Promise<any[]> {
+async function fetchLogsForExport(userId: string, c: Context): Promise<EmailLogRecord[]> {
   if (d1Service.isConfigured()) {
     try {
       const result = await d1Service.getLogs(userId, {
@@ -223,7 +264,7 @@ async function fetchLogsForExport(userId: string, c: any): Promise<any[]> {
       })
       if (result?.logs) return result.logs
     } catch (err) {
-      console.error('Export error:', err)
+      logger.error('Export error:', err)
     }
   }
 
@@ -233,7 +274,7 @@ async function fetchLogsForExport(userId: string, c: any): Promise<any[]> {
 /**
  * Generate CSV from logs
  */
-function generateCSV(logs: any[]): string {
+function generateCSV(logs: EmailLogRecord[]): string {
   const headers = [
     'ID',
     'Email',
@@ -264,12 +305,9 @@ function generateCSV(logs: any[]): string {
     log.click_count || 0,
   ])
 
-  const escapeCSV = (cell: any) => `"${String(cell).replace(/"/g, '""')}"`
+  const escapeCSV = (cell: string | number | undefined) => `"${String(cell).replace(/"/g, '""')}"`
 
-  return [
-    headers.join(','),
-    ...rows.map((row) => row.map(escapeCSV).join(',')),
-  ].join('\n')
+  return [headers.join(','), ...rows.map((row) => row.map(escapeCSV).join(','))].join('\n')
 }
 
 export default app

@@ -6,12 +6,22 @@ import { Hono } from 'hono'
 import { requireAuth } from '../middleware/auth'
 import { logService } from '../services/logService'
 import { queueEngine } from '../services/queueEngine'
+import type { QueueJob } from '../services/queueDatabase'
 import { success, error } from '../utils/response'
+import { logger } from '../utils/logger'
+
+// ============================================================================
+// Types
+// ============================================================================
+
+interface SchedulerServiceLike {
+  getScheduledJobs(): Array<{ status: string; [key: string]: unknown }>
+}
 
 // Lazy-loaded services
-let schedulerService: any = null
+let schedulerService: SchedulerServiceLike | null = null
 
-function getSchedulerService() {
+function getSchedulerService(): SchedulerServiceLike | null {
   if (!schedulerService) {
     try {
       schedulerService = require('../services/schedulerService').schedulerService
@@ -55,10 +65,25 @@ app.get('/dashboard/stats', (c) => {
       timestamp: new Date().toISOString(),
     })
   } catch (err) {
-    console.error('Dashboard stats error:', err)
+    logger.error('Dashboard stats error:', err)
     return success(c, {
       stats: { sent: 0, failed: 0, total: 0 },
-      queue: { stats: { pending: 0, running: 0, paused: 0, completed: 0, failed: 0, cancelled: 0, total_sent: 0, total_failed: 0, dead_letters: 0 }, activeJobs: [], pendingJobs: [], recentJobs: [] },
+      queue: {
+        stats: {
+          pending: 0,
+          running: 0,
+          paused: 0,
+          completed: 0,
+          failed: 0,
+          cancelled: 0,
+          total_sent: 0,
+          total_failed: 0,
+          dead_letters: 0,
+        },
+        activeJobs: [],
+        pendingJobs: [],
+        recentJobs: [],
+      },
       scheduledJobs: [],
       recentLogs: [],
       timestamp: new Date().toISOString(),
@@ -81,7 +106,7 @@ app.get('/dashboard/poll-status', (c) => {
     const hasActiveJobs = queueStats.running > 0
     const hasPendingJobs = queueStats.pending > 0
     const hasScheduledJobs = scheduledJobs.length > 0
-    const hasRunningScheduledJobs = scheduledJobs.some((j: any) => j.status === 'running')
+    const hasRunningScheduledJobs = scheduledJobs.some((j) => j.status === 'running')
 
     // Determine polling interval
     let pollNeeded = false
@@ -115,7 +140,7 @@ app.get('/dashboard/poll-status', (c) => {
       lastUpdated: new Date().toISOString(),
     })
   } catch (err) {
-    console.error('Poll status error:', err)
+    logger.error('Poll status error:', err)
     return success(c, {
       pollNeeded: false,
       pollInterval: 30000,
@@ -142,7 +167,7 @@ app.get('/dashboard/data', (c) => {
   try {
     const scheduler = getSchedulerService()
     const scheduledJobs = (scheduler?.getScheduledJobs() ?? [])
-      .filter((j: any) => j.status === 'scheduled' || j.status === 'running')
+      .filter((j) => j.status === 'scheduled' || j.status === 'running')
       .slice(0, 5)
 
     const activeJobs = queueEngine.getJobs(user.id, 'running', 5)
@@ -157,7 +182,7 @@ app.get('/dashboard/data', (c) => {
       timestamp: new Date().toISOString(),
     })
   } catch (err) {
-    console.error('Dashboard data error:', err)
+    logger.error('Dashboard data error:', err)
     return error(c, 'Failed to fetch dashboard data', 500)
   }
 })
@@ -165,7 +190,7 @@ app.get('/dashboard/data', (c) => {
 /**
  * Format job for dashboard display (strip large fields)
  */
-function formatJobSummary(job: any) {
+function formatJobSummary(job: QueueJob) {
   return {
     id: job.id,
     type: job.type,

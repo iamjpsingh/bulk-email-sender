@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useAuth } from '../stores/auth'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useConfigs } from '../lib/query'
-import { emailApi } from '../lib/api'
-import DateTimeInput from '../components/ui/DateTimeInput.vue'
+import { emailApi, templatesApi } from '../lib/api'
+import type { Template } from '../lib/api'
+import { useToast } from '../composables/useToast'
+import { parseExcelFile, getContactEmail, getContactName, replacePlaceholders } from '../lib/excelParser'
 import EmailEditor from '../components/compose/EmailEditor.vue'
+import RecipientUpload from '../components/compose/RecipientUpload.vue'
+import SendOptions from '../components/compose/SendOptions.vue'
+import EmailPreviewModal from '../components/compose/EmailPreviewModal.vue'
+import MainLayout from '../components/layout/MainLayout.vue'
 import {
   Send,
   Calendar,
@@ -13,20 +18,15 @@ import {
   XCircle,
   X,
   Users,
-  Upload,
   Settings,
-  Mail,
-  LayoutDashboard,
-  BarChart3,
-  LogOut,
-  Clock,
-  Zap,
+  FileText,
   Eye,
-  EyeOff,
-  TrendingUp
+  Code,
+  LayoutTemplate,
 } from 'lucide-vue-next'
+import HtmlCodeEditor from '../components/compose/HtmlCodeEditor.vue'
 
-const { user, logout } = useAuth()
+const toast = useToast()
 
 // TanStack Query for configs
 const { data: configsData } = useConfigs()
@@ -67,71 +67,85 @@ const result = ref<any>(null)
 const showPreview = ref(false)
 const previewContactIndex = ref(0)
 
+// Template state
+const templates = ref<Template[]>([])
+const selectedTemplateId = ref('')
+const loadingTemplates = ref(false)
+const loadingTemplate = ref(false)
+const editorMode = ref<'preview' | 'rich' | 'html'>('rich')
+
+async function fetchTemplates() {
+  loadingTemplates.value = true
+  try {
+    const res = await templatesApi.list()
+    templates.value = res.templates || []
+  } catch (err: any) {
+    toast.error(err.message || 'Failed to load templates')
+  } finally {
+    loadingTemplates.value = false
+  }
+}
+
+async function applyTemplate(templateId: string) {
+  if (!templateId) return
+  loadingTemplate.value = true
+  try {
+    const tpl = await templatesApi.get(templateId)
+    htmlContent.value = tpl.html_content || ''
+    if (tpl.subject && !subject.value) {
+      subject.value = tpl.subject
+    }
+    toast.success(`Template "${tpl.name}" applied`)
+  } catch (err: any) {
+    toast.error(err.message || 'Failed to load template')
+    selectedTemplateId.value = ''
+  } finally {
+    loadingTemplate.value = false
+  }
+}
+
+watch(selectedTemplateId, (id) => {
+  if (id) {
+    applyTemplate(id)
+    editorMode.value = 'preview'
+  } else {
+    editorMode.value = 'rich'
+  }
+})
+
+// Inline template preview with placeholder substitution
+const templatePreviewHtml = computed(() => {
+  if (!htmlContent.value) return ''
+  return replacePlaceholders(htmlContent.value, previewContact.value)
+})
+
 // Get preview contact (first contact or sample)
 const previewContact = computed(() => {
   if (contacts.value.length > 0) {
     return contacts.value[previewContactIndex.value] || contacts.value[0]
   }
-  // Sample contact if no contacts loaded
   return {
     Email: 'john@example.com',
     FirstName: 'John',
     LastName: 'Doe',
     Company: 'Acme Inc',
-    Name: 'John Doe'
+    Name: 'John Doe',
   }
 })
-
-// Find email field in contact (could be Email, email, E-mail, etc.)
-const getContactEmail = (contact: Record<string, any>): string => {
-  const emailKeys = ['Email', 'email', 'EMAIL', 'E-mail', 'e-mail', 'EmailAddress', 'email_address']
-  for (const key of emailKeys) {
-    if (contact[key] && contact[key].includes('@')) {
-      return contact[key]
-    }
-  }
-  // Fallback: find any field with @ symbol
-  for (const value of Object.values(contact)) {
-    if (typeof value === 'string' && value.includes('@')) {
-      return value
-    }
-  }
-  return ''
-}
-
-// Find name field in contact
-const getContactName = (contact: Record<string, any>): string => {
-  if (contact.FirstName) {
-    return `${contact.FirstName} ${contact.LastName || ''}`.trim()
-  }
-  if (contact.Name) return contact.Name
-  if (contact.name) return contact.name
-  if (contact.FullName) return contact.FullName
-  if (contact.full_name) return contact.full_name
-  return ''
-}
 
 const previewToEmail = computed(() => getContactEmail(previewContact.value))
 const previewToName = computed(() => getContactName(previewContact.value))
+const previewSubject = computed(() => replacePlaceholders(subject.value, previewContact.value))
+const previewContent = computed(() => replacePlaceholders(htmlContent.value, previewContact.value))
 
-// Replace placeholders in content for preview
-const previewSubject = computed(() => {
-  return replacePlaceholders(subject.value, previewContact.value)
+const previewFromName = computed(() => {
+  const cfg = smtpConfigs.value.find((c) => c.id === selectedConfigId.value)
+  return cfg?.from_name || cfg?.name || 'Your Name'
 })
-
-const previewContent = computed(() => {
-  return replacePlaceholders(htmlContent.value, previewContact.value)
+const previewFromEmail = computed(() => {
+  const cfg = smtpConfigs.value.find((c) => c.id === selectedConfigId.value)
+  return cfg?.from_email || cfg?.oauth_email || 'you@example.com'
 })
-
-function replacePlaceholders(text: string, contact: Record<string, any>): string {
-  if (!text) return ''
-  let result = text
-  for (const [key, value] of Object.entries(contact)) {
-    const placeholder = `{{${key}}}`
-    result = result.split(placeholder).join(value || '')
-  }
-  return result
-}
 
 function nextPreviewContact() {
   if (contacts.value.length > 0) {
@@ -141,9 +155,8 @@ function nextPreviewContact() {
 
 function prevPreviewContact() {
   if (contacts.value.length > 0) {
-    previewContactIndex.value = previewContactIndex.value === 0 
-      ? contacts.value.length - 1 
-      : previewContactIndex.value - 1
+    previewContactIndex.value =
+      previewContactIndex.value === 0 ? contacts.value.length - 1 : previewContactIndex.value - 1
   }
 }
 
@@ -155,133 +168,39 @@ const selectedCount = computed(() => {
 })
 
 const canSend = computed(() => {
-  return selectedConfigId.value && 
-         subject.value.trim() && 
-         contacts.value.length > 0 &&
-         htmlContent.value.trim()
+  return selectedConfigId.value && subject.value.trim() && contacts.value.length > 0 && htmlContent.value.trim()
 })
 
-async function handleLogout() {
-  await logout()
-}
-
-function handleFileUpload(event: Event) {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (file) {
-    excelFile.value = file
-    parseExcelFile(file)
-  }
-}
-
-async function parseExcelFile(file: File) {
-  try {
-    // Use xlsx library for proper Excel/CSV parsing
-    const XLSX = await import('xlsx')
-    const data = await file.arrayBuffer()
-    const workbook = XLSX.read(data, { type: 'array' })
-    const sheetName = workbook.SheetNames[0]
-    if (!sheetName) {
-      console.error('No sheets found in workbook')
-      return
-    }
-    const worksheet = workbook.Sheets[sheetName]
-    if (!worksheet) {
-      console.error('Worksheet not found')
-      return
-    }
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
-    
-    if (jsonData.length < 2) {
-      console.error('File must have at least a header row and one data row')
-      return
-    }
-    
-    // First row is headers (column names)
-    const headerRow = jsonData[0]
-    if (!headerRow) {
-      console.error('No header row found')
-      return
-    }
-    const headers = headerRow.map((h: any) => String(h).trim())
-    columns.value = headers
-    
-    // Parse contacts from remaining rows
-    const parsedContacts = []
-    for (let i = 1; i < jsonData.length; i++) {
-      const row = jsonData[i]
-      if (!row || row.length === 0) continue
-      
-      const contact: Record<string, any> = {}
-      headers.forEach((header, index) => {
-        contact[header] = row[index] !== undefined ? String(row[index]).trim() : ''
-      })
-      
-      // Only add if has at least email-like field
-      const hasEmail = Object.values(contact).some(v => 
-        typeof v === 'string' && v.includes('@')
-      )
-      if (hasEmail || Object.values(contact).some(v => v)) {
-        parsedContacts.push(contact)
-      }
-    }
-    
-    contacts.value = parsedContacts
-  } catch (err) {
-    console.error('Error parsing file:', err)
-    // Fallback to simple CSV parsing
-    const text = await file.text()
-    const lines = text.split('\n').filter(l => l.trim())
-    
-    if (lines.length < 2) return
-    
-    const headerLine = lines[0]
-    if (!headerLine) return
-    
-    const headers = headerLine.split(',').map(h => h.trim())
-    columns.value = headers
-    
-    const parsedContacts = []
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i]
-      if (!line) continue
-      const values = line.split(',')
-      const contact: Record<string, any> = {}
-      headers.forEach((header, index) => {
-        contact[header] = values[index]?.trim() || ''
-      })
-      parsedContacts.push(contact)
-    }
-    
-    contacts.value = parsedContacts
-  }
+async function handleFileSelected(file: File) {
+  excelFile.value = file
+  const parsed = await parseExcelFile(file)
+  contacts.value = parsed.contacts
+  columns.value = parsed.columns
 }
 
 async function handleSend() {
   if (!canSend.value) return
-  
+
   sending.value = true
   result.value = null
-  
+
   const formData = new FormData()
-  
-  // Config
   const config = smtpConfigs.value.find((c) => c.id === selectedConfigId.value)
   if (!config) {
-    result.value = { success: false, message: 'No SMTP config selected' }
+    toast.error('No SMTP config selected')
     sending.value = false
     return
   }
-  
+
   formData.set('configId', config.id)
   formData.set('subject', subject.value)
   formData.set('htmlContent', htmlContent.value)
   formData.set('delay', delay.value.toString())
-  
+
   if (excelFile.value) {
     formData.set('excelFile', excelFile.value)
   }
-  
+
   // Range
   let start = 0
   let count = contacts.value.length
@@ -293,7 +212,7 @@ async function handleSend() {
   }
   formData.set('emailRangeStart', start.toString())
   formData.set('emailRangeCount', count.toString())
-  
+
   // Batch settings
   if (useBatch.value) {
     formData.set('useBatch', 'on')
@@ -301,7 +220,7 @@ async function handleSend() {
     formData.set('batchDelay', batchDelay.value.toString())
     formData.set('emailDelay', emailDelay.value.toString())
   }
-  
+
   // Schedule settings
   if (useSchedule.value && scheduledTime.value) {
     const utcTime = new Date(scheduledTime.value).toISOString()
@@ -311,783 +230,359 @@ async function handleSend() {
       formData.set('notifyEmail', notifyEmail.value)
     }
   }
-  
+
   try {
     const response = await emailApi.send(formData)
     result.value = response
+    if (response.success) {
+      toast.success(response.message || 'Emails sent successfully!')
+    } else {
+      toast.error(response.message || 'Failed to send emails')
+    }
   } catch (err: any) {
     result.value = { success: false, message: err.message || 'Failed to send emails' }
+    toast.error(err.message || 'Failed to send emails')
   } finally {
     sending.value = false
   }
 }
 
-const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/compose', label: 'Compose', icon: Mail },
-  { path: '/reports', label: 'Reports', icon: BarChart3 },
-  { path: '/configs', label: 'Configs', icon: Settings }
-]
+onMounted(() => {
+  fetchTemplates()
+})
 </script>
 
 <template>
-  <div class="app-layout">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <div class="logo">
-          <Send class="logo-icon" :size="28" />
-          <span class="logo-text">Dispatch</span>
-        </div>
+  <MainLayout>
+    <header class="mb-8">
+      <div>
+        <h1 class="text-[28px] font-bold mb-1">Compose Campaign</h1>
+        <p class="text-text-muted text-sm">Create and send bulk email campaigns</p>
       </div>
-      
-      <nav class="sidebar-nav">
-        <router-link
-          v-for="item in navItems"
-          :key="item.path"
-          :to="item.path"
-          class="nav-item"
-          :class="{ active: $route.path === item.path }"
+      <!-- Progress steps -->
+      <div class="flex items-center gap-2 mt-5">
+        <div class="flex items-center gap-2 text-sm" :class="selectedConfigId ? 'text-success' : 'text-text-muted'">
+          <div
+            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors duration-200"
+            :class="selectedConfigId ? 'bg-success/15 border-success text-success' : 'border-border text-text-muted'"
+          >
+            1
+          </div>
+          <span class="hidden sm:inline">Config</span>
+        </div>
+        <div class="w-6 h-px bg-border"></div>
+        <div class="flex items-center gap-2 text-sm" :class="contacts.length > 0 ? 'text-success' : 'text-text-muted'">
+          <div
+            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors duration-200"
+            :class="contacts.length > 0 ? 'bg-success/15 border-success text-success' : 'border-border text-text-muted'"
+          >
+            2
+          </div>
+          <span class="hidden sm:inline">Contacts</span>
+        </div>
+        <div class="w-6 h-px bg-border"></div>
+        <div
+          class="flex items-center gap-2 text-sm"
+          :class="subject.trim() && htmlContent.trim() ? 'text-success' : 'text-text-muted'"
         >
-          <component :is="item.icon" class="nav-icon" :size="20" />
-          <span class="nav-label">{{ item.label }}</span>
-        </router-link>
-      </nav>
-      
-      <div class="sidebar-footer">
-        <div class="user-info" v-if="user">
-          <div class="user-avatar">
-            {{ user?.name?.charAt(0).toUpperCase() || '?' }}
+          <div
+            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors duration-200"
+            :class="
+              subject.trim() && htmlContent.trim()
+                ? 'bg-success/15 border-success text-success'
+                : 'border-border text-text-muted'
+            "
+          >
+            3
           </div>
-          <div class="user-details">
-            <div class="user-name">{{ user?.name || 'User' }}</div>
-            <div class="user-email">{{ user?.email || '' }}</div>
+          <span class="hidden sm:inline">Content</span>
+        </div>
+        <div class="w-6 h-px bg-border"></div>
+        <div class="flex items-center gap-2 text-sm" :class="canSend ? 'text-accent' : 'text-text-muted'">
+          <div
+            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors duration-200"
+            :class="canSend ? 'bg-accent/15 border-accent text-accent' : 'border-border text-text-muted'"
+          >
+            4
+          </div>
+          <span class="hidden sm:inline">Send</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Result message -->
+    <div
+      v-if="result"
+      class="flex items-center gap-4 px-5 py-4 rounded-[var(--radius-md)] mb-6"
+      :class="
+        result.success
+          ? 'bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.3)] text-success'
+          : 'bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] text-danger'
+      "
+    >
+      <CheckCircle v-if="result.success" :size="24" />
+      <XCircle v-else :size="24" />
+      <div class="flex-1">
+        <strong class="block mb-1">{{ result.success ? 'Success!' : 'Error' }}</strong>
+        <p class="text-sm opacity-80 m-0">{{ result.message }}</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" @click="result = null">
+        <X :size="16" />
+      </button>
+    </div>
+
+    <div class="grid grid-cols-[400px_1fr] gap-6 max-lg:grid-cols-1">
+      <!-- Left column -->
+      <div class="flex flex-col gap-5">
+        <!-- Email Config selector -->
+        <div class="glass-card p-5">
+          <h3 class="text-[15px] mb-4 flex items-center gap-2">
+            <Settings :size="18" class="text-accent" />
+            Email Configuration
+          </h3>
+          <select v-model="selectedConfigId" class="form-select">
+            <option value="">Select config...</option>
+            <option v-for="config in smtpConfigs" :key="config.id" :value="config.id">
+              {{ config.name }}
+              <template v-if="config.provider_type === 'google'">(Gmail)</template>
+              <template v-else-if="config.provider_type === 'microsoft'">(Outlook)</template>
+              <template v-else>({{ config.host }})</template>
+            </option>
+          </select>
+          <p v-if="smtpConfigs.length === 0" class="text-text-muted text-[13px] mt-2">
+            No configs found. <router-link to="/configs" class="text-accent">Create one</router-link>
+          </p>
+        </div>
+
+        <!-- File upload (extracted component) -->
+        <RecipientUpload :contacts="contacts" :columns="columns" @file-selected="handleFileSelected" />
+
+        <!-- Template selector -->
+        <div class="glass-card p-5">
+          <h3 class="text-[15px] mb-4 flex items-center gap-2">
+            <FileText :size="18" class="text-accent" />
+            Use Template
+          </h3>
+          <select v-model="selectedTemplateId" class="form-select" :disabled="loadingTemplates">
+            <option value="">{{ loadingTemplates ? 'Loading...' : 'Select a template...' }}</option>
+            <option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">
+              {{ tpl.name }}
+              <template v-if="tpl.category !== 'general'"> ({{ tpl.category }})</template>
+            </option>
+          </select>
+          <p v-if="templates.length === 0 && !loadingTemplates" class="text-text-muted text-[13px] mt-2">
+            No templates found. Create one in Templates.
+          </p>
+          <p v-if="loadingTemplate" class="text-text-muted text-[13px] mt-2 flex items-center gap-1">
+            <Loader2 :size="12" class="animate-spin" /> Applying template...
+          </p>
+          <!-- Inline preview -->
+          <div v-if="selectedTemplateId && htmlContent && !loadingTemplate" class="mt-3">
+            <p class="text-text-muted text-[12px] mb-1.5">
+              Preview ({{ contacts.length > 0 ? 'using first contact' : 'sample data' }}):
+            </p>
+            <div
+              class="template-inline-preview rounded-[var(--radius-sm)] border border-border bg-white overflow-hidden max-h-[180px] overflow-y-auto"
+            >
+              <div class="p-3 text-[12px] text-[#374151] leading-relaxed" v-html="templatePreviewHtml"></div>
+            </div>
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" @click="handleLogout">
-          <LogOut :size="16" />
-          <span>Logout</span>
-        </button>
+
+        <!-- Range selector -->
+        <div v-if="contacts.length > 0" class="glass-card p-5">
+          <h3 class="text-[15px] mb-4 flex items-center gap-2">
+            <Users :size="18" class="text-accent" />
+            Email Range
+          </h3>
+          <div class="flex flex-col gap-3 mb-4">
+            <label class="form-checkbox">
+              <input type="radio" v-model="rangeType" value="all" />
+              <span>Send to all ({{ contacts.length }})</span>
+            </label>
+            <label class="form-checkbox">
+              <input type="radio" v-model="rangeType" value="first" />
+              <span>First N contacts</span>
+            </label>
+            <label class="form-checkbox">
+              <input type="radio" v-model="rangeType" value="range" />
+              <span>Specific range</span>
+            </label>
+          </div>
+
+          <div v-if="rangeType === 'first'" class="mb-3">
+            <input v-model.number="firstN" type="number" class="form-input" min="1" :max="contacts.length" />
+          </div>
+
+          <div v-if="rangeType === 'range'" class="flex items-center gap-3 mb-3">
+            <input v-model.number="rangeFrom" type="number" class="form-input w-[100px]" min="1" placeholder="From" />
+            <span class="text-text-muted">to</span>
+            <input v-model.number="rangeTo" type="number" class="form-input w-[100px]" min="1" placeholder="To" />
+          </div>
+
+          <div class="p-3 bg-bg-secondary rounded-[var(--radius-sm)] text-sm text-text-secondary">
+            Will send to <strong class="text-accent">{{ selectedCount }}</strong> contacts
+          </div>
+        </div>
+
+        <!-- Batch + Schedule settings (extracted component) -->
+        <SendOptions
+          v-model:useBatch="useBatch"
+          v-model:batchSize="batchSize"
+          v-model:batchDelay="batchDelay"
+          v-model:emailDelay="emailDelay"
+          v-model:useSchedule="useSchedule"
+          v-model:scheduledTime="scheduledTime"
+          v-model:notifyEmail="notifyEmail"
+        />
       </div>
-    </aside>
-    
-    <!-- Main content -->
-    <main class="main-content">
-      <div class="compose-view fade-in">
-        
-        <header class="page-header">
-          <div>
-            <h1>Compose Campaign</h1>
-            <p class="text-muted">Create and send bulk email campaigns</p>
-          </div>
-        </header>
-        
-        <!-- Result message -->
-        <div v-if="result" class="result-message" :class="result.success ? 'success' : 'error'">
-          <CheckCircle v-if="result.success" :size="24" />
-          <XCircle v-else :size="24" />
-          <div>
-            <strong>{{ result.success ? 'Success!' : 'Error' }}</strong>
-            <p>{{ result.message }}</p>
-          </div>
-          <button class="btn btn-ghost btn-sm" @click="result = null">
-            <X :size="16" />
+
+      <!-- Right column - Editor / Preview -->
+      <div class="flex flex-col gap-5">
+        <!-- Mode switcher (when template selected) -->
+        <div class="flex justify-end gap-2" v-if="selectedTemplateId">
+          <button
+            class="btn-ghost btn-sm"
+            :class="{ 'text-accent': editorMode === 'preview' }"
+            @click="editorMode = 'preview'"
+          >
+            <LayoutTemplate :size="14" /> Preview
+          </button>
+          <button
+            class="btn-ghost btn-sm"
+            :class="{ 'text-accent': editorMode === 'rich' }"
+            @click="editorMode = 'rich'"
+          >
+            <Send :size="14" /> Rich Editor
+          </button>
+          <button
+            class="btn-ghost btn-sm"
+            :class="{ 'text-accent': editorMode === 'html' }"
+            @click="editorMode = 'html'"
+          >
+            <Code :size="14" /> HTML Editor
           </button>
         </div>
-        
-        <div class="compose-grid">
-          <!-- Left column -->
-          <div class="compose-left">
-            <!-- Email Config selector -->
-            <div class="section glass-card">
-              <h3>
-                <Settings :size="18" class="header-icon" />
-                Email Configuration
-              </h3>
-              <select v-model="selectedConfigId" class="form-select">
-                <option value="">Select config...</option>
-                <option v-for="config in smtpConfigs" :key="config.id" :value="config.id">
-                  {{ config.name }} 
-                  <template v-if="config.provider_type === 'google'">(Gmail)</template>
-                  <template v-else-if="config.provider_type === 'microsoft'">(Outlook)</template>
-                  <template v-else>({{ config.host }})</template>
-                </option>
-              </select>
-              <p v-if="smtpConfigs.length === 0" class="text-muted" style="font-size: 13px; margin-top: 8px;">
-                No configs found. <router-link to="/configs" class="text-accent">Create one</router-link>
+
+        <!-- Template preview mode -->
+        <div v-if="editorMode === 'preview'" class="glass-card p-5">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <p class="text-[12px] text-text-muted uppercase tracking-wide mb-1">Template Preview</p>
+              <h3 class="text-base font-semibold m-0">{{ previewSubject || subject || 'Untitled Subject' }}</h3>
+              <p class="text-sm text-text-secondary mt-1">
+                Showing preview with {{ contacts.length > 0 ? 'first contact' : 'sample data' }}.
               </p>
             </div>
-            
-            <!-- File upload -->
-            <div class="section glass-card">
-              <h3>
-                <Upload :size="18" class="header-icon" />
-                Upload Contacts
-              </h3>
-              <input
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                @change="handleFileUpload"
-                class="form-input"
-              />
-              <p v-if="contacts.length > 0" class="text-success" style="font-size: 13px; margin-top: 8px;">
-                ✅ {{ contacts.length }} contacts loaded
-              </p>
-              <p class="text-muted" style="font-size: 13px; margin-top: 8px;">
-                Upload CSV or Excel file with Name, Email columns
-              </p>
-            </div>
-            
-            <!-- Range selector -->
-            <div v-if="contacts.length > 0" class="section glass-card">
-              <h3>
-                <Users :size="18" class="header-icon" />
-                Email Range
-              </h3>
-              <div class="range-options">
-                <label class="form-checkbox">
-                  <input type="radio" v-model="rangeType" value="all" />
-                  <span>Send to all ({{ contacts.length }})</span>
-                </label>
-                <label class="form-checkbox">
-                  <input type="radio" v-model="rangeType" value="first" />
-                  <span>First N contacts</span>
-                </label>
-                <label class="form-checkbox">
-                  <input type="radio" v-model="rangeType" value="range" />
-                  <span>Specific range</span>
-                </label>
-              </div>
-              
-              <div v-if="rangeType === 'first'" class="range-input">
-                <input v-model.number="firstN" type="number" class="form-input" min="1" :max="contacts.length" />
-              </div>
-              
-              <div v-if="rangeType === 'range'" class="range-inputs">
-                <input v-model.number="rangeFrom" type="number" class="form-input" min="1" placeholder="From" />
-                <span>to</span>
-                <input v-model.number="rangeTo" type="number" class="form-input" min="1" placeholder="To" />
-              </div>
-              
-              <div class="range-preview">
-                Will send to <strong class="text-accent">{{ selectedCount }}</strong> contacts
-              </div>
-            </div>
-            
-            <!-- Batch settings -->
-            <div class="section glass-card">
-              <h3>
-                <Zap :size="18" class="header-icon" />
-                Batch Settings
-              </h3>
-              <label class="form-checkbox">
-                <input type="checkbox" v-model="useBatch" />
-                <span>Enable batch sending</span>
-              </label>
-              
-              <div v-if="useBatch" class="batch-settings">
-                <div class="form-group">
-                  <label class="form-label">Batch Size</label>
-                  <input v-model.number="batchSize" type="number" class="form-input" min="1" max="100" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Batch Delay (seconds)</label>
-                  <input v-model.number="batchDelay" type="number" class="form-input" min="1" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Email Delay (seconds)</label>
-                  <input v-model.number="emailDelay" type="number" class="form-input" min="1" />
-                </div>
-              </div>
-            </div>
-            
-            <!-- Schedule settings -->
-            <div class="section glass-card">
-              <h3>
-                <Clock :size="18" class="header-icon" />
-                Schedule Settings
-              </h3>
-              <label class="form-checkbox">
-                <input type="checkbox" v-model="useSchedule" />
-                <span>Schedule for later</span>
-              </label>
-              
-              <div v-if="useSchedule" class="schedule-settings">
-                <div class="form-group">
-                  <label class="form-label">Scheduled Time</label>
-                  <DateTimeInput v-model="scheduledTime" placeholder="Select date and time" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Notification Email (optional)</label>
-                  <input v-model="notifyEmail" type="email" class="form-input" placeholder="notify@example.com" />
-                </div>
-              </div>
+            <div class="flex gap-2">
+              <button class="btn-secondary btn-sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</button>
+              <button class="btn-primary btn-sm" @click="editorMode = 'rich'">Edit Content</button>
             </div>
           </div>
-          
-          <!-- Right column - Editor -->
-          <div class="compose-right">
-            <!-- Email editor -->
-            <EmailEditor
-              v-model:subject="subject"
-              v-model:content="htmlContent"
-              v-model:delay="delay"
-              :columns="columns"
-              @preview="showPreview = true"
-            />
-            
-            <!-- Send button -->
-            <div class="send-section glass-card">
-              <button
-                class="btn btn-primary btn-lg"
-                :disabled="!canSend || sending"
-                @click="handleSend"
-              >
-                <Loader2 v-if="sending" :size="18" class="spin" />
-                <Calendar v-else-if="useSchedule" :size="18" />
-                <Send v-else :size="18" />
-                {{ useSchedule ? 'Schedule' : 'Send' }} to {{ selectedCount }} contacts
-              </button>
-              
-              <p v-if="!canSend" class="send-hint text-muted">
-                <span v-if="!selectedConfigId">Select an SMTP config</span>
-                <span v-else-if="!subject.trim()">Enter a subject</span>
-                <span v-else-if="contacts.length === 0">Upload contacts</span>
-                <span v-else>Add email content</span>
-              </p>
+          <div class="border border-border rounded-[var(--radius-md)] overflow-hidden bg-white text-[#0f172a]">
+            <div
+              class="px-4 py-3 border-b border-border flex items-center justify-between text-[13px] bg-[rgba(15,23,42,0.03)]"
+            >
+              <span><strong>From:</strong> {{ previewFromName }} &lt;{{ previewFromEmail }}&gt;</span>
+              <span><strong>To:</strong> {{ previewToName }} &lt;{{ previewToEmail }}&gt;</span>
             </div>
+            <div class="px-4 py-3 border-b border-border text-[13px]">
+              <strong>Subject:</strong> {{ previewSubject }}
+            </div>
+            <div class="p-5 text-[14px] leading-[1.7]" v-html="templatePreviewHtml || previewContent"></div>
+          </div>
+          <div class="flex items-center justify-between mt-3 text-[12px] text-text-muted">
+            <span>Template content is locked. Click "Edit Content" to switch back to the editor.</span>
+            <button class="btn-ghost btn-sm" @click="editorMode = 'rich'">Switch to Editor</button>
           </div>
         </div>
-      </div>
-    </main>
-    
-    <!-- Email Preview Modal -->
-    <Teleport to="body">
-      <div v-if="showPreview" class="preview-overlay" @click.self="showPreview = false">
-        <div class="preview-modal">
-          <div class="preview-header">
-            <h2>
-              <Eye :size="20" />
-              Email Preview
-            </h2>
-            <button class="btn btn-ghost btn-sm" @click="showPreview = false">
-              <X :size="20" />
-            </button>
+
+        <!-- Rich editor -->
+        <div v-else-if="editorMode === 'rich'" class="flex flex-col gap-2">
+          <div v-if="selectedTemplateId" class="flex justify-end gap-2 text-sm text-text-secondary">
+            <button class="btn-ghost btn-sm" @click="editorMode = 'preview'">View HTML Preview</button>
+            <button class="btn-secondary btn-sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</button>
           </div>
-          
-          <!-- Contact selector -->
-          <div class="preview-contact-selector" v-if="contacts.length > 0">
-            <button class="btn btn-ghost btn-sm" @click="prevPreviewContact" :disabled="contacts.length <= 1">
-              ←
-            </button>
-            <span class="contact-info">
-              <strong>{{ previewToName || previewToEmail || 'Contact' }}</strong>
-              <span class="text-muted">({{ previewContactIndex + 1 }} of {{ contacts.length }})</span>
-            </span>
-            <button class="btn btn-ghost btn-sm" @click="nextPreviewContact" :disabled="contacts.length <= 1">
-              →
-            </button>
-          </div>
-          <div v-else class="preview-contact-selector sample">
-            <span class="text-muted">Using sample data (upload contacts to preview with real data)</span>
-          </div>
-          
-          <!-- Email preview -->
-          <div class="preview-email">
-            <div class="preview-email-header">
-              <div class="preview-row">
-                <span class="preview-label">From:</span>
-                <span>{{ smtpConfigs.find(c => c.id === selectedConfigId)?.from_name || smtpConfigs.find(c => c.id === selectedConfigId)?.name || 'Your Name' }} &lt;{{ smtpConfigs.find(c => c.id === selectedConfigId)?.from_email || smtpConfigs.find(c => c.id === selectedConfigId)?.oauth_email || 'you@example.com' }}&gt;</span>
-              </div>
-              <div class="preview-row">
-                <span class="preview-label">To:</span>
-                <span v-if="previewToEmail">
-                  <template v-if="previewToName">
-                    {{ previewToName }} &lt;{{ previewToEmail }}&gt;
-                  </template>
-                  <template v-else>
-                    {{ previewToEmail }}
-                  </template>
-                </span>
-                <span v-else class="text-muted">(No email found in contact)</span>
-              </div>
-              <div class="preview-row">
-                <span class="preview-label">Subject:</span>
-                <span class="preview-subject">{{ previewSubject || '(No subject)' }}</span>
-              </div>
-            </div>
-            
-            <div class="preview-email-body">
-              <div v-if="previewContent" v-html="previewContent"></div>
-              <div v-else class="preview-empty">
-                <Mail :size="48" />
-                <p>No content yet. Start writing your email!</p>
-              </div>
+          <EmailEditor
+            v-model:subject="subject"
+            v-model:content="htmlContent"
+            v-model:delay="delay"
+            :columns="columns"
+            @preview="showPreview = true"
+          />
+        </div>
+
+        <!-- HTML code editor (Monaco) -->
+        <div v-else-if="editorMode === 'html'" class="flex flex-col gap-3">
+          <div class="flex items-center justify-between text-sm text-text-secondary">
+            <span v-text="'Raw HTML editor (placeholders like {{FirstName}} stay intact)'" />
+            <div class="flex gap-2">
+              <button class="btn-ghost btn-sm" @click="editorMode = 'preview'">Preview</button>
+              <button class="btn-secondary btn-sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</button>
             </div>
           </div>
-          
-          <div class="preview-footer">
-            <button class="btn btn-secondary" @click="showPreview = false">
-              Close Preview
-            </button>
+          <HtmlCodeEditor v-model:content="htmlContent" />
+        </div>
+
+        <!-- Send button -->
+        <div class="glass-card p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="text-sm text-text-secondary">
+              <span v-if="canSend" class="text-success flex items-center gap-1.5">
+                <CheckCircle :size="16" />
+                Ready to send
+              </span>
+              <span v-else class="flex items-center gap-1.5">
+                <span v-if="!selectedConfigId" class="text-warning">Select an SMTP config to continue</span>
+                <span v-else-if="contacts.length === 0" class="text-warning">Upload contacts to continue</span>
+                <span v-else-if="!subject.trim()" class="text-warning">Enter a subject line</span>
+                <span v-else class="text-warning">Add email content</span>
+              </span>
+            </div>
           </div>
+          <button class="btn btn-primary btn-lg w-full" :disabled="!canSend || sending" @click="handleSend">
+            <Loader2 v-if="sending" :size="18" class="animate-spin" />
+            <Calendar v-else-if="useSchedule" :size="18" />
+            <Send v-else :size="18" />
+            {{ useSchedule ? 'Schedule' : 'Send' }} to {{ selectedCount }} contacts
+          </button>
         </div>
       </div>
-    </Teleport>
-  </div>
+    </div>
+  </MainLayout>
+
+  <!-- Email Preview Modal -->
+  <EmailPreviewModal
+    :show="showPreview"
+    :contacts="contacts"
+    :contactIndex="previewContactIndex"
+    :fromName="previewFromName"
+    :fromEmail="previewFromEmail"
+    :toName="previewToName"
+    :toEmail="previewToEmail"
+    :previewSubject="previewSubject"
+    :previewContent="previewContent"
+    @close="showPreview = false"
+    @prev="prevPreviewContact"
+    @next="nextPreviewContact"
+  />
 </template>
 
-<style scoped lang="scss">
-.app-layout {
-  display: flex;
-  min-height: 100vh;
+<style scoped>
+/* Inline template preview */
+.template-inline-preview :deep(img) {
+  max-width: 100%;
+  height: auto;
 }
 
-.sidebar {
-  width: 260px;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  z-index: 100;
-}
-
-.sidebar-header {
-  padding: 24px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  
-  &-icon {
-    color: var(--accent-primary);
-  }
-  
-  &-text {
-    font-family: var(--font-mono);
-    font-size: 20px;
-    font-weight: 700;
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-}
-
-.sidebar-nav {
-  flex: 1;
-  padding: 16px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  text-decoration: none;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background: rgba(6, 182, 212, 0.1);
-    color: var(--text-primary);
-  }
-  
-  &.active {
-    background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(20, 184, 166, 0.1));
-    color: var(--accent-primary);
-    border: 1px solid var(--border-glow);
-    
-    .nav-icon {
-      color: var(--accent-primary);
-    }
-  }
-}
-
-.nav-label {
+.template-inline-preview :deep(h1),
+.template-inline-preview :deep(h2),
+.template-inline-preview :deep(h3) {
   font-size: 14px;
-  font-weight: 500;
+  margin: 4px 0;
 }
 
-.sidebar-footer {
-  padding: 16px;
-  border-top: 1px solid var(--border-color);
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.user-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  color: var(--bg-primary);
-}
-
-.user-details {
-  flex: 1;
-  min-width: 0;
-}
-
-.user-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-email {
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.main-content {
-  flex: 1;
-  margin-left: 260px;
-  padding: 32px;
-  min-height: 100vh;
-  background: var(--bg-primary);
-}
-
-.compose-view {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 32px;
-  
-  h1 {
-    font-size: 28px;
-    margin-bottom: 4px;
-  }
-}
-
-.result-message {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
-  border-radius: var(--radius-md);
-  margin-bottom: 24px;
-  
-  &.success {
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    color: var(--success);
-  }
-  
-  &.error {
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    color: var(--danger);
-  }
-  
-  > div {
-    flex: 1;
-    
-    strong {
-      display: block;
-      margin-bottom: 4px;
-    }
-    
-    p {
-      font-size: 14px;
-      opacity: 0.8;
-      margin: 0;
-    }
-  }
-}
-
-.compose-grid {
-  display: grid;
-  grid-template-columns: 400px 1fr;
-  gap: 24px;
-  
-  @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.compose-left {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.compose-right {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.section {
-  padding: 20px;
-  
-  h3 {
-    font-size: 15px;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .header-icon {
-    color: var(--accent-primary);
-  }
-}
-
-.range-options {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.range-input {
-  margin-bottom: 12px;
-}
-
-.range-inputs {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  
-  input {
-    width: 100px;
-  }
-  
-  span {
-    color: var(--text-muted);
-  }
-}
-
-.range-preview {
-  padding: 12px;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.batch-settings, .schedule-settings {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-color);
-}
-
-.send-section {
-  text-align: center;
-  padding: 24px;
-}
-
-.send-hint {
-  margin-top: 12px;
-  font-size: 13px;
-}
-
-// Preview Modal
-.preview-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  padding: 20px;
-  animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.preview-modal {
-  width: 100%;
-  max-width: 800px;
-  max-height: 90vh;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  animation: slideUp 0.3s ease;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.preview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  
-  h2 {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 18px;
-    margin: 0;
-    color: var(--text-primary);
-  }
-}
-
-.preview-contact-selector {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 12px 24px;
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-color);
-  
-  &.sample {
-    padding: 16px 24px;
-  }
-  
-  .contact-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-  }
-}
-
-.preview-email {
-  flex: 1;
-  overflow-y: auto;
-  background: #ffffff;
-}
-
-.preview-email-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
-}
-
-.preview-row {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 8px;
-  font-size: 14px;
-  color: #374151;
-  
-  &:last-child {
-    margin-bottom: 0;
-  }
-}
-
-.preview-label {
-  font-weight: 600;
-  color: #6b7280;
-  min-width: 60px;
-}
-
-.preview-subject {
-  font-weight: 600;
-  color: #111827;
-}
-
-.preview-email-body {
-  padding: 24px;
-  min-height: 300px;
-  color: #111827;
-  font-size: 15px;
-  line-height: 1.6;
-  
-  // Reset styles for email content
-  h1, h2, h3, h4, h5, h6 {
-    color: #111827;
-    margin-bottom: 12px;
-  }
-  
-  p {
-    margin-bottom: 12px;
-    color: #374151;
-  }
-  
-  a {
-    color: #2563eb;
-  }
-  
-  img {
-    max-width: 100%;
-    height: auto;
-  }
-  
-  ul, ol {
-    margin-bottom: 12px;
-    padding-left: 24px;
-  }
-  
-  blockquote {
-    border-left: 4px solid #e5e7eb;
-    padding-left: 16px;
-    margin: 16px 0;
-    color: #6b7280;
-  }
-}
-
-.preview-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 300px;
-  color: #9ca3af;
-  
-  p {
-    margin-top: 16px;
-    color: #9ca3af;
-  }
-}
-
-.preview-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  display: flex;
-  justify-content: flex-end;
+.template-inline-preview :deep(p) {
+  margin: 4px 0;
 }
 </style>

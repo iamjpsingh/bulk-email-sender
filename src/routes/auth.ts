@@ -7,6 +7,7 @@ import { setCookie, deleteCookie, getCookie } from 'hono/cookie'
 import { d1UserDatabase } from '../services/d1UserDatabase'
 import { COOKIE, isHttps } from '../config'
 import { error, success, ErrorMessages } from '../utils/response'
+import { logger } from '../utils/logger'
 import { isValidEmail, validatePassword } from '../utils/validation'
 
 const app = new Hono()
@@ -33,7 +34,7 @@ app.post('/auth/register', async (c) => {
     // Validate password
     const passwordValidation = validatePassword(password)
     if (!passwordValidation.valid) {
-      return error(c, passwordValidation.errors[0], 400)
+      return error(c, passwordValidation.message, 400)
     }
 
     // Register user
@@ -51,7 +52,7 @@ app.post('/auth/register', async (c) => {
 
     return success(c, { user: session.user }, 'Account created successfully')
   } catch (err) {
-    console.error('Registration error:', err)
+    logger.error('Registration error:', err)
     return error(c, 'Registration failed', 500)
   }
 })
@@ -85,7 +86,7 @@ app.post('/auth/login', async (c) => {
 
     return success(c, { user: session.user }, 'Login successful')
   } catch (err) {
-    console.error('Login error:', err)
+    logger.error('Login error:', err)
     return error(c, 'Login failed', 500)
   }
 })
@@ -103,7 +104,7 @@ app.post('/auth/logout', async (c) => {
     deleteCookie(c, COOKIE.SESSION_NAME)
     return success(c, undefined, 'Logged out successfully')
   } catch (err) {
-    console.error('Logout error:', err)
+    logger.error('Logout error:', err)
     return error(c, 'Logout failed', 500)
   }
 })
@@ -127,7 +128,7 @@ app.get('/auth/me', async (c) => {
 
     return success(c, { user })
   } catch (err) {
-    console.error('Auth check error:', err)
+    logger.error('Auth check error:', err)
     return error(c, 'Auth check failed', 500)
   }
 })

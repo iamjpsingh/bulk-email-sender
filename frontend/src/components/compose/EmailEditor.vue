@@ -18,9 +18,9 @@ let quill: any = null
 // Dynamic placeholders based on Excel columns
 const dynamicPlaceholders = computed(() => {
   if (props.columns && props.columns.length > 0) {
-    return props.columns.map(col => ({
+    return props.columns.map((col) => ({
       label: col,
-      value: `{{${col}}}`
+      value: `{{${col}}}`,
     }))
   }
   return []
@@ -32,30 +32,30 @@ onMounted(async () => {
   if (editorRef.value) {
     // Dynamic import to avoid SSR issues
     const Quill = (await import('quill')).default
-    
+
     quill = new Quill(editorRef.value, {
       theme: 'snow',
       placeholder: 'Write your email content here...',
       modules: {
         toolbar: [
-          [{ 'font': [] }],
-          [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+          [{ font: [] }],
+          [{ header: [1, 2, 3, 4, 5, 6, false] }],
           ['bold', 'italic', 'underline', 'strike'],
-          [{ 'color': [] }, { 'background': [] }],
-          [{ 'script': 'sub' }, { 'script': 'super' }],
-          [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-          [{ 'indent': '-1' }, { 'indent': '+1' }],
-          [{ 'direction': 'rtl' }, { 'align': [] }],
+          [{ color: [] }, { background: [] }],
+          [{ script: 'sub' }, { script: 'super' }],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          [{ indent: '-1' }, { indent: '+1' }],
+          [{ direction: 'rtl' }, { align: [] }],
           ['link', 'image', 'video', 'blockquote', 'code-block'],
-          ['clean']
-        ]
-      }
+          ['clean'],
+        ],
+      },
     })
-    
+
     if (props.content) {
       quill.root.innerHTML = props.content
     }
-    
+
     quill.on('text-change', () => {
       if (quill) {
         emit('update:content', quill.root.innerHTML)
@@ -68,11 +68,14 @@ onBeforeUnmount(() => {
   quill = null
 })
 
-watch(() => props.content, (newContent) => {
-  if (quill && newContent !== quill.root.innerHTML) {
-    quill.root.innerHTML = newContent || ''
+watch(
+  () => props.content,
+  (newContent) => {
+    if (quill && newContent !== quill.root.innerHTML) {
+      quill.root.innerHTML = newContent || ''
+    }
   }
-})
+)
 
 function insertPlaceholder(value: string) {
   if (quill) {
@@ -92,7 +95,7 @@ function insertPlaceholder(value: string) {
         <Mail :size="18" class="header-icon" />
         Email Content
       </h3>
-      <button 
+      <button
         class="btn btn-secondary btn-sm preview-btn"
         @click="emit('preview')"
         :disabled="!props.subject && !props.content"
@@ -101,7 +104,7 @@ function insertPlaceholder(value: string) {
         Preview
       </button>
     </div>
-    
+
     <!-- Subject -->
     <div class="form-group">
       <label class="form-label">Subject *</label>
@@ -113,7 +116,7 @@ function insertPlaceholder(value: string) {
         placeholder="Enter email subject..."
       />
     </div>
-    
+
     <!-- Dynamic Placeholders -->
     <div v-if="showPlaceholders" class="placeholders">
       <span class="placeholder-label">Insert placeholder:</span>
@@ -129,12 +132,12 @@ function insertPlaceholder(value: string) {
         </button>
       </div>
     </div>
-    
+
     <!-- Editor -->
     <div class="editor-wrapper">
       <div ref="editorRef"></div>
     </div>
-    
+
     <!-- Delay -->
     <div class="form-group">
       <label class="form-label">
@@ -154,17 +157,18 @@ function insertPlaceholder(value: string) {
   </div>
 </template>
 
-<style lang="scss">
+<style scoped lang="scss">
+/* Component-specific styles only. Quill overrides are in main.scss */
 .email-editor {
   padding: 24px;
-  
+
   .editor-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
   }
-  
+
   h3 {
     font-size: 15px;
     font-weight: 600;
@@ -172,17 +176,11 @@ function insertPlaceholder(value: string) {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--text-primary);
+    color: var(--color-text-primary);
   }
-  
+
   .header-icon {
-    color: var(--accent-primary);
-  }
-  
-  .preview-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    color: var(--color-accent);
   }
 }
 
@@ -192,15 +190,15 @@ function insertPlaceholder(value: string) {
   gap: 12px;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: var(--bg-secondary);
+  background: var(--color-bg-secondary);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--color-border);
   flex-wrap: wrap;
 }
 
 .placeholder-label {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   font-weight: 500;
 }
 
@@ -214,17 +212,17 @@ function insertPlaceholder(value: string) {
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--accent-primary);
-  background: rgba(6, 182, 212, 0.1);
-  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: var(--color-accent);
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: var(--font-mono);
-  
+
   &:hover {
-    background: rgba(6, 182, 212, 0.2);
-    border-color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.2);
+    border-color: var(--color-accent);
   }
 }
 
@@ -232,379 +230,113 @@ function insertPlaceholder(value: string) {
   margin-bottom: 24px;
   border-radius: var(--radius-md);
   overflow: hidden;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+
   &:focus-within {
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.1);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
   }
 }
 
-.form-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* Quill dark theme alignment with Dispatch UI */
+:deep(.ql-toolbar.ql-snow) {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
 }
 
-// ============================================
-// QUILL DARK THEME - CLEAN OVERRIDE
-// ============================================
-
-.ql-toolbar.ql-snow {
-  background: var(--bg-primary) !important;
-  border: none !important;
-  border-bottom: 1px solid var(--border-color) !important;
-  padding: 10px 12px !important;
-  
-  .ql-formats {
-    margin-right: 8px !important;
-  }
-  
-  // All toolbar buttons - NO BORDERS
-  button {
-    width: 32px !important;
-    height: 32px !important;
-    padding: 6px !important;
-    border: none !important;
-    background: transparent !important;
-    border-radius: 4px !important;
-    
-    &:hover {
-      background: rgba(6, 182, 212, 0.15) !important;
-    }
-    
-    &.ql-active {
-      background: rgba(6, 182, 212, 0.25) !important;
-    }
-  }
-  
-  // SVG icons in toolbar
-  .ql-stroke {
-    stroke: #94a3b8 !important;
-  }
-  
-  .ql-fill {
-    fill: #94a3b8 !important;
-  }
-  
-  .ql-thin {
-    stroke: #94a3b8 !important;
-  }
-  
-  button:hover .ql-stroke,
-  button.ql-active .ql-stroke,
-  .ql-picker-label:hover .ql-stroke {
-    stroke: #06b6d4 !important;
-  }
-  
-  button:hover .ql-fill,
-  button.ql-active .ql-fill {
-    fill: #06b6d4 !important;
-  }
-  
-  // Picker labels (Font, Header dropdowns)
-  .ql-picker {
-    color: #94a3b8 !important;
-    
-    .ql-picker-label {
-      border: 1px solid var(--border-color) !important;
-      border-radius: 4px !important;
-      padding: 4px 8px !important;
-      background: transparent !important;
-      
-      &:hover {
-        border-color: #06b6d4 !important;
-      }
-      
-      &::before {
-        color: #94a3b8 !important;
-      }
-      
-      .ql-stroke {
-        stroke: #94a3b8 !important;
-      }
-    }
-    
-    &.ql-expanded .ql-picker-label {
-      border-color: #06b6d4 !important;
-      
-      &::before {
-        color: #06b6d4 !important;
-      }
-      
-      .ql-stroke {
-        stroke: #06b6d4 !important;
-      }
-    }
-  }
-  
-  // Color picker button - NO BORDER
-  .ql-color-picker,
-  .ql-background {
-    .ql-picker-label {
-      border: none !important;
-      padding: 2px !important;
-    }
-  }
-  
-  // Align picker button - NO BORDER  
-  .ql-align {
-    .ql-picker-label {
-      border: none !important;
-      padding: 2px !important;
-    }
-  }
+:deep(.ql-container.ql-snow) {
+  border: 1px solid var(--color-border);
+  border-top: 0;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  min-height: 280px;
 }
 
-// ALL DROPDOWN MENUS
-.ql-snow .ql-picker-options {
-  background: #0a0f1a !important;
-  border: 1px solid rgba(148, 163, 184, 0.15) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
-  padding: 4px !important;
+:deep(.ql-editor) {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  line-height: 1.7;
+  padding: 18px 18px 32px;
 }
 
-// Font & Header dropdown items
-.ql-snow .ql-picker.ql-font .ql-picker-options,
-.ql-snow .ql-picker.ql-header .ql-picker-options {
-  .ql-picker-item {
-    padding: 8px 12px !important;
-    border-radius: 4px !important;
-    
-    &::before {
-      color: #94a3b8 !important;
-    }
-    
-    &:hover {
-      background: rgba(6, 182, 212, 0.1) !important;
-      
-      &::before {
-        color: #06b6d4 !important;
-      }
-    }
-    
-    &.ql-selected {
-      background: rgba(6, 182, 212, 0.15) !important;
-      
-      &::before {
-        color: #06b6d4 !important;
-      }
-    }
-  }
+:deep(.ql-editor p) {
+  margin: 0 0 10px;
 }
 
-// COLOR PICKER - Grid layout with actual colors
-.ql-snow .ql-color-picker .ql-picker-options,
-.ql-snow .ql-background .ql-picker-options {
-  background: #0a0f1a !important;
-  padding: 8px !important;
-  width: 200px !important;
-  
-  .ql-picker-item {
-    width: 24px !important;
-    height: 24px !important;
-    border: none !important;
-    border-radius: 3px !important;
-    margin: 2px !important;
-    padding: 0 !important;
-    display: inline-block !important;
-    float: none !important;
-    
-    &:hover {
-      outline: 2px solid #06b6d4 !important;
-      outline-offset: 1px !important;
-    }
-    
-    &.ql-selected {
-      outline: 2px solid #06b6d4 !important;
-      outline-offset: 1px !important;
-    }
-  }
+:deep(.ql-editor a) {
+  color: var(--color-accent);
+  text-decoration: underline;
 }
 
-// When color picker is expanded, use flex
-.ql-snow .ql-color-picker.ql-expanded .ql-picker-options,
-.ql-snow .ql-background.ql-expanded .ql-picker-options {
-  display: flex !important;
-  flex-wrap: wrap !important;
+:deep(.ql-toolbar button),
+:deep(.ql-toolbar .ql-picker-label),
+:deep(.ql-toolbar .ql-picker-item) {
+  color: var(--color-text-secondary);
+  stroke: var(--color-text-secondary);
 }
 
-// ALIGNMENT DROPDOWN - Horizontal with dark background
-.ql-snow .ql-picker.ql-align .ql-picker-options {
-  background: #0a0f1a !important;
-  padding: 4px !important;
-  width: auto !important;
-  
-  .ql-picker-item {
-    width: 32px !important;
-    height: 32px !important;
-    padding: 6px !important;
-    border-radius: 4px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: transparent !important;
-    
-    &:hover {
-      background: rgba(6, 182, 212, 0.1) !important;
-    }
-    
-    &.ql-selected {
-      background: rgba(6, 182, 212, 0.15) !important;
-    }
-    
-    svg {
-      width: 18px !important;
-      height: 18px !important;
-    }
-  }
+:deep(.ql-toolbar button:hover),
+:deep(.ql-toolbar button.ql-active),
+:deep(.ql-toolbar .ql-picker-label:hover),
+:deep(.ql-toolbar .ql-picker-label.ql-active),
+:deep(.ql-toolbar .ql-picker-item:hover),
+:deep(.ql-toolbar .ql-picker-item.ql-selected) {
+  color: var(--color-text-primary);
+  stroke: var(--color-accent);
 }
 
-// When alignment picker is expanded, show as flex row
-.ql-snow .ql-picker.ql-align.ql-expanded .ql-picker-options {
-  display: flex !important;
-  flex-direction: row !important;
+:deep(.ql-picker-options) {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
 }
 
-// SVG in all picker items
-.ql-snow .ql-picker-options .ql-picker-item svg .ql-stroke,
-.ql-snow .ql-picker-options .ql-picker-item svg line,
-.ql-snow .ql-picker-options .ql-picker-item svg path {
-  stroke: #94a3b8 !important;
+:deep(.ql-stroke) {
+  stroke: var(--color-text-secondary);
 }
 
-.ql-snow .ql-picker-options .ql-picker-item:hover svg .ql-stroke,
-.ql-snow .ql-picker-options .ql-picker-item:hover svg line,
-.ql-snow .ql-picker-options .ql-picker-item:hover svg path,
-.ql-snow .ql-picker-options .ql-picker-item.ql-selected svg .ql-stroke,
-.ql-snow .ql-picker-options .ql-picker-item.ql-selected svg line,
-.ql-snow .ql-picker-options .ql-picker-item.ql-selected svg path {
-  stroke: #06b6d4 !important;
+:deep(.ql-fill) {
+  fill: var(--color-text-secondary);
 }
 
-// Editor container
-.ql-container.ql-snow {
-  border: none !important;
-  font-family: var(--font-sans) !important;
-  font-size: 15px !important;
-  background: var(--bg-secondary) !important;
+:deep(.ql-toolbar button.ql-active .ql-stroke),
+:deep(.ql-toolbar .ql-picker-label.ql-active .ql-stroke),
+:deep(.ql-toolbar .ql-picker-item.ql-selected .ql-stroke) {
+  stroke: var(--color-accent);
 }
 
-// Editor content
-.ql-editor {
-  min-height: 350px !important;
-  padding: 20px !important;
-  color: #f1f5f9 !important;
-  line-height: 1.7 !important;
-  
-  &.ql-blank::before {
-    color: #64748b !important;
-    font-style: normal !important;
-    left: 20px !important;
-  }
-  
-  h1, h2, h3, h4, h5, h6 {
-    color: #f1f5f9 !important;
-    margin-bottom: 12px !important;
-  }
-  
-  p {
-    margin-bottom: 12px !important;
-  }
-  
-  a {
-    color: #06b6d4 !important;
-  }
-  
-  blockquote {
-    border-left: 4px solid #06b6d4 !important;
-    padding-left: 16px !important;
-    margin: 16px 0 !important;
-    color: #94a3b8 !important;
-    background: rgba(6, 182, 212, 0.05) !important;
-    padding: 12px 16px !important;
-    border-radius: 0 8px 8px 0 !important;
-  }
-  
-  pre.ql-syntax {
-    background: #0a0f1a !important;
-    color: #f1f5f9 !important;
-    border: 1px solid rgba(148, 163, 184, 0.1) !important;
-    border-radius: 8px !important;
-    padding: 16px !important;
-    font-family: 'Space Mono', monospace !important;
-    font-size: 13px !important;
-  }
-  
-  ul, ol {
-    padding-left: 24px !important;
-    margin-bottom: 12px !important;
-  }
-  
-  img {
-    max-width: 100% !important;
-    border-radius: 8px !important;
-  }
+:deep(.ql-toolbar button.ql-active .ql-fill),
+:deep(.ql-toolbar .ql-picker-label.ql-active .ql-fill),
+:deep(.ql-toolbar .ql-picker-item.ql-selected .ql-fill) {
+  fill: var(--color-accent);
 }
 
-// Tooltip (link editor)
-.ql-tooltip {
-  background: #0a0f1a !important;
-  border: 1px solid rgba(148, 163, 184, 0.2) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
-  color: #f1f5f9 !important;
-  padding: 12px 16px !important;
-  z-index: 1000 !important;
-  
-  &::before {
-    color: #94a3b8 !important;
-  }
-  
-  input[type="text"] {
-    background: #111827 !important;
-    border: 1px solid rgba(148, 163, 184, 0.2) !important;
-    border-radius: 6px !important;
-    color: #f1f5f9 !important;
-    padding: 8px 12px !important;
-    font-size: 14px !important;
-    
-    &:focus {
-      border-color: #06b6d4 !important;
-      outline: none !important;
-    }
-  }
-  
-  a {
-    color: #06b6d4 !important;
-    
-    &:hover {
-      color: #14b8a6 !important;
-    }
-  }
-  
-  a.ql-remove {
-    color: #ef4444 !important;
-    
-    &:hover {
-      color: #dc2626 !important;
-    }
-  }
-  
-  .ql-preview {
-    color: #06b6d4 !important;
-  }
+:deep(.ql-toolbar .ql-picker.ql-expanded .ql-picker-label) {
+  color: var(--color-text-primary);
 }
 
-// Image resize handles
-.ql-editor img {
-  cursor: pointer;
+:deep(.ql-snow .ql-picker.ql-expanded .ql-picker-label .ql-stroke) {
+  stroke: var(--color-text-primary);
 }
 
-// Snow theme overrides
-.ql-snow .ql-tooltip {
-  background: #0a0f1a !important;
+:deep(.ql-tooltip) {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+:deep(.ql-tooltip input[type='text']) {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+:deep(.ql-tooltip a.ql-action),
+:deep(.ql-tooltip a.ql-remove) {
+  color: var(--color-accent);
 }
 </style>

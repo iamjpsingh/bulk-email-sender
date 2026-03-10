@@ -1,0 +1,3854 @@
+openapi: 3.0.3
+info:
+  title: Dispatch API
+  version: 3.0.0
+  description: |
+    Open-source bulk email campaign platform with tracking, multi-provider support, and batch processing.
+
+    ## Authentication
+    Most endpoints require authentication via a `session_token` cookie obtained from the login endpoint.
+    Alternatively, an API key can be passed via the `X-API-Key` header.
+
+    ## CSRF Protection
+    All mutation endpoints (POST, PUT, DELETE) require a valid `X-CSRF-Token` header.
+    The CSRF token is issued as a cookie on every response.
+
+    ## Common Response Format
+    All endpoints return a standard envelope:
+    ```json
+    {
+      "success": true,
+      "data": { ... },
+      "message": "Human-readable message",
+      "meta": { "pagination": { ... } }
+    }
+    ```
+  contact:
+    name: Dispatch
+    url: https://github.com/iamjpsingh/bulk-email-sender
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Health
+    description: Health check and API info
+  - name: Auth
+    description: Authentication and session management
+  - name: Config
+    description: SMTP configuration management
+  - name: Send
+    description: Email sending, batch processing, and scheduling
+  - name: Campaigns
+    description: Campaign lifecycle management and A/B testing
+  - name: Contacts
+    description: Contact lists, contacts CRUD, import, and validation
+  - name: Templates
+    description: Email template management
+  - name: Automations
+    description: Drip sequence and automation management
+  - name: Analytics
+    description: Advanced analytics, device and geo breakdowns
+  - name: Queue
+    description: Persistent job queue, dead letters, and suppression
+  - name: Reports
+    description: Email logs, stats, and exports
+  - name: Dashboard
+    description: Dashboard stats and polling
+
+# ---------------------------------------------------------------------------
+# Security Schemes
+# ---------------------------------------------------------------------------
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session_token
+      description: Session token cookie set on login/register.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for programmatic access.
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: CSRF token required for POST/PUT/DELETE requests. Value is read from the `csrf_token` cookie.
+
+  # -------------------------------------------------------------------------
+  # Reusable Schemas
+  # -------------------------------------------------------------------------
+  schemas:
+    # -- Envelope --
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          description: Response payload (shape varies per endpoint).
+        message:
+          type: string
+        meta:
+          type: object
+          properties:
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+      required: [success]
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Something went wrong
+        error:
+          type: string
+      required: [success, message]
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 100
+        totalPages:
+          type: integer
+          example: 5
+        hasMore:
+          type: boolean
+          example: true
+
+    # -- Auth --
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+      required: [id, email, name]
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+      required: [email, password]
+
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        password:
+          type: string
+          format: password
+          minLength: 8
+      required: [email, name, password]
+
+    # -- Config --
+    SMTPConfig:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider_type:
+          type: string
+          enum: [smtp, google, microsoft]
+        host:
+          type: string
+        port:
+          type: integer
+        secure:
+          type: boolean
+        user:
+          type: string
+        from_email:
+          type: string
+          format: email
+        from_name:
+          type: string
+        is_default:
+          type: boolean
+        oauth_email:
+          type: string
+          format: email
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    SMTPConfigCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          default: Default Configuration
+        host:
+          type: string
+          example: smtp.gmail.com
+        port:
+          type: integer
+          default: 587
+        secure:
+          type: boolean
+          default: false
+        user:
+          type: string
+        pass:
+          type: string
+          format: password
+        fromEmail:
+          type: string
+          format: email
+        fromName:
+          type: string
+        isDefault:
+          type: boolean
+      required: [host, user, pass, fromEmail]
+
+    SMTPConfigUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+        secure:
+          type: boolean
+        user:
+          type: string
+        pass:
+          type: string
+          format: password
+        fromEmail:
+          type: string
+          format: email
+        fromName:
+          type: string
+        isDefault:
+          type: boolean
+
+    SMTPTestRequest:
+      type: object
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+          default: 587
+        secure:
+          type: boolean
+        user:
+          type: string
+        pass:
+          type: string
+          format: password
+      required: [host, user, pass]
+
+    # -- Campaigns --
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        subject:
+          type: string
+        from_email:
+          type: string
+          format: email
+        from_name:
+          type: string
+        type:
+          type: string
+          enum: [regular, ab_test, automated]
+        status:
+          type: string
+          enum: [draft, testing, scheduled, sending, paused, completed, cancelled, archived]
+        total_recipients:
+          type: integer
+        sent_count:
+          type: integer
+        open_count:
+          type: integer
+        click_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        scheduled_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CampaignCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        subject:
+          type: string
+        from_email:
+          type: string
+          format: email
+        from_name:
+          type: string
+        type:
+          type: string
+          enum: [regular, ab_test, automated]
+        html_content:
+          type: string
+        template_id:
+          type: string
+        list_id:
+          type: string
+        config_id:
+          type: string
+        folder:
+          type: string
+      required: [name, subject, from_email, from_name]
+
+    CampaignStats:
+      type: object
+      properties:
+        total_recipients:
+          type: integer
+        sent:
+          type: integer
+        failed:
+          type: integer
+        opened:
+          type: integer
+        clicked:
+          type: integer
+        bounced:
+          type: integer
+        unsubscribed:
+          type: integer
+        open_rate:
+          type: number
+          format: float
+        click_rate:
+          type: number
+          format: float
+
+    ABVariantCreate:
+      type: object
+      properties:
+        label:
+          type: string
+          default: A
+        percentage:
+          type: integer
+          default: 50
+        subject:
+          type: string
+        template_id:
+          type: string
+        sender_name:
+          type: string
+        sender_email:
+          type: string
+
+    # -- Contacts --
+    ContactList:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        contact_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    Contact:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        company:
+          type: string
+        phone:
+          type: string
+        status:
+          type: string
+          enum: [active, unsubscribed, bounced, complained]
+        tags:
+          type: string
+        custom_fields:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    ContactCreate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        company:
+          type: string
+        phone:
+          type: string
+        tags:
+          type: string
+        custom_fields:
+          type: object
+      required: [email]
+
+    # -- Templates --
+    Template:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        subject:
+          type: string
+        html_content:
+          type: string
+        category:
+          type: string
+          enum: [marketing, transactional, notification, newsletter, custom]
+        variables:
+          type: string
+          description: JSON-encoded array of variable names
+        is_starter:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    TemplateCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        subject:
+          type: string
+        html_content:
+          type: string
+        category:
+          type: string
+          enum: [marketing, transactional, notification, newsletter, custom]
+      required: [name, html_content]
+
+    # -- Automations --
+    Automation:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        trigger_type:
+          type: string
+          enum: [list_join, tag_added, manual, scheduled, webhook]
+        status:
+          type: string
+          enum: [draft, active, paused, completed]
+        trigger_config:
+          type: string
+          description: JSON-encoded trigger configuration
+        total_enrolled:
+          type: integer
+        total_completed:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        steps:
+          type: array
+          description: Only included when fetching a single automation.
+          items:
+            type: object
+
+    AutomationCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        trigger_type:
+          type: string
+          enum: [list_join, tag_added, manual, scheduled, webhook]
+        trigger_config:
+          type: object
+        steps:
+          type: array
+          items:
+            type: object
+      required: [name, trigger_type]
+
+    # -- Queue --
+    JobSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        campaign_id:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [direct, batch, scheduled, automation]
+        status:
+          type: string
+          enum: [pending, running, paused, completed, failed, cancelled]
+        priority:
+          type: integer
+        subject:
+          type: string
+        from_email:
+          type: string
+        config_name:
+          type: string
+        total_count:
+          type: integer
+        sent_count:
+          type: integer
+        failed_count:
+          type: integer
+        last_processed_index:
+          type: integer
+        batch_size:
+          type: integer
+        progress:
+          type: integer
+          description: Percentage 0-100.
+        scheduled_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+
+    QueueStats:
+      type: object
+      properties:
+        pending:
+          type: integer
+        running:
+          type: integer
+        paused:
+          type: integer
+        completed:
+          type: integer
+        failed:
+          type: integer
+        cancelled:
+          type: integer
+        total_sent:
+          type: integer
+        total_failed:
+          type: integer
+        dead_letters:
+          type: integer
+
+    SuppressionEntry:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        reason:
+          type: string
+        source:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # -- Reports --
+    EmailLog:
+      type: object
+      properties:
+        id:
+          type: string
+        recipient_email:
+          type: string
+          format: email
+        recipient_name:
+          type: string
+        subject:
+          type: string
+        status:
+          type: string
+        send_type:
+          type: string
+        provider_type:
+          type: string
+        config_name:
+          type: string
+        sent_at:
+          type: string
+          format: date-time
+        opened_at:
+          type: string
+          format: date-time
+          nullable: true
+        open_count:
+          type: integer
+        click_count:
+          type: integer
+
+    LogStats:
+      type: object
+      properties:
+        sent:
+          type: integer
+        failed:
+          type: integer
+        total:
+          type: integer
+
+    # -- Dashboard --
+    DashboardStats:
+      type: object
+      properties:
+        stats:
+          $ref: '#/components/schemas/LogStats'
+        queue:
+          type: object
+          properties:
+            stats:
+              $ref: '#/components/schemas/QueueStats'
+            activeJobs:
+              type: array
+              items:
+                $ref: '#/components/schemas/JobSummary'
+            pendingJobs:
+              type: array
+              items:
+                $ref: '#/components/schemas/JobSummary'
+            recentJobs:
+              type: array
+              items:
+                $ref: '#/components/schemas/JobSummary'
+        scheduledJobs:
+          type: array
+          items:
+            type: object
+        recentLogs:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmailLog'
+        timestamp:
+          type: string
+          format: date-time
+
+    PollStatus:
+      type: object
+      properties:
+        pollNeeded:
+          type: boolean
+        pollInterval:
+          type: integer
+          description: Recommended polling interval in milliseconds.
+        hasActiveJobs:
+          type: boolean
+        hasPendingJobs:
+          type: boolean
+        hasScheduledJobs:
+          type: boolean
+        hasRunningScheduledJobs:
+          type: boolean
+        activeJobCount:
+          type: integer
+        pendingJobCount:
+          type: integer
+        pausedJobCount:
+          type: integer
+        scheduledJobCount:
+          type: integer
+        lastUpdated:
+          type: string
+          format: date-time
+
+  # -------------------------------------------------------------------------
+  # Reusable Parameters
+  # -------------------------------------------------------------------------
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+    OffsetParam:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        default: 0
+    SearchParam:
+      name: search
+      in: query
+      schema:
+        type: string
+
+# ---------------------------------------------------------------------------
+# Default Security
+# ---------------------------------------------------------------------------
+security:
+  - cookieAuth: []
+  - apiKeyAuth: []
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+  # =========================================================================
+  # Health
+  # =========================================================================
+  /:
+    get:
+      tags: [Health]
+      summary: API information
+      operationId: getApiInfo
+      security: []
+      responses:
+        '200':
+          description: API info with available endpoint groups.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  name:
+                    type: string
+                  version:
+                    type: string
+                  documentation:
+                    type: object
+                  endpoints:
+                    type: object
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: OK
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+
+  # =========================================================================
+  # Auth
+  # =========================================================================
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Account created. Session cookie set.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error or email already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful. Session cookie set.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out
+      operationId: logout
+      security: []
+      responses:
+        '200':
+          description: Session destroyed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Current authenticated user.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated or session expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # =========================================================================
+  # Config
+  # =========================================================================
+  /config/list:
+    get:
+      tags: [Config]
+      summary: List all SMTP configurations
+      operationId: listConfigs
+      responses:
+        '200':
+          description: Array of user configurations.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          configs:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/SMTPConfig'
+
+  /config/smtp:
+    get:
+      tags: [Config]
+      summary: Get SMTP configurations (legacy)
+      operationId: getSmtpConfigs
+      responses:
+        '200':
+          description: SMTP configurations with default indicator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+    post:
+      tags: [Config]
+      summary: Create SMTP configuration
+      operationId: createSmtpConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SMTPConfigCreate'
+      responses:
+        '200':
+          description: Configuration created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          configId:
+                            type: string
+        '400':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /config/smtp/active:
+    get:
+      tags: [Config]
+      summary: Get active (default) configuration
+      operationId: getActiveConfig
+      responses:
+        '200':
+          description: Active configuration or null.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /config/smtp/{configId}:
+    put:
+      tags: [Config]
+      summary: Update SMTP configuration
+      operationId: updateSmtpConfig
+      parameters:
+        - name: configId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SMTPConfigUpdate'
+      responses:
+        '200':
+          description: Configuration updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Configuration not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Config]
+      summary: Delete SMTP configuration
+      operationId: deleteSmtpConfig
+      parameters:
+        - name: configId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Configuration deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Configuration not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /config/smtp/{configId}/default:
+    post:
+      tags: [Config]
+      summary: Set a configuration as default
+      operationId: setDefaultConfig
+      parameters:
+        - name: configId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Default configuration updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Configuration not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /config/smtp/test:
+    post:
+      tags: [Config]
+      summary: Test SMTP connection with ad-hoc credentials
+      operationId: testSmtpConnection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SMTPTestRequest'
+      responses:
+        '200':
+          description: Connection test result.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          valid:
+                            type: boolean
+
+  /config/test/{configId}:
+    post:
+      tags: [Config]
+      summary: Test a saved SMTP configuration
+      operationId: testSavedConfig
+      parameters:
+        - name: configId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Connection test result.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          valid:
+                            type: boolean
+        '404':
+          description: Configuration not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # =========================================================================
+  # Send
+  # =========================================================================
+  /send:
+    post:
+      tags: [Send]
+      summary: Send emails to a list of contacts
+      operationId: sendEmails
+      description: |
+        Accepts a multipart form with an Excel file of contacts, HTML content, and sending options.
+        Supports immediate, batched, and scheduled sending modes.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                excelFile:
+                  type: string
+                  format: binary
+                  description: Excel file (.xlsx) with contact data.
+                subject:
+                  type: string
+                htmlContent:
+                  type: string
+                  description: HTML body content (from WYSIWYG editor).
+                htmlTemplate:
+                  type: string
+                  format: binary
+                  description: Optional HTML template file (overrides htmlContent).
+                configId:
+                  type: string
+                  description: SMTP config ID to use. Falls back to default.
+                delay:
+                  type: integer
+                  default: 20
+                  description: Delay in seconds between emails (non-batch mode).
+                useBatch:
+                  type: string
+                  enum: ['on']
+                  description: Enable batch mode.
+                batchSize:
+                  type: integer
+                  default: 20
+                batchDelay:
+                  type: integer
+                  default: 60
+                  description: Delay in seconds between batches.
+                emailDelay:
+                  type: integer
+                  default: 45
+                  description: Delay in seconds between emails within a batch.
+                scheduleEmail:
+                  type: string
+                  enum: ['on']
+                  description: Enable scheduling.
+                scheduledTime:
+                  type: string
+                  format: date-time
+                  description: ISO 8601 datetime for scheduled send.
+                notifyEmail:
+                  type: string
+                  format: email
+                  description: Email address for job completion notification.
+                emailRangeStart:
+                  type: integer
+                  default: 0
+                  description: Starting index in the contact list.
+                emailRangeCount:
+                  type: integer
+                  description: Number of contacts to send to.
+              required: [excelFile, subject]
+      responses:
+        '200':
+          description: Sending initiated or job scheduled.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          jobId:
+                            type: string
+                          contactCount:
+                            type: integer
+                          configUsed:
+                            type: string
+                          batchMode:
+                            type: boolean
+                          scheduledMode:
+                            type: boolean
+                          scheduledTime:
+                            type: string
+                            format: date-time
+        '400':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /parse-excel:
+    post:
+      tags: [Send]
+      summary: Parse an Excel file and preview contacts
+      operationId: parseExcel
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                excelFile:
+                  type: string
+                  format: binary
+              required: [excelFile]
+      responses:
+        '200':
+          description: Parsed contacts preview (first 5 rows) and total count.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          contacts:
+                            type: array
+                            items:
+                              type: object
+                            maxItems: 5
+                          totalCount:
+                            type: integer
+
+  /provider-info:
+    post:
+      tags: [Send]
+      summary: Get provider limits and recommendations
+      operationId: getProviderInfo
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                smtpHost:
+                  type: string
+                hasNotification:
+                  type: string
+                  enum: ['true', 'false']
+              required: [smtpHost]
+      responses:
+        '200':
+          description: Provider detection result with rate limits.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          provider:
+                            type: string
+                          dailyLimit:
+                            type: integer
+                          maxContacts:
+                            type: integer
+                          recommendedBatchSize:
+                            type: integer
+                          recommendedDelay:
+                            type: integer
+
+  /batch-status:
+    get:
+      tags: [Send]
+      summary: Get current batch job status (legacy)
+      operationId: getBatchStatus
+      responses:
+        '200':
+          description: Current batch status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /batch-pause:
+    post:
+      tags: [Send]
+      summary: Pause the running batch job (legacy)
+      operationId: pauseBatch
+      responses:
+        '200':
+          description: Job paused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /batch-resume:
+    post:
+      tags: [Send]
+      summary: Resume a paused batch job (legacy)
+      operationId: resumeBatch
+      responses:
+        '200':
+          description: Job resumed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /batch-cancel:
+    delete:
+      tags: [Send]
+      summary: Cancel the running batch job (legacy)
+      operationId: cancelBatch
+      responses:
+        '200':
+          description: Job cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /scheduled-jobs:
+    get:
+      tags: [Send]
+      summary: List scheduled jobs
+      operationId: listScheduledJobs
+      responses:
+        '200':
+          description: Array of scheduled jobs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /scheduled-jobs/{id}:
+    delete:
+      tags: [Send]
+      summary: Cancel a scheduled job
+      operationId: cancelScheduledJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Job not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # =========================================================================
+  # Campaigns
+  # =========================================================================
+  /campaigns:
+    get:
+      tags: [Campaigns]
+      summary: List campaigns
+      operationId: listCampaigns
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, testing, scheduled, sending, paused, completed, cancelled, archived]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [regular, ab_test, automated]
+        - name: folder
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Paginated list of campaigns.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Campaign'
+                      meta:
+                        type: object
+                        properties:
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Campaigns]
+      summary: Create a campaign
+      operationId: createCampaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignCreate'
+      responses:
+        '201':
+          description: Campaign created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Campaign'
+        '400':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/dashboard:
+    get:
+      tags: [Campaigns]
+      summary: Get campaign dashboard stats
+      operationId: getCampaignDashboard
+      responses:
+        '200':
+          description: Aggregated campaign statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /campaigns/{id}:
+    get:
+      tags: [Campaigns]
+      summary: Get a campaign by ID
+      operationId: getCampaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Campaign details.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Campaign'
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Campaigns]
+      summary: Update a campaign
+      operationId: updateCampaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignCreate'
+      responses:
+        '200':
+          description: Campaign updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Campaign not found or not editable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Campaigns]
+      summary: Delete a campaign
+      operationId: deleteCampaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Campaign deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/draft:
+    post:
+      tags: [Campaigns]
+      summary: Save campaign as draft
+      operationId: saveCampaignDraft
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Partial campaign fields to update.
+      responses:
+        '200':
+          description: Draft saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/schedule:
+    post:
+      tags: [Campaigns]
+      summary: Schedule a campaign
+      operationId: scheduleCampaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scheduled_at:
+                  type: string
+                  format: date-time
+              required: [scheduled_at]
+      responses:
+        '200':
+          description: Campaign scheduled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Missing scheduled_at.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Campaign not found or not in draft/testing status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/launch:
+    post:
+      tags: [Campaigns]
+      summary: Launch a campaign
+      operationId: launchCampaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Campaign launched.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/pause:
+    post:
+      tags: [Campaigns]
+      summary: Pause a campaign
+      operationId: pauseCampaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Campaign paused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/cancel:
+    post:
+      tags: [Campaigns]
+      summary: Cancel a campaign
+      operationId: cancelCampaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Campaign cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/clone:
+    post:
+      tags: [Campaigns]
+      summary: Clone a campaign
+      operationId: cloneCampaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Campaign cloned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Campaign'
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/archive:
+    post:
+      tags: [Campaigns]
+      summary: Archive a campaign
+      operationId: archiveCampaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Campaign archived.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/stats:
+    get:
+      tags: [Campaigns]
+      summary: Get campaign statistics
+      operationId: getCampaignStats
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Campaign statistics.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CampaignStats'
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/ab/variants:
+    get:
+      tags: [Campaigns]
+      summary: List A/B test variants
+      operationId: listABVariants
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A/B variants for the campaign.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          variants:
+                            type: array
+                            items:
+                              type: object
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/ab/variant:
+    post:
+      tags: [Campaigns]
+      summary: Create an A/B test variant
+      operationId: createABVariant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ABVariantCreate'
+      responses:
+        '201':
+          description: Variant created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /campaigns/{id}/ab/winner:
+    post:
+      tags: [Campaigns]
+      summary: Declare A/B test winner
+      operationId: declareABWinner
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                variant_id:
+                  type: string
+              required: [variant_id]
+      responses:
+        '200':
+          description: Winner declared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Missing variant_id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # =========================================================================
+  # Contacts
+  # =========================================================================
+  /contacts/lists:
+    get:
+      tags: [Contacts]
+      summary: List contact lists
+      operationId: listContactLists
+      responses:
+        '200':
+          description: Array of contact lists.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          lists:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/ContactList'
+
+    post:
+      tags: [Contacts]
+      summary: Create a contact list
+      operationId: createContactList
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+              required: [name]
+      responses:
+        '200':
+          description: Contact list created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ContactList'
+        '400':
+          description: Name is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /contacts/lists/{id}:
+    put:
+      tags: [Contacts]
+      summary: Update a contact list
+      operationId: updateContactList
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: List updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: List not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Contacts]
+      summary: Delete a contact list
+      operationId: deleteContactList
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: List not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /contacts/search:
+    get:
+      tags: [Contacts]
+      summary: Search contacts across all lists
+      operationId: searchContacts
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+      responses:
+        '200':
+          description: Matching contacts.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          contacts:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Contact'
+
+  /contacts/{listId}:
+    get:
+      tags: [Contacts]
+      summary: List contacts in a list
+      operationId: listContacts
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/SearchParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, unsubscribed, bounced, complained]
+        - name: tags
+          in: query
+          schema:
+            type: string
+            description: Comma-separated tag names.
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Paginated contacts.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Contact'
+                      meta:
+                        type: object
+                        properties:
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Contacts]
+      summary: Add a contact to a list
+      operationId: addContact
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCreate'
+      responses:
+        '200':
+          description: Contact added.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Contact'
+        '400':
+          description: Email is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate email in this list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /contacts/item/{id}:
+    put:
+      tags: [Contacts]
+      summary: Update a contact
+      operationId: updateContact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCreate'
+      responses:
+        '200':
+          description: Contact updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Contact not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /contacts/bulk/delete:
+    post:
+      tags: [Contacts]
+      summary: Bulk delete contacts
+      operationId: bulkDeleteContacts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+              required: [ids]
+      responses:
+        '200':
+          description: Contacts deleted.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          deleted:
+                            type: integer
+
+  /contacts/bulk/tag:
+    post:
+      tags: [Contacts]
+      summary: Bulk tag contacts
+      operationId: bulkTagContacts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+              required: [ids, tags]
+      responses:
+        '200':
+          description: Contacts tagged.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          updated:
+                            type: integer
+
+  /contacts/bulk/move:
+    post:
+      tags: [Contacts]
+      summary: Bulk move contacts to another list
+      operationId: bulkMoveContacts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                target_list_id:
+                  type: string
+              required: [ids, target_list_id]
+      responses:
+        '200':
+          description: Contacts moved.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          moved:
+                            type: integer
+
+  /contacts/{listId}/import:
+    post:
+      tags: [Contacts]
+      summary: Import contacts from a file
+      operationId: importContacts
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Excel or CSV file with contacts.
+                fieldMapping:
+                  type: string
+                  description: JSON object mapping file columns to contact fields.
+                skipDuplicates:
+                  type: string
+                  enum: ['true', 'false']
+                  default: 'true'
+              required: [file]
+      responses:
+        '200':
+          description: Import result with counts.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          imported:
+                            type: integer
+                          duplicates:
+                            type: integer
+                          invalid:
+                            type: integer
+                          errors:
+                            type: array
+                            items:
+                              type: string
+
+  /contacts/import-history:
+    get:
+      tags: [Contacts]
+      summary: Get import history
+      operationId: getImportHistory
+      responses:
+        '200':
+          description: Import history entries.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          history:
+                            type: array
+                            items:
+                              type: object
+
+  /contacts/validate:
+    post:
+      tags: [Contacts]
+      summary: Validate a batch of emails
+      operationId: validateEmails
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                emails:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+                  maxItems: 100
+              required: [emails]
+      responses:
+        '200':
+          description: Validation results per email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /contacts/validate-single:
+    post:
+      tags: [Contacts]
+      summary: Validate a single email
+      operationId: validateSingleEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+              required: [email]
+      responses:
+        '200':
+          description: Validation result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # =========================================================================
+  # Templates
+  # =========================================================================
+  /templates:
+    get:
+      tags: [Templates]
+      summary: List templates
+      operationId: listTemplates
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [marketing, transactional, notification, newsletter, custom]
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Paginated list of templates.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Template'
+                      meta:
+                        type: object
+                        properties:
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Templates]
+      summary: Create a template
+      operationId: createTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateCreate'
+      responses:
+        '201':
+          description: Template created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Template'
+        '400':
+          description: Name and HTML content are required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /templates/starters:
+    get:
+      tags: [Templates]
+      summary: Get built-in starter templates
+      operationId: getStarterTemplates
+      responses:
+        '200':
+          description: Array of starter templates.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          templates:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Template'
+
+  /templates/{id}:
+    get:
+      tags: [Templates]
+      summary: Get a template by ID
+      operationId: getTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template details.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Template'
+        '404':
+          description: Template not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Templates]
+      summary: Update a template
+      operationId: updateTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateCreate'
+      responses:
+        '200':
+          description: Template updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Template not found or is a starter template.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Templates]
+      summary: Delete a template
+      operationId: deleteTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Template not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /templates/{id}/duplicate:
+    post:
+      tags: [Templates]
+      summary: Duplicate a template
+      operationId: duplicateTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  default: Copy
+      responses:
+        '201':
+          description: Template duplicated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Template'
+        '404':
+          description: Template not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /templates/{id}/preview:
+    post:
+      tags: [Templates]
+      summary: Preview a template with sample data
+      operationId: previewTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  description: Key-value pairs for placeholder replacement.
+      responses:
+        '200':
+          description: Rendered HTML and detected variables.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          html:
+                            type: string
+                          variables:
+                            type: array
+                            items:
+                              type: string
+        '404':
+          description: Template not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /templates/preview:
+    post:
+      tags: [Templates]
+      summary: Preview arbitrary HTML with sample data
+      operationId: previewHtml
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                html:
+                  type: string
+                data:
+                  type: object
+              required: [html]
+      responses:
+        '200':
+          description: Rendered HTML and detected variables.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          html:
+                            type: string
+                          variables:
+                            type: array
+                            items:
+                              type: string
+
+  # =========================================================================
+  # Automations
+  # =========================================================================
+  /automations:
+    get:
+      tags: [Automations]
+      summary: List automations
+      operationId: listAutomations
+      responses:
+        '200':
+          description: Array of automations.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          automations:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Automation'
+
+    post:
+      tags: [Automations]
+      summary: Create an automation
+      operationId: createAutomation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationCreate'
+      responses:
+        '201':
+          description: Automation created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Automation'
+        '400':
+          description: Name and trigger_type are required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /automations/{id}:
+    get:
+      tags: [Automations]
+      summary: Get an automation with steps
+      operationId: getAutomation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Automation details with steps.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Automation'
+        '404':
+          description: Automation not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Automations]
+      summary: Update an automation
+      operationId: updateAutomation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationCreate'
+      responses:
+        '200':
+          description: Automation updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Automation not found or active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Automations]
+      summary: Delete an automation
+      operationId: deleteAutomation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Automation deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Automation not found or active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /automations/{id}/activate:
+    post:
+      tags: [Automations]
+      summary: Activate an automation
+      operationId: activateAutomation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Automation activated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Automation not found or cannot be activated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /automations/{id}/pause:
+    post:
+      tags: [Automations]
+      summary: Pause an automation
+      operationId: pauseAutomation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Automation paused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Automation not found or not active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /automations/{id}/deactivate:
+    post:
+      tags: [Automations]
+      summary: Deactivate an automation
+      operationId: deactivateAutomation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Automation deactivated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Automation not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /automations/{id}/enrollments:
+    get:
+      tags: [Automations]
+      summary: List automation enrollments
+      operationId: listEnrollments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200':
+          description: Enrollment records.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          enrollments:
+                            type: array
+                            items:
+                              type: object
+        '404':
+          description: Automation not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /automations/{id}/enroll:
+    post:
+      tags: [Automations]
+      summary: Enroll a contact in an automation
+      operationId: enrollContact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_id:
+                  type: string
+              required: [contact_id]
+      responses:
+        '200':
+          description: Contact enrolled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Missing contact_id or already enrolled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Automation not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /automations/{id}/enrollments/{contactId}:
+    delete:
+      tags: [Automations]
+      summary: Remove a contact from an automation
+      operationId: unenrollContact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: contactId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contact removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Automation or enrollment not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /automations/{id}/stats:
+    get:
+      tags: [Automations]
+      summary: Get automation statistics
+      operationId: getAutomationStats
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Automation statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Automation not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # =========================================================================
+  # Analytics
+  # =========================================================================
+  /analytics/summary:
+    get:
+      tags: [Analytics]
+      summary: Get analytics summary
+      operationId: getAnalyticsSummary
+      responses:
+        '200':
+          description: Aggregated analytics across all campaigns.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /analytics/campaigns:
+    get:
+      tags: [Analytics]
+      summary: List campaign analytics reports
+      operationId: listCampaignReports
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Array of campaign reports.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          reports:
+                            type: array
+                            items:
+                              type: object
+
+  /analytics/campaigns/{campaignId}:
+    get:
+      tags: [Analytics]
+      summary: Get campaign analytics report
+      operationId: getCampaignAnalytics
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detailed campaign analytics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: No analytics data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /analytics/campaigns/{campaignId}/links:
+    get:
+      tags: [Analytics]
+      summary: Get link click map for a campaign
+      operationId: getCampaignLinkClicks
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Link click data.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          links:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                url:
+                                  type: string
+                                clicks:
+                                  type: integer
+
+  /analytics/devices:
+    get:
+      tags: [Analytics]
+      summary: Get device and email client breakdown
+      operationId: getDeviceBreakdown
+      parameters:
+        - name: campaign_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device and client breakdown.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          clients:
+                            type: array
+                            items:
+                              type: object
+                          devices:
+                            type: array
+                            items:
+                              type: object
+
+  /analytics/geo:
+    get:
+      tags: [Analytics]
+      summary: Get geographic breakdown
+      operationId: getGeoBreakdown
+      parameters:
+        - name: campaign_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Geographic distribution of opens/clicks.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          geo:
+                            type: array
+                            items:
+                              type: object
+
+  /analytics/time:
+    get:
+      tags: [Analytics]
+      summary: Get send time analysis and recommendations
+      operationId: getTimeAnalysis
+      responses:
+        '200':
+          description: Time analysis with best send time recommendation.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          analysis:
+                            type: object
+                          recommendation:
+                            type: object
+
+  /analytics/export/campaign/{campaignId}:
+    get:
+      tags: [Analytics]
+      summary: Export campaign analytics report
+      operationId: exportCampaignReport
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [csv, json]
+            default: json
+      responses:
+        '200':
+          description: File download.
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: No data to export.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /analytics/export/summary:
+    get:
+      tags: [Analytics]
+      summary: Export analytics summary
+      operationId: exportAnalyticsSummary
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [csv, json]
+            default: json
+      responses:
+        '200':
+          description: File download.
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+
+  # =========================================================================
+  # Queue
+  # =========================================================================
+  /queue/jobs:
+    get:
+      tags: [Queue]
+      summary: List jobs
+      operationId: listJobs
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, paused, completed, failed, cancelled]
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200':
+          description: Array of job summaries.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/JobSummary'
+
+  /queue/jobs/{id}:
+    get:
+      tags: [Queue]
+      summary: Get a specific job
+      operationId: getJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job details.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/JobSummary'
+        '404':
+          description: Job not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Queue]
+      summary: Cancel a job
+      operationId: cancelJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Job cannot be cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /queue/jobs/{id}/pause:
+    post:
+      tags: [Queue]
+      summary: Pause a running job
+      operationId: pauseJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job paused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Job is not running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /queue/jobs/{id}/resume:
+    post:
+      tags: [Queue]
+      summary: Resume a paused job
+      operationId: resumeJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job resumed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Job is not paused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /queue/stats:
+    get:
+      tags: [Queue]
+      summary: Get queue statistics
+      operationId: getQueueStats
+      responses:
+        '200':
+          description: Queue statistics.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/QueueStats'
+
+  /queue/dead-letters:
+    get:
+      tags: [Queue]
+      summary: List dead letter entries
+      operationId: listDeadLetters
+      parameters:
+        - name: job_id
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200':
+          description: Dead letter entries.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+
+  /queue/suppression:
+    get:
+      tags: [Queue]
+      summary: Get suppression list
+      operationId: getSuppressionList
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200':
+          description: Suppression list entries.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SuppressionEntry'
+
+    post:
+      tags: [Queue]
+      summary: Add email to suppression list
+      operationId: suppressEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                reason:
+                  type: string
+              required: [email, reason]
+      responses:
+        '200':
+          description: Email suppressed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Email and reason are required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /queue/suppression/{email}:
+    delete:
+      tags: [Queue]
+      summary: Remove email from suppression list
+      operationId: unsuppressEmail
+      parameters:
+        - name: email
+          in: path
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        '200':
+          description: Email unsuppressed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Email not found in suppression list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # =========================================================================
+  # Reports
+  # =========================================================================
+  /report/logs:
+    get:
+      tags: [Reports]
+      summary: Get email logs with filtering
+      operationId: getEmailLogs
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: send_type
+          in: query
+          schema:
+            type: string
+        - name: provider
+          in: query
+          schema:
+            type: string
+        - name: campaign_id
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/SearchParam'
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Paginated email logs with stats.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          logs:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/EmailLog'
+                          stats:
+                            $ref: '#/components/schemas/LogStats'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+
+  /report/stats:
+    get:
+      tags: [Reports]
+      summary: Get email statistics
+      operationId: getEmailStats
+      responses:
+        '200':
+          description: Email statistics.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LogStats'
+
+  /report/export/csv:
+    get:
+      tags: [Reports]
+      summary: Export logs as CSV
+      operationId: exportLogsCsv
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: send_type
+          in: query
+          schema:
+            type: string
+        - name: provider
+          in: query
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: CSV file download.
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /report/export/json:
+    get:
+      tags: [Reports]
+      summary: Export logs as JSON
+      operationId: exportLogsJson
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: send_type
+          in: query
+          schema:
+            type: string
+        - name: provider
+          in: query
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: JSON file download.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmailLog'
+
+  /report/logs/{id}:
+    delete:
+      tags: [Reports]
+      summary: Delete a single email log
+      operationId: deleteLog
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Log deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /report/logs/delete-bulk:
+    post:
+      tags: [Reports]
+      summary: Bulk delete email logs
+      operationId: bulkDeleteLogs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+              required: [ids]
+      responses:
+        '200':
+          description: Logs deleted.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          deleted:
+                            type: integer
+        '400':
+          description: No log IDs provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # =========================================================================
+  # Dashboard
+  # =========================================================================
+  /dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Get full dashboard statistics
+      operationId: getDashboardStats
+      responses:
+        '200':
+          description: Dashboard data with queue, scheduled jobs, and recent logs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DashboardStats'
+
+  /dashboard/poll-status:
+    get:
+      tags: [Dashboard]
+      summary: Lightweight polling status
+      operationId: getPollStatus
+      description: |
+        Returns whether the client should continue polling and at what interval.
+        Use this to implement adaptive polling on the frontend.
+      responses:
+        '200':
+          description: Polling recommendation.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PollStatus'
+
+  /dashboard/data:
+    get:
+      tags: [Dashboard]
+      summary: Get active dashboard data (optimized)
+      operationId: getDashboardData
+      description: Returns only active/pending jobs and upcoming scheduled jobs.
+      responses:
+        '200':
+          description: Active dashboard data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'

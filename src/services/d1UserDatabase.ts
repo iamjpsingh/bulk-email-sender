@@ -5,6 +5,8 @@
 
 const WORKER_URL = process.env.TRACKING_WORKER_URL || '';
 
+import { logger } from '../utils/logger';
+
 export interface D1User {
   id: string;
   email: string;
@@ -64,7 +66,7 @@ class D1UserDatabase {
 
       const data = await response.json() as any;
       if (!data.success) {
-        console.error('Registration failed:', data.error);
+        logger.error('Registration failed:', data.error);
         return null;
       }
 
@@ -76,7 +78,7 @@ class D1UserDatabase {
 
       return { token: data.token, user: data.user, expiresAt: data.expiresAt };
     } catch (error) {
-      console.error('Registration error:', error);
+      logger.error('Registration error:', error);
       return null;
     }
   }
@@ -91,7 +93,7 @@ class D1UserDatabase {
 
       const data = await response.json() as any;
       if (!data.success) {
-        console.error('Login failed:', data.error);
+        logger.error('Login failed:', data.error);
         return null;
       }
 
@@ -103,7 +105,7 @@ class D1UserDatabase {
 
       return { token: data.token, user: data.user, expiresAt: data.expiresAt };
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       return null;
     }
   }
@@ -119,7 +121,7 @@ class D1UserDatabase {
 
       return true;
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('Logout error:', error);
       return false;
     }
   }
@@ -151,7 +153,7 @@ class D1UserDatabase {
 
       return data.user;
     } catch (error) {
-      console.error('Session validation error:', error);
+      logger.error('Session validation error:', error);
       return null;
     }
   }
@@ -173,7 +175,7 @@ class D1UserDatabase {
         is_default: !!c.is_default
       }));
     } catch (error) {
-      console.error('Get configs error:', error);
+      logger.error('Get configs error:', error);
       return [];
     }
   }
@@ -194,7 +196,7 @@ class D1UserDatabase {
       const data = await response.json() as any;
       return data.success ? data.id : null;
     } catch (error) {
-      console.error('Create config error:', error);
+      logger.error('Create config error:', error);
       return null;
     }
   }
@@ -210,7 +212,7 @@ class D1UserDatabase {
       const data = await response.json() as any;
       return data.success;
     } catch (error) {
-      console.error('Update config error:', error);
+      logger.error('Update config error:', error);
       return false;
     }
   }
@@ -224,7 +226,7 @@ class D1UserDatabase {
       const data = await response.json() as any;
       return data.success;
     } catch (error) {
-      console.error('Delete config error:', error);
+      logger.error('Delete config error:', error);
       return false;
     }
   }

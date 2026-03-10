@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main, new-framework]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ============================================
+  # Backend Tests + Lint
+  # ============================================
+  backend-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install
+      - name: Lint
+        run: bun run lint
+      - name: Run tests
+        run: bun run test
+      - name: Type check
+        run: bunx tsc --noEmit
+
+  # ============================================
+  # Frontend Build + Test
+  # ============================================
+  frontend-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: cd frontend && bun install
+      - name: Type check
+        run: cd frontend && bunx vue-tsc --noEmit
+      - name: Run tests
+        run: cd frontend && bun run test
+      - name: Build
+        run: cd frontend && bunx vite build
+
+  # ============================================
+  # Tracking Worker Type Check
+  # ============================================
+  worker-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: cd tracking-worker && bun install
+      - name: Type check
+        run: cd tracking-worker && bunx tsc --noEmit
+
+  # ============================================
+  # Security Audit
+  # ============================================
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Audit backend dependencies
+        run: bun install && bunx audit-ci --moderate || true
+        continue-on-error: true
+      - name: Audit frontend dependencies
+        run: cd frontend && bun install && bunx audit-ci --moderate || true
+        continue-on-error: true

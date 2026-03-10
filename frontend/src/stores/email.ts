@@ -2,11 +2,10 @@
  * Email Store
  * Uses TanStack Query for state management
  */
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import {
   useLogs,
-  useStats,
   useClearLogs,
   useBatchStatus,
   usePauseBatch,
@@ -60,7 +59,7 @@ export function useReportsStore(filters?: Record<string, any>) {
     pagination: computed(() => data.value?.pagination),
     loading: isLoading,
     refetch,
-    clearLogs: () => clearMutation.mutateAsync(),
+    clearLogs: (ids: string[]) => clearMutation.mutateAsync(ids),
     isClearing: computed(() => clearMutation.isPending.value),
   }
 }

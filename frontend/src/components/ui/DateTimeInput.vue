@@ -86,32 +86,32 @@ function handleModalClose() {
   padding: 14px 48px 14px 16px;
   font-family: var(--font-sans);
   font-size: 15px;
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   transition: all 0.2s ease;
   cursor: pointer;
-  
+
   &::placeholder {
-    color: var(--text-muted);
+    color: var(--color-text-muted);
   }
-  
+
   &:focus {
     outline: none;
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.1);
-    background: var(--bg-primary);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+    background: var(--color-bg-primary);
   }
-  
+
   &:hover:not(:focus) {
-    border-color: rgba(6, 182, 212, 0.3);
+    border-color: rgba(99, 102, 241, 0.3);
   }
-  
+
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    background: var(--bg-card);
+    background: var(--color-bg-card);
   }
 }
 
@@ -120,7 +120,7 @@ function handleModalClose() {
   right: 16px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--accent-primary);
+  color: var(--color-accent);
   pointer-events: none;
   transition: color 0.2s ease;
 }

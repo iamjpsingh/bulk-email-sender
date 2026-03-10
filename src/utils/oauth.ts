@@ -3,6 +3,7 @@
  * Shared OAuth handling logic
  */
 import { SERVER } from '../config'
+import { logger } from './logger'
 import { d1UserDatabase } from '../services/d1UserDatabase'
 import { oauthService } from '../services/oauthService'
 
@@ -75,7 +76,7 @@ export async function handleOAuthCallback(
         oauth_refresh_token: tokens.refresh_token,
         oauth_expires_at: new Date(tokens.expires_at).toISOString(),
       })
-      console.log(`🔄 Updated ${provider} OAuth for: ${tokens.email}`)
+      logger.debug(`Updated ${provider} OAuth for: ${tokens.email}`)
     } else {
       const configName = provider === 'google' ? `Gmail - ${tokens.name}` : `Outlook - ${tokens.name}`
       await d1UserDatabase.createSMTPConfig({
@@ -88,7 +89,7 @@ export async function handleOAuthCallback(
         oauth_expires_at: new Date(tokens.expires_at).toISOString(),
         is_default: existingConfigs.length === 0,
       })
-      console.log(`✅ Connected ${provider} account: ${tokens.email}`)
+      logger.info(`Connected ${provider} account: ${tokens.email}`)
     }
 
     return {
@@ -96,7 +97,7 @@ export async function handleOAuthCallback(
       redirectUrl: `${frontendUrl}/configs?success=${provider}_connected`,
     }
   } catch (err) {
-    console.error(`${provider} OAuth callback error:`, err)
+    logger.error(`${provider} OAuth callback error:`, err)
     return {
       success: false,
       redirectUrl: `${frontendUrl}/configs?error=${provider}_failed`,
@@ -123,7 +124,7 @@ export async function getValidOAuthToken(
 
   // Check if token needs refresh
   if (d1UserDatabase.needsTokenRefresh(config as any)) {
-    console.log(`🔄 Refreshing OAuth token for ${config.provider_type}...`)
+    logger.debug(`Refreshing OAuth token for ${config.provider_type}...`)
 
     try {
       const newTokens = config.provider_type === 'google'
@@ -137,10 +138,10 @@ export async function getValidOAuthToken(
         new Date(newTokens.expires_at).toISOString()
       )
       
-      console.log(`✅ OAuth token refreshed for ${config.provider_type}`)
+      logger.debug(`OAuth token refreshed for ${config.provider_type}`)
       return newTokens.access_token
     } catch (err) {
-      console.error('Failed to refresh OAuth token:', err)
+      logger.error('Failed to refresh OAuth token:', err)
       throw new Error('OAuth token expired. Please reconnect your account.')
     }
   }

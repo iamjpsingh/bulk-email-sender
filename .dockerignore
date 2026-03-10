@@ -1,0 +1,61 @@
+# =============================================================================
+# Docker Build Ignore
+# =============================================================================
+
+# Dependencies (will be installed fresh in container)
+node_modules/
+frontend/node_modules/
+tracking-worker/node_modules/
+
+# Git
+.git/
+.gitignore
+
+# Build artifacts
+dist/
+frontend/dist/
+
+# Local data (mounted as volumes instead)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+logs/
+uploads/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in image)
+docs/
+*.md
+!package.json
+
+# Tests
+tests/
+vitest.config.ts
+coverage/
+
+# Claude / AI tooling
+.claude/
+CLAUDE.md
+
+# Tracking worker (deployed separately to Cloudflare)
+tracking-worker/
+
+# Miscellaneous
+*.log
+*.tgz
+.npmrc

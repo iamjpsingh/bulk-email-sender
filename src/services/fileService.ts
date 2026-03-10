@@ -1,188 +1,155 @@
-import * as XLSX from "xlsx";
-import { writeFile, readFile, mkdir } from "fs/promises";
-import { existsSync } from "fs";
-import type { Contact } from "../types";
+import * as XLSX from 'xlsx'
+import { writeFile, readFile, mkdir } from 'fs/promises'
+import { existsSync } from 'fs'
+import { logger } from '../utils/logger'
+import { isValidEmail } from '../utils/validation'
+import type { Contact } from '../types/index'
 
 export class FileService {
   static async parseExcelFile(filePath: string): Promise<Contact[]> {
     try {
-      console.log(`Parsing Excel file: ${filePath}`);
+      logger.debug(`Parsing Excel file: ${filePath}`)
 
       if (!existsSync(filePath)) {
-        throw new Error("File does not exist");
+        throw new Error('File does not exist')
       }
 
-      const workbook = XLSX.readFile(filePath);
-      const sheetName = workbook.SheetNames[0];
+      const workbook = XLSX.readFile(filePath)
+      const sheetName = workbook.SheetNames[0]
 
       if (!sheetName) {
-        throw new Error("No sheets found in Excel file");
+        throw new Error('No sheets found in Excel file')
       }
 
-      const worksheet = workbook.Sheets[sheetName];
+      const worksheet = workbook.Sheets[sheetName]
 
       // Convert to JSON with header option
       const data = XLSX.utils.sheet_to_json(worksheet, {
         header: 1,
-        defval: "",
-      }) as any[][];
+        defval: '',
+      }) as any[][]
 
       if (data.length < 2) {
-        throw new Error(
-          "Excel file must have at least a header row and one data row"
-        );
+        throw new Error('Excel file must have at least a header row and one data row')
       }
 
       // Get headers from first row
-      const headers = data[0];
-      console.log("Excel headers:", headers);
+      const headers = data[0]
+      logger.debug('Excel headers:', headers)
 
       // Find Email column (case insensitive)
       const emailColumnIndex = headers.findIndex(
-        (header: string) =>
-          typeof header === "string" && header.toLowerCase().includes("email")
-      );
+        (header: string) => typeof header === 'string' && header.toLowerCase().includes('email')
+      )
 
       if (emailColumnIndex === -1) {
-        throw new Error(
-          'No Email column found. Please ensure your Excel file has an "Email" column.'
-        );
+        throw new Error('No Email column found. Please ensure your Excel file has an "Email" column.')
       }
 
       // Convert data rows to contact objects
-      const contacts: Contact[] = [];
+      const contacts: Contact[] = []
 
       for (let i = 1; i < data.length; i++) {
-        const row = data[i];
+        const row = data[i]
 
         if (!row || row.length === 0) {
-          continue; // Skip empty rows
+          continue // Skip empty rows
         }
 
         const contact: Contact = {
-          Email: "",
-        };
+          Email: '',
+        }
 
         // Map each column to contact properties
         headers.forEach((header: string, index: number) => {
-          if (typeof header === "string" && header.trim() !== "") {
-            const cleanHeader = header.trim();
-            const value = row[index] ? String(row[index]).trim() : "";
+          if (typeof header === 'string' && header.trim() !== '') {
+            const cleanHeader = header.trim()
+            const value = row[index] ? String(row[index]).trim() : ''
 
             // Store with ORIGINAL column name exactly as in Excel
-            contact[cleanHeader] = value;
+            contact[cleanHeader] = value
 
             // Set Email field for validation (find any email-like column)
-            if (cleanHeader.toLowerCase().includes("email") && value.includes("@")) {
-              contact.Email = value;
+            if (cleanHeader.toLowerCase().includes('email') && value.includes('@')) {
+              contact.Email = value
             }
           }
-        });
+        })
 
         // Only include contacts with valid email addresses
-        if (contact.Email && this.isValidEmail(contact.Email)) {
-          contacts.push(contact);
+        if (contact.Email && isValidEmail(contact.Email)) {
+          contacts.push(contact)
         } else {
-          console.log(
-            `Skipping row ${i + 1}: Invalid or missing email (${contact.Email})`
-          );
+          logger.debug(`Skipping row ${i + 1}: Invalid or missing email (${contact.Email})`)
         }
       }
 
-      console.log(`Successfully parsed ${contacts.length} valid contacts`);
+      logger.debug(`Successfully parsed ${contacts.length} valid contacts`)
 
       if (contacts.length === 0) {
-        throw new Error("No valid email addresses found in the Excel file");
+        throw new Error('No valid email addresses found in the Excel file')
       }
 
-      return contacts;
+      return contacts
     } catch (error) {
-      console.error("Excel parsing error:", error);
+      logger.error('Excel parsing error:', error)
       if (error instanceof Error) {
-        throw new Error(`Failed to parse Excel file: ${error.message}`);
+        throw new Error(`Failed to parse Excel file: ${error.message}`)
       } else {
-        throw new Error("Failed to parse Excel file: Unknown error");
+        throw new Error('Failed to parse Excel file: Unknown error')
       }
     }
   }
 
-  static async saveUploadedFile(
-    file: Uint8Array,
-    filename: string
-  ): Promise<string> {
+  static async saveUploadedFile(file: Uint8Array, filename: string): Promise<string> {
     try {
       // Ensure uploads directory exists
-      const uploadDir = "./uploads";
+      const uploadDir = './uploads'
       if (!existsSync(uploadDir)) {
-        await mkdir(uploadDir, { recursive: true });
+        await mkdir(uploadDir, { recursive: true })
       }
 
-      const uploadPath = `${uploadDir}/${filename}`;
-      await writeFile(uploadPath, file);
-      console.log(`File saved: ${uploadPath}`);
-      return uploadPath;
+      const uploadPath = `${uploadDir}/${filename}`
+      await writeFile(uploadPath, file)
+      logger.debug(`File saved: ${uploadPath}`)
+      return uploadPath
     } catch (error) {
-      console.error("File save error:", error);
-      throw new Error(
-        `Failed to save uploaded file: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
+      logger.error('File save error:', error)
+      throw new Error(`Failed to save uploaded file: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   static async readHTMLTemplate(filePath: string): Promise<string> {
     try {
       if (!existsSync(filePath)) {
-        throw new Error("HTML template file does not exist");
+        throw new Error('HTML template file does not exist')
       }
 
-      const content = await readFile(filePath, "utf-8");
-      console.log(
-        `HTML template loaded: ${filePath} (${content.length} characters)`
-      );
-      return content;
+      const content = await readFile(filePath, 'utf-8')
+      logger.debug(`HTML template loaded: ${filePath} (${content.length} characters)`)
+      return content
     } catch (error) {
-      console.error("HTML template read error:", error);
-      throw new Error(
-        `Failed to read HTML template: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
+      logger.error('HTML template read error:', error)
+      throw new Error(`Failed to read HTML template: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-  }
-
-  static isValidEmail(email: string): boolean {
-    if (!email || typeof email !== "string") {
-      return false;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const isValid = emailRegex.test(email.trim());
-
-    if (!isValid) {
-      console.log(`Invalid email format: ${email}`);
-    }
-
-    return isValid;
   }
 
   static replacePlaceholders(template: string, contact: Contact): string {
     if (!template || !contact) {
-      return template || "";
+      return template || ''
     }
 
-    let result = template;
+    let result = template
 
     // Replace placeholders with exact key match
     // Match {{anything}} pattern
     result = result.replace(/\{\{(\w+)\}\}/g, (match, key) => {
       if (contact[key] !== undefined) {
-        return String(contact[key] || "");
+        return String(contact[key] || '')
       }
-      return match;
-    });
+      return match
+    })
 
-    return result;
+    return result
   }
 }

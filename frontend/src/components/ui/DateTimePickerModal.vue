@@ -299,21 +299,21 @@ function togglePeriod() {
   height: 36px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &:hover {
-    background: rgba(6, 182, 212, 0.1);
-    color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-accent);
   }
 }
 
 .month-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   margin: 0;
 }
 
@@ -332,7 +332,7 @@ function togglePeriod() {
   text-align: center;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   padding: 8px 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -352,37 +352,37 @@ function togglePeriod() {
   height: 36px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s ease;
-  
+
   &:hover:not(:disabled):not(.is-empty) {
-    background: rgba(6, 182, 212, 0.1);
-    color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-accent);
     transform: scale(1.05);
   }
-  
+
   &.is-today {
-    background: rgba(6, 182, 212, 0.15);
-    color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-accent);
     font-weight: 600;
-    border: 1px solid rgba(6, 182, 212, 0.3);
+    border: 1px solid rgba(99, 102, 241, 0.3);
   }
-  
+
   &.is-selected {
-    background: var(--accent-primary);
-    color: var(--bg-primary);
+    background: var(--color-accent);
+    color: var(--color-bg-primary);
     font-weight: 600;
-    
+
     &:hover {
-      background: #0891b2;
+      background: #4f46e5;
       transform: scale(1.05);
     }
   }
-  
+
   &.is-empty {
     cursor: default;
     opacity: 0;
@@ -392,7 +392,7 @@ function togglePeriod() {
 
 .time-section {
   padding: 20px 0;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--color-border);
 }
 
 .time-header {
@@ -401,7 +401,7 @@ function togglePeriod() {
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   margin-bottom: 16px;
 }
 
@@ -424,17 +424,17 @@ function togglePeriod() {
   width: 32px;
   height: 32px;
   border: none;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 16px;
   font-weight: 600;
   transition: all 0.2s ease;
-  
+
   &:hover {
-    background: var(--accent-primary);
-    color: var(--bg-primary);
+    background: var(--color-accent);
+    color: var(--color-bg-primary);
     transform: scale(1.1);
   }
 }
@@ -445,38 +445,38 @@ function togglePeriod() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   font-family: var(--font-mono);
 }
 
 .time-separator {
   font-size: 24px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   margin: 0 8px;
 }
 
 .period-btn {
   width: 48px;
   height: 48px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
   transition: all 0.2s ease;
-  
+
   &:hover {
-    background: var(--accent-primary);
-    color: var(--bg-primary);
-    border-color: var(--accent-primary);
+    background: var(--color-accent);
+    color: var(--color-bg-primary);
+    border-color: var(--color-accent);
   }
 }
 
@@ -484,11 +484,11 @@ function togglePeriod() {
   text-align: center;
   font-size: 20px;
   font-weight: 600;
-  color: var(--accent-primary);
+  color: var(--color-accent);
   font-family: var(--font-mono);
   padding: 12px;
-  background: rgba(6, 182, 212, 0.1);
+  background: rgba(99, 102, 241, 0.1);
   border-radius: var(--radius-md);
-  border: 1px solid rgba(6, 182, 212, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.2);
 }
 </style>

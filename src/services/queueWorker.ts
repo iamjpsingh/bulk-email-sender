@@ -1,0 +1,372 @@
+// src/services/queueWorker.ts - Job processing worker with retry and notification
+
+import { emailService } from './emailService'
+import { logService } from './logService'
+import { d1Service } from './d1Service'
+import { retryEngine } from './retryEngine'
+import { FileService } from './fileService'
+import { logger } from '../utils/logger'
+import type { QueueDatabase, QueueJob } from './queueDatabase'
+import type { EmailConfig, Contact } from '../types/index'
+
+// ============================================================================
+// Queue Worker
+// ============================================================================
+
+export class QueueWorker {
+  private queueDb: QueueDatabase
+  private maxConcurrent = 3
+  private workerInterval: Timer | null = null
+  private activeJobs: Map<string, { abort: boolean }> = new Map()
+
+  constructor(queueDb: QueueDatabase) {
+    this.queueDb = queueDb
+  }
+
+  // --------------------------------------------------------------------------
+  // Worker Lifecycle
+  // --------------------------------------------------------------------------
+
+  /**
+   * Start the background worker that processes jobs
+   */
+  startWorker(intervalMs = 5000) {
+    if (this.workerInterval) return
+
+    this.workerInterval = setInterval(() => {
+      this.processNextJob()
+    }, intervalMs)
+
+    logger.startup(`Queue worker started (polling every ${intervalMs / 1000}s, max ${this.maxConcurrent} concurrent)`)
+  }
+
+  /**
+   * Stop the background worker
+   */
+  stopWorker() {
+    if (this.workerInterval) {
+      clearInterval(this.workerInterval)
+      this.workerInterval = null
+      logger.info('Queue worker stopped')
+    }
+  }
+
+  /**
+   * Set max concurrent jobs
+   */
+  setMaxConcurrent(max: number) {
+    this.maxConcurrent = Math.max(1, Math.min(max, 10))
+  }
+
+  /**
+   * Get count of currently active jobs
+   */
+  getActiveJobCount(): number {
+    return this.activeJobs.size
+  }
+
+  /**
+   * Get IDs of currently active jobs
+   */
+  getActiveJobIds(): string[] {
+    return Array.from(this.activeJobs.keys())
+  }
+
+  // --------------------------------------------------------------------------
+  // Job Processing
+  // --------------------------------------------------------------------------
+
+  /**
+   * Process the next available job (supports concurrency)
+   */
+  private async processNextJob() {
+    // Check if we have capacity for more concurrent jobs
+    if (this.activeJobs.size >= this.maxConcurrent) return
+
+    const job = this.queueDb.dequeue()
+    if (!job) return
+
+    // Skip if this job is already being processed
+    if (this.activeJobs.has(job.id)) return
+
+    // Mark as running
+    this.queueDb.markRunning(job.id)
+
+    const control = { abort: false }
+    this.activeJobs.set(job.id, control)
+
+    logger.debug(
+      `Processing job ${job.id}: ${job.total_count} contacts (from index ${job.last_processed_index}) [${this.activeJobs.size}/${this.maxConcurrent} slots]`
+    )
+
+    // Run in background -- don't await so worker can pick up more jobs
+    this.executeJob(job, control).catch((error) => {
+      const msg = error instanceof Error ? error.message : 'Unknown error'
+      logger.error(`Job ${job.id} failed:`, msg)
+      this.queueDb.failJob(job.id, msg)
+      this.activeJobs.delete(job.id)
+    })
+  }
+
+  /**
+   * Execute a job -- send emails with retry and checkpoint
+   */
+  private async executeJob(job: QueueJob, control: { abort: boolean }) {
+    const contacts: Contact[] = JSON.parse(job.contacts_json)
+    const emailConfig: EmailConfig = JSON.parse(job.config_json)
+
+    // Configure transporter
+    emailService.createTransport(emailConfig)
+
+    const campaignId = job.campaign_id || d1Service.generateCampaignId()
+    let sentCount = job.sent_count
+    let failedCount = job.failed_count
+    let lastIndex = job.last_processed_index
+
+    // Process from where we left off
+    for (let i = lastIndex; i < contacts.length; i++) {
+      // Check if paused or cancelled
+      if (control.abort) {
+        logger.debug(`Job ${job.id} interrupted at index ${i}`)
+        this.queueDb.updateProgress(job.id, i, sentCount, failedCount)
+        return
+      }
+
+      const contact = contacts[i]
+
+      // Check suppression list
+      if (this.queueDb.isSuppressed(job.user_id, contact.Email)) {
+        logger.debug(`Skipping suppressed email: ${contact.Email}`)
+        lastIndex = i + 1
+        this.queueDb.updateProgress(job.id, lastIndex, sentCount, failedCount)
+        continue
+      }
+
+      // Attempt to send with retry
+      const success = await this.sendWithRetry(job, contact, campaignId, emailConfig)
+
+      if (success) {
+        sentCount++
+      } else {
+        failedCount++
+      }
+
+      lastIndex = i + 1
+
+      // Checkpoint progress every email
+      this.queueDb.updateProgress(job.id, lastIndex, sentCount, failedCount)
+
+      // Delay between emails
+      if (i < contacts.length - 1 && !control.abort) {
+        const delaySec = job.email_delay_sec || 45
+
+        // Check if we're at a batch boundary
+        const batchSize = job.batch_size || 20
+        const positionInBatch = (i - (job.last_processed_index || 0) + 1) % batchSize
+        if (positionInBatch === 0 && i < contacts.length - 1) {
+          // Batch boundary -- longer delay
+          const batchDelayMs = (job.batch_delay_min || 1) * 60 * 1000
+          logger.debug(`Batch boundary -- waiting ${job.batch_delay_min || 1} min before next batch`)
+          await this.interruptibleSleep(batchDelayMs, control)
+        } else {
+          await this.interruptibleSleep(delaySec * 1000, control)
+        }
+      }
+    }
+
+    // Job completed
+    this.queueDb.completeJob(job.id)
+    this.activeJobs.delete(job.id)
+    logger.info(`Job ${job.id} completed: ${sentCount} sent, ${failedCount} failed`)
+
+    // Send completion notification
+    if (job.notify_email) {
+      await this.sendCompletionNotification(job, sentCount, failedCount)
+    }
+  }
+
+  /**
+   * Send a single email with retry logic
+   */
+  private async sendWithRetry(
+    job: QueueJob,
+    contact: Contact,
+    campaignId: string,
+    emailConfig: EmailConfig
+  ): Promise<boolean> {
+    let attempts = 0
+    const maxAttempts = 4 // 1 initial + 3 retries for temporary errors
+
+    while (attempts < maxAttempts) {
+      try {
+        // Personalize content
+        let personalizedContent = FileService.replacePlaceholders(job.html_content || '', contact)
+        const personalizedSubject = FileService.replacePlaceholders(job.subject || '', contact)
+
+        // Register tracking
+        if (d1Service.isConfigured()) {
+          const trackingResult = await d1Service.registerEmail({
+            userId: job.user_id,
+            campaignId,
+            campaignName: `Campaign ${new Date().toLocaleDateString()}`,
+            subject: personalizedSubject,
+            fromEmail: job.from_email || '',
+            fromName: job.from_name,
+            recipientEmail: contact.Email,
+            recipientName: contact.FirstName || String(contact['Name'] || ''),
+            sendType: job.type === 'direct' ? 'direct' : 'batch',
+            providerType: 'smtp',
+            configName: job.config_name || '',
+          })
+
+          if (trackingResult) {
+            personalizedContent = d1Service.injectTracking(personalizedContent, trackingResult.trackingId)
+          }
+        }
+
+        // Compliance headers (CAN-SPAM, RFC 8058)
+        const unsubUrl = job.from_email ? `mailto:${job.from_email}?subject=unsubscribe` : ''
+        const feedbackId = `${job.id}:${Date.now()}:${job.from_email || 'noreply'}`
+
+        const mailOptions = {
+          from: `${job.from_name || ''} <${job.from_email || ''}>`,
+          to: contact.Email,
+          subject: personalizedSubject,
+          html: personalizedContent,
+          headers: {
+            'List-Unsubscribe': `<${unsubUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            Precedence: 'bulk',
+            'Feedback-ID': feedbackId,
+          },
+        }
+
+        const info = await emailService.sendSingleEmail(mailOptions)
+
+        // Log success
+        logService.addLog({
+          id: `q_${job.id}_${Date.now()}`,
+          email: contact.Email,
+          status: 'Sent',
+          timestamp: new Date().toISOString(),
+          messageId: info.messageId,
+          firstName: contact.FirstName,
+          company: contact.Company,
+          subject: personalizedSubject,
+        })
+
+        logger.debug(`[${job.id}] Sent to ${contact.Email} (${info.messageId})`)
+        return true
+      } catch (error) {
+        attempts++
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        const errorType = retryEngine.classifyError(error instanceof Error ? error : errorMessage)
+
+        logger.error(`[${job.id}] Failed ${contact.Email} (attempt ${attempts}, ${errorType}): ${errorMessage}`)
+
+        if (errorType === 'permanent' || !retryEngine.shouldRetry(errorType, attempts)) {
+          // Permanent failure -- dead letter queue
+          this.queueDb.addToDeadLetter(
+            job.id,
+            contact.Email,
+            contact.FirstName || null,
+            errorMessage,
+            errorType,
+            attempts
+          )
+
+          // Suppress on hard bounce
+          if (errorType === 'permanent') {
+            this.queueDb.suppress(job.user_id, contact.Email, 'bounce_hard', `job:${job.id}`)
+          }
+
+          // Log failure
+          logService.addLog({
+            id: `q_${job.id}_${Date.now()}`,
+            email: contact.Email,
+            status: 'Failed',
+            message: `${retryEngine.describeError(errorType)} (${errorMessage})`,
+            timestamp: new Date().toISOString(),
+            firstName: contact.FirstName,
+            company: contact.Company,
+            subject: job.subject || '',
+          })
+
+          return false
+        }
+
+        // Wait before retry
+        const delay = retryEngine.getRetryDelay(attempts, errorType)
+        logger.debug(`Retrying ${contact.Email} in ${Math.round(delay / 1000)}s...`)
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+    }
+
+    return false
+  }
+
+  /**
+   * Sleep that can be interrupted by pause/cancel
+   */
+  private async interruptibleSleep(ms: number, control: { abort: boolean }): Promise<void> {
+    const interval = 1000 // Check every second
+    let elapsed = 0
+    while (elapsed < ms && !control.abort) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(interval, ms - elapsed)))
+      elapsed += interval
+    }
+  }
+
+  /**
+   * Send completion notification
+   */
+  private async sendCompletionNotification(job: QueueJob, sentCount: number, failedCount: number) {
+    try {
+      const { notificationService } = await import('./notificationService')
+
+      await notificationService.sendJobCompletionNotification(
+        job.user_id,
+        job.notify_email!,
+        {
+          sent: sentCount,
+          failed: failedCount,
+          total: job.total_count,
+          errors: 0,
+        },
+        {
+          id: job.id,
+          subject: job.subject || '',
+          startTime: job.started_at || job.created_at,
+          endTime: new Date().toISOString(),
+          configUsed: job.config_name || 'Queue Job',
+          batchMode: job.type === 'batch',
+        },
+        job.config_name || 'Queue Job'
+      )
+
+      logger.debug(`Completion notification sent to ${job.notify_email}`)
+    } catch (error) {
+      logger.error('Failed to send completion notification:', error)
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Job Control (called by engine)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Signal a job to pause
+   */
+  signalPause(jobId: string) {
+    const control = this.activeJobs.get(jobId)
+    if (control) control.abort = true
+  }
+
+  /**
+   * Signal a job to cancel
+   */
+  signalCancel(jobId: string) {
+    const control = this.activeJobs.get(jobId)
+    if (control) control.abort = true
+  }
+}

@@ -3,6 +3,7 @@
  * Google & Microsoft OAuth integration
  */
 import { randomBytes } from 'crypto'
+import { logger } from '../utils/logger'
 import { OAUTH } from '../config'
 
 export type EmailProvider = 'google' | 'microsoft' | 'smtp'
@@ -150,7 +151,7 @@ class OAuthService {
 
     if (!tokenResponse.ok) {
       const error = await tokenResponse.text()
-      console.error('Google token exchange failed:', error)
+      logger.error('Google token exchange failed:', error)
       throw new Error('Failed to exchange Google authorization code')
     }
 
@@ -203,7 +204,7 @@ class OAuthService {
 
     if (!tokenResponse.ok) {
       const error = await tokenResponse.text()
-      console.error('Microsoft token exchange failed:', error)
+      logger.error('Microsoft token exchange failed:', error)
       throw new Error('Failed to exchange Microsoft authorization code')
     }
 
@@ -342,7 +343,7 @@ class OAuthService {
 
     if (!response.ok) {
       const error = await response.text()
-      console.error('Gmail send failed:', error)
+      logger.error('Gmail send failed:', error)
       throw new Error(`Failed to send email via Gmail: ${response.status}`)
     }
 
@@ -392,7 +393,7 @@ class OAuthService {
 
     if (!response.ok) {
       const error = await response.text()
-      console.error('Outlook send failed:', error)
+      logger.error('Outlook send failed:', error)
       throw new Error(`Failed to send email via Outlook: ${response.status}`)
     }
 

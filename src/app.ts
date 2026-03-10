@@ -4,17 +4,20 @@
  */
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { logger } from 'hono/logger'
+import { logger as honoLogger } from 'hono/logger'
 import { serveStatic } from 'hono/bun'
 import { getCookie } from 'hono/cookie'
 import { mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
 
 // Configuration
-import { SERVER, CORS, AUTH, OAUTH, API, DIRECTORIES, ENV, COOKIE } from './config'
+import { SERVER, CORS, AUTH, OAUTH, API, DIRECTORIES, ENV, COOKIE, WORKERS } from './config'
+import { logger } from './utils/logger'
 
 // Middleware
 import { authMiddleware } from './middleware/auth'
+import { authRateLimit, sendRateLimit, uploadRateLimit } from './middleware/rateLimit'
+import { csrfTokenIssuer, csrfProtection } from './middleware/csrf'
 
 // Services
 import { d1Service } from './services/d1Service'
@@ -31,9 +34,26 @@ import dashboardRoutes from './routes/dashboard'
 import trackingRoutes from './routes/tracking'
 import queueRoutes from './routes/queue'
 import contactsRoutes from './routes/contacts'
+import eventsRoutes from './routes/events'
+import templatesRoutes from './routes/templates'
+import campaignsRoutes from './routes/campaigns'
+import segmentsRoutes from './routes/segments'
+import webhooksRoutes from './routes/webhooks'
+import automationsRoutes from './routes/automations'
+import apikeysRoutes from './routes/apikeys'
+import routingRoutes from './routes/routing'
+import warmupRoutes from './routes/warmup'
+import analyticsRoutes from './routes/analytics'
+import pluginsRoutes from './routes/plugins'
 
 // Queue Engine
 import { queueEngine } from './services/queueEngine'
+
+// Phase 2 Services (auto-initialize on import)
+import { automationService } from './services/automationService'
+
+// Phase 3 Services (auto-initialize on import)
+import { warmupService } from './services/warmupService'
 
 // ============================================================================
 // Application Setup
@@ -46,15 +66,30 @@ const app = new Hono()
 // ============================================================================
 
 // CORS
-app.use('*', cors({
-  origin: (origin) => {
-    return CORS.ALLOWED_ORIGINS.includes(origin) ? origin : CORS.ALLOWED_ORIGINS[0]
-  },
-  credentials: true,
-}))
+app.use(
+  '*',
+  cors({
+    origin: (origin) => {
+      return CORS.ALLOWED_ORIGINS.includes(origin) ? origin : CORS.ALLOWED_ORIGINS[0]
+    },
+    credentials: true,
+  })
+)
 
 // Request logging
-app.use('*', logger())
+app.use('*', honoLogger())
+
+// CSRF token issuer (sets cookie on all responses)
+app.use('*', csrfTokenIssuer)
+
+// CSRF protection on mutation endpoints
+app.use('*', csrfProtection)
+
+// Rate limiting on sensitive endpoints
+app.use('/api/auth/login', authRateLimit)
+app.use('/api/auth/register', authRateLimit)
+app.use('/api/send', sendRateLimit)
+app.use('/api/parse-excel', uploadRateLimit)
 
 // Authentication
 app.use('*', async (c, next) => {
@@ -89,9 +124,21 @@ const routes = [
   trackingRoutes,
   queueRoutes,
   contactsRoutes,
+  eventsRoutes,
+  templatesRoutes,
+  campaignsRoutes,
+  segmentsRoutes,
+  webhooksRoutes,
+  automationsRoutes,
+  apikeysRoutes,
+  routingRoutes,
+  warmupRoutes,
+  analyticsRoutes,
+  pluginsRoutes,
 ]
 
-routes.forEach((route) => app.route('/', route))
+// Mount all API routes under /api prefix to avoid conflicts with frontend SPA routes
+routes.forEach((route) => app.route('/api', route))
 
 // ============================================================================
 // Health & User Endpoints
@@ -105,7 +152,7 @@ app.get('/health', (c) =>
   })
 )
 
-app.get('/user/info', async (c) => {
+app.get('/api/user/info', async (c) => {
   const token = getCookie(c, COOKIE.SESSION_NAME)
   if (!token) {
     return c.json({ success: false, message: 'Not authenticated' }, 401)
@@ -127,12 +174,12 @@ app.get('/user/info', async (c) => {
 // ============================================================================
 
 app.notFound((c) => {
-  console.log(`❌ 404: ${c.req.method} ${c.req.path}`)
+  logger.debug(`404: ${c.req.method} ${c.req.path}`)
   return c.json({ success: false, message: `Not found: ${c.req.path}` }, 404)
 })
 
 app.onError((err, c) => {
-  console.error('Error:', err)
+  logger.error('Unhandled error:', err)
   return c.json(
     {
       success: false,
@@ -157,20 +204,23 @@ async function initialize() {
 
   // Initialize queue engine: recover interrupted jobs and start worker
   const recovered = queueEngine.recoverInterruptedJobs()
-  queueEngine.startWorker(5000) // Poll every 5 seconds
+  queueEngine.startWorker(WORKERS.QUEUE_POLL_INTERVAL)
+
+  // Start automation worker (processes due drip sequence actions)
+  automationService.startWorker(WORKERS.AUTOMATION_POLL_INTERVAL)
+
+  // Start warmup worker (advances warmup plans daily)
+  warmupService.startWorker(WORKERS.WARMUP_POLL_INTERVAL)
 
   // Log startup info
-  console.log(`\n🚀 ${API.NAME} v${API.VERSION}\n`)
-  console.log('📧 Providers:')
-  console.log(`   ${OAUTH.GOOGLE.isConfigured() ? '✅' : '⚠️ '} Google Gmail`)
-  console.log(`   ${OAUTH.MICROSOFT.isConfigured() ? '✅' : '⚠️ '} Microsoft Outlook`)
-  console.log('\n📊 Tracking:')
-  console.log(`   ${trackingConfigured ? '✅' : '⚠️ '} Cloudflare Worker ${trackingConfigured ? '' : '(set TRACKING_WORKER_URL)'}`)
-  console.log('\n📦 Queue:')
-  console.log(`   ✅ Persistent job queue (SQLite)${recovered > 0 ? ` — recovered ${recovered} interrupted job(s)` : ''}`)
-  console.log(`\n🌐 API: http://localhost:${SERVER.PORT}`)
-  console.log(`🖥️  Frontend: ${SERVER.FRONTEND_URL}`)
-  console.log('\n✅ Ready\n')
+  logger.startup(`\n🚀 ${API.NAME} v${API.VERSION}`)
+  logger.startup(`   Google Gmail: ${OAUTH.GOOGLE.isConfigured() ? '✅' : '⚠️  not configured'}`)
+  logger.startup(`   Microsoft Outlook: ${OAUTH.MICROSOFT.isConfigured() ? '✅' : '⚠️  not configured'}`)
+  logger.startup(`   Tracking: ${trackingConfigured ? '✅' : '⚠️  (set TRACKING_WORKER_URL)'}`)
+  logger.startup(`   Queue: ✅ SQLite${recovered > 0 ? ` — recovered ${recovered} interrupted job(s)` : ''}`)
+  logger.startup(`   API: http://localhost:${SERVER.PORT}`)
+  logger.startup(`   Frontend: ${SERVER.FRONTEND_URL}`)
+  logger.startup('✅ Ready\n')
 }
 
 await initialize()

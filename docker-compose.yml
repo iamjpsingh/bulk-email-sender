@@ -1,0 +1,71 @@
+# =============================================================================
+# Dispatch - Docker Compose Configuration
+# =============================================================================
+#
+# Usage:
+#   docker compose up -d          # Start in background
+#   docker compose up --build     # Rebuild and start
+#   docker compose logs -f app    # Follow app logs
+#   docker compose down           # Stop all services
+#
+# Prerequisites:
+#   - Copy .env.example to .env and fill in your configuration
+#   - Ensure data/ and logs/ directories exist (created automatically)
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Main Application: Bun + Hono backend serving Vue 3 frontend
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dispatch-app
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persist SQLite databases across container restarts
+      - ./data:/app/data
+      # Persist email logs
+      - ./logs:/app/logs
+      # Persist uploaded files (Excel sheets, etc.)
+      - ./uploads:/app/uploads
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3000/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Tracking Worker (Cloudflare Worker + D1)
+  # ---------------------------------------------------------------------------
+  # The tracking worker runs on Cloudflare's edge network and cannot be
+  # containerized directly. Deploy it separately with wrangler:
+  #
+  #   cd tracking-worker
+  #   bun install
+  #   bunx wrangler d1 execute dispatch --file=schema.sql --remote
+  #   bunx wrangler deploy
+  #
+  # Then set TRACKING_WORKER_URL in your .env to the deployed worker URL.
+  #
+  # For local development/testing with wrangler dev:
+  #
+  # tracking-worker:
+  #   build:
+  #     context: ./tracking-worker
+  #     dockerfile: Dockerfile.worker
+  #   container_name: dispatch-tracking
+  #   ports:
+  #     - "8787:8787"
+  #   command: ["bunx", "wrangler", "dev", "--port", "8787"]
+  #   restart: unless-stopped

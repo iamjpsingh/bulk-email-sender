@@ -1,30 +1,31 @@
 // src/services/schedulerService.ts - FIX DOUBLE NOTIFICATION ISSUE
 
-import Database from "bun:sqlite";
-import { batchService } from "./batchService";
-import { emailService } from "./emailService";
-import { notificationService } from "./notificationService";
-import type { EmailJob, BatchConfig, ScheduledJob } from "../types";
-import { existsSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import Database from 'bun:sqlite'
+import { batchService } from './batchService'
+import { emailService } from './emailService'
+import { notificationService } from './notificationService'
+import type { EmailJob, BatchConfig, ScheduledJob } from '../types/index'
+import { existsSync, mkdirSync } from 'fs'
+import { dirname } from 'path'
+import { logger } from '../utils/logger'
 
 class SchedulerService {
-  private db: Database;
-  private schedulerInterval: Timer | null = null;
+  private db: Database
+  private schedulerInterval: Timer | null = null
 
   constructor() {
     // Ensure data directory exists
-    const dbPath = "./data/scheduler.db";
-    const dbDir = dirname(dbPath);
+    const dbPath = './data/scheduler.db'
+    const dbDir = dirname(dbPath)
 
     if (!existsSync(dbDir)) {
-      mkdirSync(dbDir, { recursive: true });
-      console.log("📁 Created data directory for SQLite database");
+      mkdirSync(dbDir, { recursive: true })
+      logger.debug('Created data directory for SQLite database')
     }
 
-    this.db = new Database(dbPath);
-    this.initDatabase();
-    this.startScheduler();
+    this.db = new Database(dbPath)
+    this.initDatabase()
+    this.startScheduler()
   }
 
   private initDatabase() {
@@ -47,25 +48,25 @@ class SchedulerService {
         use_batch INTEGER DEFAULT 0,
         config_name TEXT
       )
-    `);
+    `)
 
     // MIGRATION: Add user_id column if it doesn't exist
     try {
-      this.db.exec(`ALTER TABLE scheduled_jobs ADD COLUMN user_id TEXT`);
-      console.log("✅ Added user_id column to scheduled_jobs table");
+      this.db.exec(`ALTER TABLE scheduled_jobs ADD COLUMN user_id TEXT`)
+      logger.debug('Added user_id column to scheduled_jobs table')
     } catch (error) {
       // Column already exists, ignore
     }
 
     // MIGRATION: Add config_name column if it doesn't exist
     try {
-      this.db.exec(`ALTER TABLE scheduled_jobs ADD COLUMN config_name TEXT`);
-      console.log("✅ Added config_name column to scheduled_jobs table");
+      this.db.exec(`ALTER TABLE scheduled_jobs ADD COLUMN config_name TEXT`)
+      logger.debug('Added config_name column to scheduled_jobs table')
     } catch (error) {
       // Column already exists, ignore
     }
 
-    console.log("✅ SQLite database initialized with user support");
+    logger.info('SQLite database initialized with user support')
   }
 
   async scheduleJob(
@@ -77,13 +78,13 @@ class SchedulerService {
     notifyEmail?: string,
     notifyBrowser?: boolean
   ): Promise<string> {
-    const jobId = `sched_${Date.now()}`;
+    const jobId = `sched_${Date.now()}`
 
     const stmt = this.db.prepare(`
       INSERT INTO scheduled_jobs 
       (id, user_id, email_job, batch_config, scheduled_time, notify_email, notify_browser, contact_count, subject, use_batch, config_name)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    `)
 
     stmt.run(
       jobId,
@@ -96,23 +97,23 @@ class SchedulerService {
       emailJob.contacts.length,
       emailJob.subject,
       batchConfig ? 1 : 0,
-      configName || "Default Config"
-    );
+      configName || 'Default Config'
+    )
 
-    console.log(`📅 Job scheduled: ${jobId} for user ${userId} at ${scheduledTime.toLocaleString()}`);
-    return jobId;
+    logger.info(`Job scheduled: ${jobId} for user ${userId} at ${scheduledTime.toLocaleString()}`)
+    return jobId
   }
 
   private startScheduler() {
     this.schedulerInterval = setInterval(() => {
-      this.checkDueJobs();
-    }, 60000);
+      this.checkDueJobs()
+    }, 60000)
 
-    console.log("⏰ Scheduler started - checking every minute for due jobs");
+    logger.startup('   Scheduler started (checking every minute for due jobs)')
   }
 
   private async checkDueJobs() {
-    const now = new Date().toISOString();
+    const now = new Date().toISOString()
 
     const dueJobs = this.db
       .prepare(
@@ -122,15 +123,15 @@ class SchedulerService {
       ORDER BY scheduled_time ASC
     `
       )
-      .all(now);
+      .all(now)
 
     for (const job of dueJobs) {
-      await this.executeScheduledJob(job);
+      await this.executeScheduledJob(job)
     }
   }
 
   private async executeScheduledJob(job: any) {
-    console.log(`🚀 Executing scheduled job: ${job.id} for user: ${job.user_id}`);
+    logger.debug(`Executing scheduled job: ${job.id} for user: ${job.user_id}`)
 
     try {
       // Update status to running
@@ -142,65 +143,61 @@ class SchedulerService {
         WHERE id = ?
       `
         )
-        .run(new Date().toISOString(), job.id);
+        .run(new Date().toISOString(), job.id)
 
-      const emailJob: EmailJob = JSON.parse(job.email_job);
-      const batchConfig: BatchConfig | null = job.batch_config
-        ? JSON.parse(job.batch_config)
-        : null;
+      const emailJob: EmailJob = JSON.parse(job.email_job)
+      const batchConfig: BatchConfig | null = job.batch_config ? JSON.parse(job.batch_config) : null
 
       // Configure email service
-      emailService.createTransport(emailJob.config);
+      emailService.createTransport(emailJob.config)
 
-      let executionPromise: Promise<any>;
+      let executionPromise: Promise<any>
 
       if (job.use_batch && batchConfig) {
         // FIXED: For batch jobs, let the batch service handle notifications
-        console.log(
-          `📦 Starting scheduled batch job: ${emailJob.contacts.length} contacts in batches`
-        );
-        
+        logger.debug(`Starting scheduled batch job: ${emailJob.contacts.length} contacts in batches`)
+
         // Create notification settings for batch job
-        const notificationSettings = job.notify_email ? {
-          email: job.notify_email,
-          userId: job.user_id,
-          configName: job.config_name || 'Scheduled Batch Job'
-        } : undefined;
-        
-        executionPromise = batchService.startBatchJob(emailJob, batchConfig, notificationSettings);
-        
+        const notificationSettings = job.notify_email
+          ? {
+              email: job.notify_email,
+              userId: job.user_id,
+              configName: job.config_name || 'Scheduled Batch Job',
+            }
+          : undefined
+
+        executionPromise = batchService.startBatchJob(emailJob, batchConfig, notificationSettings)
+
         // FIXED: For batch jobs, just monitor completion but DON'T send notification
         // The batch service will handle the notification
-        this.monitorBatchJobCompletionOnly(job.id);
-        
+        this.monitorBatchJobCompletionOnly(job.id)
       } else {
         // For normal jobs, handle notifications at scheduler level
-        console.log(
-          `📧 Starting scheduled bulk job: ${emailJob.contacts.length} contacts`
-        );
-        
+        logger.debug(`Starting scheduled bulk job: ${emailJob.contacts.length} contacts`)
+
         // Create notification settings for bulk job
-        const notificationSettings = job.notify_email ? {
-          email: job.notify_email,
-          userId: job.user_id,
-          configName: job.config_name || 'Scheduled Bulk Job'
-        } : undefined;
-        
-        executionPromise = emailService.sendBulkEmails(emailJob, notificationSettings);
-        
+        const notificationSettings = job.notify_email
+          ? {
+              email: job.notify_email,
+              userId: job.user_id,
+              configName: job.config_name || 'Scheduled Bulk Job',
+            }
+          : undefined
+
+        executionPromise = emailService.sendBulkEmails(emailJob, notificationSettings)
+
         // Wait for completion and send notification
-        await executionPromise;
+        await executionPromise
         await this.completeScheduledJobWithNotification(
           job.id,
           job.notify_email,
           job.notify_browser,
           job.user_id,
           job.config_name
-        );
+        )
       }
-      
     } catch (error) {
-      console.error(`❌ Scheduled job ${job.id} failed:`, error);
+      logger.error(`Scheduled job ${job.id} failed:`, error)
 
       this.db
         .prepare(
@@ -210,32 +207,32 @@ class SchedulerService {
         WHERE id = ?
       `
         )
-        .run(job.id);
+        .run(job.id)
     }
   }
 
   // FIXED: Monitor batch completion but DON'T send notification (batch service handles it)
   private async monitorBatchJobCompletionOnly(jobId: string) {
     const checkCompletion = async () => {
-      const batchStatus = batchService.getBatchStatus();
+      const batchStatus = batchService.getBatchStatus()
 
       if (!batchStatus.isRunning) {
         // Batch job completed - just update status, NO notification
-        await this.completeScheduledJobSilently(jobId);
-        return;
+        await this.completeScheduledJobSilently(jobId)
+        return
       }
 
       // Check again in 30 seconds
-      setTimeout(checkCompletion, 30000);
-    };
+      setTimeout(checkCompletion, 30000)
+    }
 
     // Start monitoring
-    setTimeout(checkCompletion, 30000);
+    setTimeout(checkCompletion, 30000)
   }
 
   // FIXED: Complete scheduled job WITHOUT sending notification (for batch jobs)
   private async completeScheduledJobSilently(jobId: string) {
-    const completedAt = new Date().toISOString();
+    const completedAt = new Date().toISOString()
 
     // Update job status only
     this.db
@@ -246,9 +243,9 @@ class SchedulerService {
       WHERE id = ?
     `
       )
-      .run(completedAt, jobId);
+      .run(completedAt, jobId)
 
-    console.log(`✅ Scheduled batch job ${jobId} completed (notification handled by batch service)`);
+    logger.debug(`Scheduled batch job ${jobId} completed (notification handled by batch service)`)
   }
 
   // FIXED: Complete scheduled job WITH notification (for normal jobs only)
@@ -259,7 +256,7 @@ class SchedulerService {
     userId?: string,
     configName?: string
   ) {
-    const completedAt = new Date().toISOString();
+    const completedAt = new Date().toISOString()
 
     // Update job status
     this.db
@@ -270,17 +267,15 @@ class SchedulerService {
       WHERE id = ?
     `
       )
-      .run(completedAt, jobId);
+      .run(completedAt, jobId)
 
-    console.log(`✅ Scheduled job ${jobId} completed`);
+    logger.debug(`Scheduled job ${jobId} completed`)
 
     // Send notification for normal (non-batch) jobs
     if (notifyEmail && userId) {
-      const job = this.db
-        .prepare(`SELECT * FROM scheduled_jobs WHERE id = ?`)
-        .get(jobId);
-        
-      await this.sendAdvancedCompletionNotification(jobId, notifyEmail, job, userId, configName);
+      const job = this.db.prepare(`SELECT * FROM scheduled_jobs WHERE id = ?`).get(jobId)
+
+      await this.sendAdvancedCompletionNotification(jobId, notifyEmail, job, userId, configName)
     }
   }
 
@@ -293,18 +288,18 @@ class SchedulerService {
   ): Promise<void> {
     try {
       // Get campaign statistics from logs
-      const stats = notificationService.getCampaignStats(jobId);
+      const stats = notificationService.getCampaignStats(jobId)
 
       const jobDetails = {
         id: jobId,
-        subject: job.subject || "Scheduled Email Campaign",
+        subject: job.subject || 'Scheduled Email Campaign',
         startTime: job.started_at,
         endTime: job.completed_at,
-        configUsed: configName || job.config_name || "Scheduled Job Configuration",
+        configUsed: configName || job.config_name || 'Scheduled Job Configuration',
         batchMode: false, // This is only for normal scheduled jobs, not batch
-      };
+      }
 
-      console.log(`📧 Sending completion notification to ${notifyEmail} for user ${userId}`);
+      logger.debug(`Sending completion notification to ${notifyEmail} for user ${userId}`)
 
       const success = await notificationService.sendJobCompletionNotification(
         userId,
@@ -312,18 +307,15 @@ class SchedulerService {
         stats,
         jobDetails,
         jobDetails.configUsed
-      );
+      )
 
       if (success) {
-        console.log(`✅ Scheduled job completion notification sent successfully`);
+        logger.debug(`Scheduled job completion notification sent`)
       } else {
-        console.error(`❌ Failed to send scheduled job completion notification`);
+        logger.error(`Failed to send scheduled job completion notification`)
       }
     } catch (error) {
-      console.error(
-        "❌ Failed to send scheduled job completion notification:",
-        error
-      );
+      logger.error('Failed to send scheduled job completion notification:', error)
     }
   }
 
@@ -337,7 +329,7 @@ class SchedulerService {
       ORDER BY scheduled_time ASC
     `
       )
-      .all();
+      .all()
   }
 
   async cancelScheduledJob(jobId: string): Promise<boolean> {
@@ -350,12 +342,12 @@ class SchedulerService {
         WHERE id = ? AND status = 'scheduled'
       `
         )
-        .run(jobId);
+        .run(jobId)
 
-      return result.changes > 0;
+      return result.changes > 0
     } catch (error) {
-      console.error("❌ Failed to cancel scheduled job:", error);
-      return false;
+      logger.error('Failed to cancel scheduled job:', error)
+      return false
     }
   }
 
@@ -368,7 +360,7 @@ class SchedulerService {
       LIMIT ?
     `
       )
-      .all(limit);
+      .all(limit)
   }
 
   getUserScheduledJobs(userId: string): any[] {
@@ -381,8 +373,8 @@ class SchedulerService {
       ORDER BY scheduled_time ASC
     `
       )
-      .all(userId);
+      .all(userId)
   }
 }
 
-export const schedulerService = new SchedulerService();
+export const schedulerService = new SchedulerService()

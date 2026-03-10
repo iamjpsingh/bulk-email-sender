@@ -16,9 +16,9 @@ export const ENV = {
 
 // Server Configuration
 export const SERVER = {
-  PORT: parseInt(process.env.PORT || '3000', 10),
+  PORT: parseInt(process.env.PORT || '5500', 10),
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
-  BASE_URL: process.env.BASE_URL || 'http://localhost:3000',
+  BASE_URL: process.env.BASE_URL || 'http://localhost:5500',
 } as const
 
 // CORS Configuration
@@ -26,7 +26,7 @@ export const CORS = {
   ALLOWED_ORIGINS: [
     'http://localhost:5173',
     'http://localhost:5174',
-    'http://localhost:3000',
+    'http://localhost:5500',
     process.env.FRONTEND_URL,
   ].filter(Boolean) as string[],
 } as const
@@ -37,17 +37,18 @@ export const AUTH = {
   SESSION_EXPIRY_HOURS: 24,
   COOKIE_MAX_AGE: 7 * 24 * 60 * 60, // 7 days in seconds
   PUBLIC_PATHS: [
-    '/auth/login',
-    '/auth/register',
-    '/auth/google/callback',
-    '/auth/microsoft/callback',
-    '/oauth/status',
-    '/track/open/',
-    '/track/click/',
-    '/track/unsubscribe/',
-    '/track/status',
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/google/callback',
+    '/api/auth/microsoft/callback',
+    '/api/oauth/status',
+    '/api/track/open/',
+    '/api/track/click/',
+    '/api/track/unsubscribe/',
+    '/api/track/status',
     '/health',
     '/public/',
+    '/api/events/stream',
   ],
 } as const
 
@@ -68,11 +69,7 @@ export const OAUTH = {
     CLIENT_ID: process.env.MICROSOFT_CLIENT_ID,
     CLIENT_SECRET: process.env.MICROSOFT_CLIENT_SECRET,
     REDIRECT_URI: process.env.MICROSOFT_REDIRECT_URI || `${SERVER.BASE_URL}/auth/microsoft/callback`,
-    SCOPES: [
-      'https://graph.microsoft.com/Mail.Send',
-      'https://graph.microsoft.com/User.Read',
-      'offline_access',
-    ],
+    SCOPES: ['https://graph.microsoft.com/Mail.Send', 'https://graph.microsoft.com/User.Read', 'offline_access'],
     isConfigured: () => !!(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET),
   },
 } as const
@@ -100,7 +97,7 @@ export const DIRECTORIES = {
 
 // API Configuration
 export const API = {
-  VERSION: '2.0.0',
+  VERSION: '3.0.0',
   NAME: 'Dispatch API',
 } as const
 
@@ -119,6 +116,26 @@ export const COOKIE = {
     maxAge: AUTH.COOKIE_MAX_AGE,
     path: '/',
   },
+} as const
+
+// Worker/Timing Constants
+export const WORKERS = {
+  QUEUE_POLL_INTERVAL: 5000,
+  AUTOMATION_POLL_INTERVAL: 60000,
+  WARMUP_POLL_INTERVAL: 86400000,
+} as const
+
+export const BATCH_DEFAULTS = {
+  DELAY_SECONDS: 20,
+  BATCH_SIZE: 20,
+  EMAIL_DELAY: 60,
+  BATCH_DELAY: 45,
+  JOB_CLEAR_TIMEOUT: 30000,
+  MAX_RETRY_ATTEMPTS: 4,
+  MAX_CONCURRENT_JOBS: 3,
+  SSE_HEARTBEAT_INTERVAL: 30000,
+  SESSION_CACHE_TTL: 5 * 60 * 1000,
+  VALIDATION_BATCH_LIMIT: 100,
 } as const
 
 /**

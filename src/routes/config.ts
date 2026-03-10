@@ -6,6 +6,7 @@ import { Hono } from 'hono'
 import { d1UserDatabase } from '../services/d1UserDatabase'
 import { requireAuth } from '../middleware/auth'
 import { success, error } from '../utils/response'
+import { logger } from '../utils/logger'
 import { validateSMTPConfig } from '../utils/validation'
 
 const app = new Hono()
@@ -98,7 +99,7 @@ app.post('/config/smtp', async (c) => {
 
     return success(c, { configId }, '✅ Configuration saved')
   } catch (err) {
-    console.error('Error creating config:', err)
+    logger.error('Error creating config:', err)
     return error(c, 'Failed to save configuration', 500)
   }
 })
@@ -134,7 +135,7 @@ app.post('/config/create', async (c) => {
 
     return success(c, { configId }, configId ? '✅ Created' : 'Failed')
   } catch (err) {
-    console.error('Error creating config:', err)
+    logger.error('Error creating config:', err)
     return error(c, 'Failed to create', 500)
   }
 })
@@ -165,7 +166,7 @@ app.put('/config/smtp/:configId', async (c) => {
 
     return success(c, undefined, '✅ Configuration updated')
   } catch (err) {
-    console.error('Error updating config:', err)
+    logger.error('Error updating config:', err)
     return error(c, 'Failed to update configuration', 500)
   }
 })
@@ -185,7 +186,7 @@ app.post('/config/update/:configId', async (c) => {
 
     return success(c, undefined, updated ? '✅ Updated' : 'Not found')
   } catch (err) {
-    console.error('Error updating config:', err)
+    logger.error('Error updating config:', err)
     return error(c, 'Failed to update', 500)
   }
 })
@@ -210,7 +211,7 @@ app.delete('/config/smtp/:configId', async (c) => {
 
     return success(c, undefined, '✅ Configuration deleted')
   } catch (err) {
-    console.error('Error deleting config:', err)
+    logger.error('Error deleting config:', err)
     return error(c, 'Failed to delete configuration', 500)
   }
 })
@@ -227,7 +228,7 @@ app.delete('/config/delete/:configId', async (c) => {
     const deleted = await d1UserDatabase.deleteSMTPConfig(configId, user.id)
     return success(c, undefined, deleted ? '✅ Deleted' : 'Not found')
   } catch (err) {
-    console.error('Error deleting config:', err)
+    logger.error('Error deleting config:', err)
     return error(c, 'Failed to delete', 500)
   }
 })
@@ -252,7 +253,7 @@ app.post('/config/smtp/:configId/default', async (c) => {
 
     return success(c, undefined, '✅ Default configuration updated')
   } catch (err) {
-    console.error('Error setting default:', err)
+    logger.error('Error setting default:', err)
     return error(c, 'Failed to set default', 500)
   }
 })
@@ -279,7 +280,7 @@ app.post('/config/smtp/test', async (c) => {
       isValid ? '✅ Connection successful' : '❌ Connection failed'
     )
   } catch (err) {
-    console.error('Connection test error:', err)
+    logger.error('Connection test error:', err)
     return error(c, 'Connection test failed', 500)
   }
 })
@@ -318,7 +319,7 @@ app.post('/config/test/:configId', async (c) => {
       isValid ? '✅ Success' : '❌ Failed'
     )
   } catch (err) {
-    console.error('Test error:', err)
+    logger.error('Test error:', err)
     return error(c, 'Test failed', 500)
   }
 })

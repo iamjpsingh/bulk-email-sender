@@ -119,6 +119,28 @@ CREATE TABLE IF NOT EXISTS tracking_events (
 );
 
 -- ============================================================================
+-- COMPLIANCE & SUPPRESSION
+-- ============================================================================
+
+-- Suppression List (unsubscribes, bounces, complaints)
+CREATE TABLE IF NOT EXISTS suppressions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  reason TEXT NOT NULL CHECK (reason IN ('unsubscribe', 'hard_bounce', 'soft_bounce', 'complaint', 'manual')),
+  source TEXT DEFAULT 'system',
+  campaign_id TEXT,
+  bounce_code TEXT,
+  bounce_message TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(user_id, email, reason)
+);
+
+CREATE INDEX IF NOT EXISTS idx_suppressions_user ON suppressions(user_id);
+CREATE INDEX IF NOT EXISTS idx_suppressions_email ON suppressions(email);
+CREATE INDEX IF NOT EXISTS idx_suppressions_reason ON suppressions(reason);
+
+-- ============================================================================
 -- INDEXES
 -- ============================================================================
 
@@ -128,6 +150,15 @@ CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_smtp_configs_user ON smtp_configs(user_id);
+
+-- Add compliance columns to emails (safe to re-run)
+-- ALTER TABLE emails ADD COLUMN unsubscribed_at TEXT;
+-- ALTER TABLE emails ADD COLUMN bounced_at TEXT;
+-- ALTER TABLE emails ADD COLUMN bounce_reason TEXT;
+
+-- Add compliance columns to campaigns (safe to re-run)
+-- ALTER TABLE campaigns ADD COLUMN bounced_count INTEGER DEFAULT 0;
+-- ALTER TABLE campaigns ADD COLUMN unsubscribed_count INTEGER DEFAULT 0;
 
 -- Email tracking indexes
 CREATE INDEX IF NOT EXISTS idx_emails_tracking ON emails(tracking_id);

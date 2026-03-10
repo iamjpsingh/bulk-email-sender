@@ -9,6 +9,8 @@
  * 4. Reports page fetches stats from Worker API
  */
 
+import { logger } from '../utils/logger'
+
 interface TrackingConfig {
   workerUrl: string
   enabled: boolean
@@ -26,10 +28,10 @@ class D1Service {
 
   initialize(): boolean {
     if (this.config.workerUrl) {
-      console.log(`✅ Tracking Worker: ${this.config.workerUrl}`)
+      logger.info(`Tracking Worker: ${this.config.workerUrl}`)
       return true
     }
-    console.log('⚠️  Tracking Worker not configured (TRACKING_WORKER_URL)')
+    logger.warn('Tracking Worker not configured (TRACKING_WORKER_URL)')
     return false
   }
 
@@ -82,7 +84,7 @@ class D1Service {
       })
 
       if (!response.ok) {
-        console.error('Failed to register email with tracker:', await response.text())
+        logger.error('Failed to register email with tracker:', await response.text())
         return null
       }
 
@@ -90,7 +92,7 @@ class D1Service {
       return result.success ? { trackingId: result.tracking_id, emailId: result.email_id } : null
 
     } catch (error) {
-      console.error('Error registering email with tracker:', error)
+      logger.error('Error registering email with tracker:', error)
       return null
     }
   }
@@ -158,7 +160,7 @@ class D1Service {
       return data.success ? data.data : null
 
     } catch (error) {
-      console.error('Error fetching stats:', error)
+      logger.error('Error fetching stats:', error)
       return null
     }
   }
@@ -199,7 +201,7 @@ class D1Service {
       return data.success ? data : null
 
     } catch (error) {
-      console.error('Error fetching logs:', error)
+      logger.error('Error fetching logs:', error)
       return null
     }
   }
@@ -216,21 +218,21 @@ class D1Service {
    */
   async deleteLog(userId: string, logId: string): Promise<boolean> {
     if (!this.config.enabled) {
-      console.log('❌ D1 not configured, skipping delete')
+      logger.debug('D1 not configured, skipping delete')
       return false
     }
 
     try {
       const url = `${this.config.workerUrl}/api/logs/${logId}?user_id=${userId}`
-      console.log(`🗑️ Calling worker: DELETE ${url}`)
+      logger.debug(`Calling worker: DELETE ${url}`)
       
       const response = await fetch(url, { method: 'DELETE' })
       const text = await response.text()
-      console.log(`🗑️ Worker response: ${response.status} - ${text}`)
+      logger.debug(`Worker response: ${response.status} - ${text}`)
       
       return response.ok
     } catch (error) {
-      console.error('Error deleting log:', error)
+      logger.error('Error deleting log:', error)
       return false
     }
   }
@@ -249,7 +251,7 @@ class D1Service {
       })
       return response.ok
     } catch (error) {
-      console.error('Error deleting logs:', error)
+      logger.error('Error deleting logs:', error)
       return false
     }
   }

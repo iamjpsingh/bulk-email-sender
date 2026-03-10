@@ -8,6 +8,7 @@ import { d1UserDatabase } from '../services/d1UserDatabase'
 import { requireAuth } from '../middleware/auth'
 import { OAUTH } from '../config'
 import { success, error } from '../utils/response'
+import { logger } from '../utils/logger'
 import { handleOAuthCallback, getValidOAuthToken, type OAuthProvider } from '../utils/oauth'
 
 const app = new Hono()
@@ -48,7 +49,7 @@ app.get('/oauth/google/connect', (c) => {
     const authUrl = oauthService.getGoogleAuthUrl(user.id)
     return success(c, { authUrl })
   } catch (err) {
-    console.error('Google OAuth init error:', err)
+    logger.error('Google OAuth init error:', err)
     return error(c, 'Failed to initiate Google OAuth', 500)
   }
 })
@@ -63,7 +64,7 @@ app.get('/oauth/microsoft/connect', (c) => {
     const authUrl = oauthService.getMicrosoftAuthUrl(user.id)
     return success(c, { authUrl })
   } catch (err) {
-    console.error('Microsoft OAuth init error:', err)
+    logger.error('Microsoft OAuth init error:', err)
     return error(c, 'Failed to initiate Microsoft OAuth', 500)
   }
 })
@@ -115,10 +116,10 @@ app.delete('/oauth/:configId/disconnect', async (c) => {
       return error(c, 'Failed to disconnect', 500)
     }
 
-    console.log(`🔌 Disconnected ${config.provider_type} account: ${config.oauth_email}`)
+    logger.info(`Disconnected ${config.provider_type} account: ${config.oauth_email}`)
     return success(c, undefined, 'Account disconnected')
   } catch (err) {
-    console.error('OAuth disconnect error:', err)
+    logger.error('OAuth disconnect error:', err)
     return error(c, 'Failed to disconnect', 500)
   }
 })
@@ -159,7 +160,7 @@ app.post('/oauth/:configId/test', async (c) => {
       return error(c, 'Token expired. Please reconnect your account.', 400)
     }
   } catch (err) {
-    console.error('OAuth test error:', err)
+    logger.error('OAuth test error:', err)
     return error(c, 'Connection test failed', 500)
   }
 })

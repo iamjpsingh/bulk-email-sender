@@ -1,0 +1,128 @@
+// src/routes/warmup.ts - Email Warmup Endpoints
+
+import { Hono } from 'hono'
+import { requireAuth } from '../middleware/auth'
+import { success, error } from '../utils/response'
+import { warmupService } from '../services/warmupService'
+
+const app = new Hono()
+
+// List warmup plans
+app.get('/warmup', async (c) => {
+  const user = requireAuth(c)
+  const status = c.req.query('status')
+  const plans = warmupService.list(user.id, status || undefined)
+  return success(c, { plans })
+})
+
+// Get warmup plan
+app.get('/warmup/:id', async (c) => {
+  const user = requireAuth(c)
+  const planId = c.req.param('id')
+  const plan = warmupService.get(user.id, planId)
+
+  if (!plan) return error(c, 'Warmup plan not found', 404)
+  return success(c, plan)
+})
+
+// Get warmup progress with schedule and logs
+app.get('/warmup/:id/progress', async (c) => {
+  const user = requireAuth(c)
+  const planId = c.req.param('id')
+  const progress = warmupService.getProgress(user.id, planId)
+
+  if (!progress) return error(c, 'Warmup plan not found', 404)
+  return success(c, progress)
+})
+
+// Create warmup plan
+app.post('/warmup', async (c) => {
+  const user = requireAuth(c)
+  const body = await c.req.json()
+
+  if (!body.config_id) {
+    return error(c, 'config_id is required')
+  }
+
+  if (!body.schedule_type || !['conservative', 'moderate', 'aggressive', 'custom'].includes(body.schedule_type)) {
+    return error(c, 'Valid schedule_type required: conservative, moderate, aggressive, or custom')
+  }
+
+  const plan = warmupService.create(user.id, {
+    config_id: body.config_id,
+    config_name: body.config_name || '',
+    schedule_type: body.schedule_type,
+    starting_volume: body.starting_volume,
+    target_volume: body.target_volume,
+    custom_schedule: body.custom_schedule,
+  })
+
+  return success(c, plan, 'Warmup plan created', 201)
+})
+
+// Pause warmup
+app.post('/warmup/:id/pause', async (c) => {
+  const user = requireAuth(c)
+  const planId = c.req.param('id')
+
+  if (!warmupService.pause(user.id, planId)) {
+    return error(c, 'Cannot pause plan (not active or not found)', 404)
+  }
+
+  return success(c, null, 'Warmup plan paused')
+})
+
+// Resume warmup
+app.post('/warmup/:id/resume', async (c) => {
+  const user = requireAuth(c)
+  const planId = c.req.param('id')
+
+  if (!warmupService.resume(user.id, planId)) {
+    return error(c, 'Cannot resume plan (not paused or not found)', 404)
+  }
+
+  return success(c, null, 'Warmup plan resumed')
+})
+
+// Cancel warmup
+app.post('/warmup/:id/cancel', async (c) => {
+  const user = requireAuth(c)
+  const planId = c.req.param('id')
+
+  if (!warmupService.cancel(user.id, planId)) {
+    return error(c, 'Cannot cancel plan', 404)
+  }
+
+  return success(c, null, 'Warmup plan cancelled')
+})
+
+// Delete warmup (only completed/cancelled)
+app.delete('/warmup/:id', async (c) => {
+  const user = requireAuth(c)
+  const planId = c.req.param('id')
+
+  if (!warmupService.delete(user.id, planId)) {
+    return error(c, 'Cannot delete active warmup plan', 400)
+  }
+
+  return success(c, null, 'Warmup plan deleted')
+})
+
+// Check warmup status for a config
+app.get('/warmup/config/:configId', async (c) => {
+  const user = requireAuth(c)
+  const configId = c.req.param('configId')
+
+  const plan = warmupService.getActivePlanForConfig(user.id, configId)
+  const sendStatus = warmupService.canSendMore(user.id, configId)
+
+  return success(c, {
+    hasWarmup: !!plan,
+    plan,
+    canSend: sendStatus.allowed,
+    remaining: sendStatus.remaining,
+    dailyLimit: sendStatus.limit,
+  })
+})
+
+export default app

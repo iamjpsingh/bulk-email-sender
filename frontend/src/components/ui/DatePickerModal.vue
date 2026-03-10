@@ -192,21 +192,21 @@ function handleClose() {
   height: 36px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &:hover {
-    background: rgba(6, 182, 212, 0.1);
-    color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-accent);
   }
 }
 
 .month-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   margin: 0;
 }
 
@@ -225,7 +225,7 @@ function handleClose() {
   text-align: center;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   padding: 8px 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -245,37 +245,37 @@ function handleClose() {
   height: 40px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s ease;
-  
+
   &:hover:not(:disabled):not(.is-empty) {
-    background: rgba(6, 182, 212, 0.1);
-    color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-accent);
     transform: scale(1.05);
   }
-  
+
   &.is-today {
-    background: rgba(6, 182, 212, 0.15);
-    color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-accent);
     font-weight: 600;
-    border: 1px solid rgba(6, 182, 212, 0.3);
+    border: 1px solid rgba(99, 102, 241, 0.3);
   }
-  
+
   &.is-selected {
-    background: var(--accent-primary);
-    color: var(--bg-primary);
+    background: var(--color-accent);
+    color: var(--color-bg-primary);
     font-weight: 600;
-    
+
     &:hover {
-      background: #0891b2;
+      background: #4f46e5;
       transform: scale(1.05);
     }
   }
-  
+
   &.is-empty {
     cursor: default;
     opacity: 0;
