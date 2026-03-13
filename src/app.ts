@@ -14,6 +14,9 @@ import { existsSync } from 'fs'
 import { SERVER, CORS, AUTH, OAUTH, API, DIRECTORIES, ENV, COOKIE, WORKERS } from './config'
 import { logger } from './utils/logger'
 
+// Database initialization (must run before services)
+import { initDatabase } from './db'
+
 // Middleware
 import { authMiddleware } from './middleware/auth'
 import { authRateLimit, sendRateLimit, uploadRateLimit } from './middleware/rateLimit'
@@ -21,7 +24,7 @@ import { csrfTokenIssuer, csrfProtection } from './middleware/csrf'
 
 // Services
 import { d1Service } from './services/d1Service'
-import { d1UserDatabase } from './services/d1UserDatabase'
+import { authLocalService } from './services/authLocalService'
 
 // Routes
 import indexRoutes from './routes/index'
@@ -45,6 +48,7 @@ import routingRoutes from './routes/routing'
 import warmupRoutes from './routes/warmup'
 import analyticsRoutes from './routes/analytics'
 import pluginsRoutes from './routes/plugins'
+import adminRoutes from './routes/admin'
 
 // Queue Engine
 import { queueEngine } from './services/queueEngine'
@@ -135,6 +139,7 @@ const routes = [
   warmupRoutes,
   analyticsRoutes,
   pluginsRoutes,
+  adminRoutes,
 ]
 
 // Mount all API routes under /api prefix to avoid conflicts with frontend SPA routes
@@ -152,20 +157,20 @@ app.get('/health', (c) =>
   })
 )
 
-app.get('/api/user/info', async (c) => {
+app.get('/api/user/info', (c) => {
   const token = getCookie(c, COOKIE.SESSION_NAME)
   if (!token) {
     return c.json({ success: false, message: 'Not authenticated' }, 401)
   }
 
-  const user = await d1UserDatabase.validateSession(token)
-  if (!user) {
+  const session = authLocalService.validateSession(token)
+  if (!session) {
     return c.json({ success: false, message: 'Session expired' }, 401)
   }
 
   return c.json({
     success: true,
-    user: { id: user.id, email: user.email, name: user.name },
+    user: { id: session.user.id, email: session.user.email, name: session.user.name },
   })
 })
 
@@ -198,6 +203,9 @@ async function initialize() {
   // Create required directories
   const dirs = Object.values(DIRECTORIES)
   await Promise.all(dirs.map((dir) => !existsSync(dir) && mkdir(dir, { recursive: true })))
+
+  // Initialize database (run migrations)
+  initDatabase()
 
   // Initialize tracking service
   const trackingConfigured = d1Service.initialize()

@@ -15,6 +15,7 @@ export type CampaignLifecycleStatus = 'draft' | 'testing' | 'scheduled' | 'sendi
 
 export interface CampaignRecord {
   id: string
+  org_id: string
   user_id: string
   name: string
   type: CampaignType
@@ -115,6 +116,7 @@ class CampaignService {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS campaigns (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
         type TEXT DEFAULT 'one_time' CHECK (type IN ('one_time', 'recurring', 'ab_test', 'automation')),
@@ -175,6 +177,10 @@ class CampaignService {
       CREATE INDEX IF NOT EXISTS idx_ab_campaign ON ab_variants(campaign_id);
     `)
 
+    // Add org_id to existing tables (idempotent)
+    try { this.db.exec('ALTER TABLE campaigns ADD COLUMN org_id TEXT') } catch {}
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_camp_org ON campaigns(org_id)')
+
     logger.info('Campaigns database initialized (data/campaigns.db)')
   }
 
@@ -182,14 +188,14 @@ class CampaignService {
   // CRUD
   // --------------------------------------------------------------------------
 
-  create(userId: string, input: CampaignInput): CampaignRecord {
+  create(orgId: string, userId: string, input: CampaignInput): CampaignRecord {
     const id = `camp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
 
     this.db.prepare(`
-      INSERT INTO campaigns (id, user_id, name, type, subject, from_name, from_email, reply_to, template_id, list_id, segment_id, tags, folder, batch_size, email_delay, batch_delay)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO campaigns (id, org_id, user_id, name, type, subject, from_name, from_email, reply_to, template_id, list_id, segment_id, tags, folder, batch_size, email_delay, batch_delay)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, userId, input.name,
+      id, orgId, userId, input.name,
       input.type || 'one_time',
       input.subject, input.from_name, input.from_email,
       input.reply_to || null,
@@ -206,13 +212,13 @@ class CampaignService {
     return this.db.prepare('SELECT * FROM campaigns WHERE id = ?').get(id) as CampaignRecord
   }
 
-  get(userId: string, campaignId: string): CampaignRecord | null {
+  get(orgId: string, campaignId: string): CampaignRecord | null {
     return this.db.prepare(`
-      SELECT * FROM campaigns WHERE id = ? AND user_id = ?
-    `).get(campaignId, userId) as CampaignRecord | null
+      SELECT * FROM campaigns WHERE id = ? AND org_id = ?
+    `).get(campaignId, orgId) as CampaignRecord | null
   }
 
-  update(userId: string, campaignId: string, updates: Partial<CampaignInput>): boolean {
+  update(orgId: string, campaignId: string, updates: Partial<CampaignInput>): boolean {
     const sets: string[] = []
     const params: any[] = []
 
@@ -234,29 +240,29 @@ class CampaignService {
     if (sets.length === 0) return false
 
     sets.push("updated_at = datetime('now')")
-    params.push(campaignId, userId)
+    params.push(campaignId, orgId)
 
     const result = this.db.prepare(`
-      UPDATE campaigns SET ${sets.join(', ')} WHERE id = ? AND user_id = ? AND status IN ('draft', 'testing')
+      UPDATE campaigns SET ${sets.join(', ')} WHERE id = ? AND org_id = ? AND status IN ('draft', 'testing')
     `).run(...params)
 
     return result.changes > 0
   }
 
-  delete(userId: string, campaignId: string): boolean {
+  delete(orgId: string, campaignId: string): boolean {
     const result = this.db.prepare(`
-      DELETE FROM campaigns WHERE id = ? AND user_id = ? AND status IN ('draft', 'cancelled', 'archived')
-    `).run(campaignId, userId)
+      DELETE FROM campaigns WHERE id = ? AND org_id = ? AND status IN ('draft', 'cancelled', 'archived')
+    `).run(campaignId, orgId)
     return result.changes > 0
   }
 
-  list(userId: string, filters: CampaignFilters = {}): { campaigns: CampaignRecord[]; total: number } {
+  list(orgId: string, filters: CampaignFilters = {}): { campaigns: CampaignRecord[]; total: number } {
     const page = filters.page || 1
     const limit = Math.min(filters.limit || 20, 100)
     const offset = (page - 1) * limit
 
-    const conditions: string[] = ['user_id = ?']
-    const params: any[] = [userId]
+    const conditions: string[] = ['org_id = ?']
+    const params: any[] = [orgId]
 
     if (filters.status) {
       conditions.push('status = ?')
@@ -293,15 +299,15 @@ class CampaignService {
   // Lifecycle
   // --------------------------------------------------------------------------
 
-  saveDraft(userId: string, campaignId: string, draftData: unknown): boolean {
+  saveDraft(orgId: string, campaignId: string, draftData: unknown): boolean {
     const result = this.db.prepare(`
       UPDATE campaigns SET draft_data = ?, updated_at = datetime('now')
-      WHERE id = ? AND user_id = ?
-    `).run(JSON.stringify(draftData), campaignId, userId)
+      WHERE id = ? AND org_id = ?
+    `).run(JSON.stringify(draftData), campaignId, orgId)
     return result.changes > 0
   }
 
-  setStatus(userId: string, campaignId: string, status: CampaignLifecycleStatus): boolean {
+  setStatus(orgId: string, campaignId: string, status: CampaignLifecycleStatus): boolean {
     const extra: string[] = []
     if (status === 'sending') extra.push("sent_at = datetime('now')")
     if (status === 'completed') extra.push("completed_at = datetime('now')")
@@ -309,30 +315,30 @@ class CampaignService {
     const setClause = [`status = ?`, "updated_at = datetime('now')", ...extra].join(', ')
 
     const result = this.db.prepare(`
-      UPDATE campaigns SET ${setClause} WHERE id = ? AND user_id = ?
-    `).run(status, campaignId, userId)
+      UPDATE campaigns SET ${setClause} WHERE id = ? AND org_id = ?
+    `).run(status, campaignId, orgId)
 
     if (result.changes > 0) {
-      if (status === 'sending') eventBus.emit('campaign_launched', userId, { campaignId })
-      if (status === 'completed') eventBus.emit('campaign_completed', userId, { campaignId })
+      if (status === 'sending') eventBus.emit('campaign_launched', orgId, { campaignId })
+      if (status === 'completed') eventBus.emit('campaign_completed', orgId, { campaignId })
     }
 
     return result.changes > 0
   }
 
-  schedule(userId: string, campaignId: string, scheduledAt: string): boolean {
+  schedule(orgId: string, campaignId: string, scheduledAt: string): boolean {
     const result = this.db.prepare(`
       UPDATE campaigns SET status = 'scheduled', scheduled_at = ?, updated_at = datetime('now')
-      WHERE id = ? AND user_id = ? AND status IN ('draft', 'testing')
-    `).run(scheduledAt, campaignId, userId)
+      WHERE id = ? AND org_id = ? AND status IN ('draft', 'testing')
+    `).run(scheduledAt, campaignId, orgId)
     return result.changes > 0
   }
 
-  clone(userId: string, campaignId: string): CampaignRecord | null {
-    const original = this.get(userId, campaignId)
+  clone(orgId: string, userId: string, campaignId: string): CampaignRecord | null {
+    const original = this.get(orgId, campaignId)
     if (!original) return null
 
-    return this.create(userId, {
+    return this.create(orgId, userId, {
       name: `${original.name} (Copy)`,
       type: original.type,
       subject: original.subject,
@@ -371,8 +377,8 @@ class CampaignService {
     `).run(jobId, campaignId)
   }
 
-  getStats(userId: string, campaignId: string): CampaignRecord | null {
-    return this.get(userId, campaignId)
+  getStats(orgId: string, campaignId: string): CampaignRecord | null {
+    return this.get(orgId, campaignId)
   }
 
   // --------------------------------------------------------------------------
@@ -405,7 +411,7 @@ class CampaignService {
   /**
    * Get dashboard overview for campaigns
    */
-  getDashboardStats(userId: string): { total: number; drafts: number; sending: number; completed: number; scheduled: number } {
+  getDashboardStats(orgId: string): { total: number; drafts: number; sending: number; completed: number; scheduled: number } {
     const row = this.db.prepare(`
       SELECT
         COUNT(*) as total,
@@ -413,8 +419,8 @@ class CampaignService {
         SUM(CASE WHEN status = 'sending' THEN 1 ELSE 0 END) as sending,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
         SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) as scheduled
-      FROM campaigns WHERE user_id = ?
-    `).get(userId) as any
+      FROM campaigns WHERE org_id = ?
+    `).get(orgId) as any
 
     return {
       total: row.total || 0,

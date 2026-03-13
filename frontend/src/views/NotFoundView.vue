@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { AlertTriangle, ArrowLeft, Home } from 'lucide-vue-next'
+import { ArrowLeft, Home } from 'lucide-vue-next'
 
 const router = useRouter()
 
@@ -14,12 +14,16 @@ function goBack() {
 </script>
 
 <template>
-  <div class="not-found">
-    <div class="not-found-content">
-      <AlertTriangle :size="48" class="text-warning opacity-60" />
-      <h1>Page Not Found</h1>
-      <p class="text-muted">The page you're looking for doesn't exist or has been moved.</p>
-      <div class="not-found-actions">
+  <div class="min-h-screen flex items-center justify-center p-6 bg-bg-primary">
+    <div class="text-center max-w-[420px]">
+      <div class="mb-6">
+        <span class="block text-[100px] font-[800] tracking-[-0.05em] leading-none text-accent/20 select-none">404</span>
+      </div>
+      <h1 class="text-2xl font-semibold mb-3 text-text-primary">Page Not Found</h1>
+      <p class="text-sm text-text-muted mb-10 leading-relaxed max-w-[320px] mx-auto">
+        The page you're looking for doesn't exist or has been moved.
+      </p>
+      <div class="flex gap-3 justify-center">
         <button class="btn-ghost" @click="goBack">
           <ArrowLeft :size="16" />
           Go Back
@@ -32,37 +36,3 @@ function goBack() {
     </div>
   </div>
 </template>
-
-<style scoped>
-.not-found {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: var(--color-bg-primary);
-}
-
-.not-found-content {
-  text-align: center;
-  max-width: 400px;
-}
-
-.not-found-content h1 {
-  font-size: 28px;
-  font-weight: 700;
-  margin: 16px 0 8px;
-  color: var(--color-text-primary);
-}
-
-.not-found-content p {
-  color: var(--color-text-muted);
-  margin-bottom: 24px;
-}
-
-.not-found-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-}
-</style>

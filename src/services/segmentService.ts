@@ -11,6 +11,7 @@ import { logger } from '../utils/logger'
 
 export interface Segment {
   id: string
+  org_id: string
   user_id: string
   name: string
   description: string | null
@@ -68,6 +69,7 @@ class SegmentService {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS segments (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
@@ -94,6 +96,10 @@ class SegmentService {
       CREATE INDEX IF NOT EXISTS idx_sc_contact ON segment_contacts(contact_id);
     `)
 
+    // Add org_id to existing tables (idempotent)
+    try { this.db.exec('ALTER TABLE segments ADD COLUMN org_id TEXT') } catch {}
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_seg_org ON segments(org_id)')
+
     logger.info('Segments database initialized (data/segments.db)')
   }
 
@@ -101,14 +107,14 @@ class SegmentService {
   // CRUD
   // --------------------------------------------------------------------------
 
-  create(userId: string, input: SegmentInput): Segment {
+  create(orgId: string, userId: string, input: SegmentInput): Segment {
     const id = `seg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
 
     this.db.prepare(`
-      INSERT INTO segments (id, user_id, name, description, type, rules_json)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO segments (id, org_id, user_id, name, description, type, rules_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, userId, input.name,
+      id, orgId, userId, input.name,
       input.description || null,
       input.type || 'dynamic',
       input.rules ? JSON.stringify(input.rules) : null
@@ -117,13 +123,13 @@ class SegmentService {
     return this.db.prepare('SELECT * FROM segments WHERE id = ?').get(id) as Segment
   }
 
-  get(userId: string, segmentId: string): Segment | null {
+  get(orgId: string, segmentId: string): Segment | null {
     return this.db.prepare(`
-      SELECT * FROM segments WHERE id = ? AND user_id = ?
-    `).get(segmentId, userId) as Segment | null
+      SELECT * FROM segments WHERE id = ? AND org_id = ?
+    `).get(segmentId, orgId) as Segment | null
   }
 
-  update(userId: string, segmentId: string, updates: Partial<SegmentInput>): boolean {
+  update(orgId: string, segmentId: string, updates: Partial<SegmentInput>): boolean {
     const sets: string[] = []
     const params: any[] = []
 
@@ -135,26 +141,26 @@ class SegmentService {
     if (sets.length === 0) return false
 
     sets.push("updated_at = datetime('now')")
-    params.push(segmentId, userId)
+    params.push(segmentId, orgId)
 
     const result = this.db.prepare(`
-      UPDATE segments SET ${sets.join(', ')} WHERE id = ? AND user_id = ?
+      UPDATE segments SET ${sets.join(', ')} WHERE id = ? AND org_id = ?
     `).run(...params)
 
     return result.changes > 0
   }
 
-  delete(userId: string, segmentId: string): boolean {
+  delete(orgId: string, segmentId: string): boolean {
     const result = this.db.prepare(`
-      DELETE FROM segments WHERE id = ? AND user_id = ?
-    `).run(segmentId, userId)
+      DELETE FROM segments WHERE id = ? AND org_id = ?
+    `).run(segmentId, orgId)
     return result.changes > 0
   }
 
-  list(userId: string): Segment[] {
+  list(orgId: string): Segment[] {
     return this.db.prepare(`
-      SELECT * FROM segments WHERE user_id = ? ORDER BY updated_at DESC
-    `).all(userId) as Segment[]
+      SELECT * FROM segments WHERE org_id = ? ORDER BY updated_at DESC
+    `).all(orgId) as Segment[]
   }
 
   // --------------------------------------------------------------------------

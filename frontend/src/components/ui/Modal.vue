@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { X } from 'lucide-vue-next'
 
 interface Props {
@@ -19,6 +19,25 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
+const containerRef = ref<HTMLElement | null>(null)
+
+function trapFocus(event: KeyboardEvent) {
+  if (event.key !== 'Tab' || !containerRef.value) return
+  const focusable = containerRef.value.querySelectorAll<HTMLElement>(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  )
+  if (!focusable.length) return
+  const first = focusable[0] as HTMLElement | undefined
+  const last = focusable[focusable.length - 1] as HTMLElement | undefined
+  if (!first || !last) return
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
 
 function handleClose() {
   if (props.closable) {
@@ -38,11 +57,18 @@ function handleEscapeKey(event: KeyboardEvent) {
   }
 }
 
-watch(() => props.show, (newVal) => {
+watch(() => props.show, async (newVal) => {
   if (newVal) {
     document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', trapFocus)
+    await nextTick()
+    const firstFocusable = containerRef.value?.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    firstFocusable?.focus()
   } else {
     document.body.style.overflow = ''
+    document.removeEventListener('keydown', trapFocus)
   }
 })
 
@@ -55,6 +81,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleEscapeKey)
+  document.removeEventListener('keydown', trapFocus)
   document.body.style.overflow = ''
 })
 </script>
@@ -71,6 +98,7 @@ onUnmounted(() => {
         :aria-label="title"
       >
         <div
+          ref="containerRef"
           :class="[
             'modal-container',
             `modal-${size}`
@@ -105,7 +133,7 @@ onUnmounted(() => {
   </Teleport>
 </template>
 
-<style scoped lang="scss">
+<style scoped>
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -130,12 +158,12 @@ onUnmounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-
-  &.modal-sm { width: 100%; max-width: 400px; }
-  &.modal-md { width: 100%; max-width: 500px; }
-  &.modal-lg { width: 100%; max-width: 700px; }
-  &.modal-xl { width: 100%; max-width: 900px; }
+  width: 100%;
 }
+.modal-sm { max-width: 400px; }
+.modal-md { max-width: 500px; }
+.modal-lg { max-width: 700px; }
+.modal-xl { max-width: 900px; }
 
 .modal-header {
   display: flex;
@@ -144,14 +172,7 @@ onUnmounted(() => {
   padding: 20px 24px;
   border-bottom: 1px solid var(--color-border);
 }
-
-.modal-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
+.modal-title { font-size: 18px; font-weight: 600; color: var(--color-text-primary); margin: 0; }
 .modal-close {
   display: flex;
   align-items: center;
@@ -164,42 +185,28 @@ onUnmounted(() => {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
+}
+.modal-close:hover { background: rgba(239, 68, 68, 0.1); color: var(--color-danger); }
 
-  &:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: var(--color-danger);
+.modal-content { flex: 1; padding: 24px; overflow-y: auto; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 12px; }
+
+/* Transition */
+.modal-enter-active { transition: opacity 0.25s ease; }
+.modal-enter-active .modal-container { transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease; }
+.modal-leave-active { transition: opacity 0.15s ease; }
+.modal-leave-active .modal-container { transition: transform 0.15s ease, opacity 0.15s ease; }
+.modal-enter-from { opacity: 0; }
+.modal-enter-from .modal-container { transform: scale(0.95) translateY(10px); opacity: 0; }
+.modal-leave-to { opacity: 0; }
+.modal-leave-to .modal-container { transform: scale(0.97); opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-enter-active,
+  .modal-leave-active,
+  .modal-enter-active .modal-container,
+  .modal-leave-active .modal-container {
+    transition: none;
   }
-}
-
-.modal-content {
-  flex: 1;
-  padding: 24px;
-  overflow-y: auto;
-}
-
-.modal-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--color-border);
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-// Transition
-.modal-enter-active {
-  transition: opacity 0.25s ease;
-  .modal-container { transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease; }
-}
-.modal-leave-active {
-  transition: opacity 0.15s ease;
-  .modal-container { transition: transform 0.15s ease, opacity 0.15s ease; }
-}
-.modal-enter-from {
-  opacity: 0;
-  .modal-container { transform: scale(0.95) translateY(10px); opacity: 0; }
-}
-.modal-leave-to {
-  opacity: 0;
-  .modal-container { transform: scale(0.97); opacity: 0; }
 }
 </style>

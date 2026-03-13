@@ -75,11 +75,8 @@ function handleModalClose() {
   </div>
 </template>
 
-<style scoped lang="scss">
-.date-input-wrapper {
-  position: relative;
-}
-
+<style scoped>
+.date-input-wrapper { position: relative; }
 .date-input {
   width: 100%;
   padding: 14px 48px 14px 16px;
@@ -91,36 +88,10 @@ function handleModalClose() {
   border-radius: var(--radius-md);
   transition: all 0.2s ease;
   cursor: pointer;
-
-  &::placeholder {
-    color: var(--color-text-muted);
-  }
-
-  &:focus {
-    outline: none;
-    border-color: var(--color-accent);
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
-    background: var(--color-bg-primary);
-  }
-
-  &:hover:not(:focus) {
-    border-color: rgba(99, 102, 241, 0.3);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    background: var(--color-bg-card);
-  }
 }
-
-.date-icon {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--color-accent);
-  pointer-events: none;
-  transition: color 0.2s ease;
-}
+.date-input::placeholder { color: var(--color-text-muted); }
+.date-input:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1); background: var(--color-bg-primary); }
+.date-input:hover:not(:focus) { border-color: rgba(99, 102, 241, 0.3); }
+.date-input:disabled { opacity: 0.6; cursor: not-allowed; background: var(--color-bg-card); }
+.date-icon { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--color-accent); pointer-events: none; transition: color 0.2s ease; }
 </style>

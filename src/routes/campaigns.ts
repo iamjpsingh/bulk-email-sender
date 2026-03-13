@@ -1,7 +1,9 @@
 // src/routes/campaigns.ts - Campaign Management API
 
 import { Hono } from 'hono'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, getOrgId } from '../middleware/auth'
+import { requirePermission } from '../middleware/rbac'
+import { PERMISSIONS } from '../services/rbacService'
 import { campaignService, type CampaignLifecycleStatus, type CampaignType } from '../services/campaignService'
 import { success, error } from '../utils/response'
 
@@ -11,8 +13,8 @@ const app = new Hono()
 // Campaign CRUD
 // ============================================================================
 
-app.get('/campaigns', (c) => {
-  const user = requireAuth(c)
+app.get('/campaigns', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const orgId = getOrgId(c)
 
   const filters = {
     status: c.req.query('status') as CampaignLifecycleStatus | undefined,
@@ -23,7 +25,7 @@ app.get('/campaigns', (c) => {
     limit: parseInt(c.req.query('limit') || '20'),
   }
 
-  const { campaigns, total } = campaignService.list(user.id, filters)
+  const { campaigns, total } = campaignService.list(orgId, filters)
 
   return c.json({
     success: true,
@@ -40,52 +42,53 @@ app.get('/campaigns', (c) => {
   })
 })
 
-app.post('/campaigns', async (c) => {
+app.post('/campaigns', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const user = requireAuth(c)
+  const orgId = getOrgId(c)
   const body = await c.req.json()
 
   if (!body.name?.trim() || !body.subject?.trim() || !body.from_email?.trim() || !body.from_name?.trim()) {
     return error(c, 'Name, subject, from_email, and from_name are required', 400)
   }
 
-  const campaign = campaignService.create(user.id, body)
+  const campaign = campaignService.create(orgId, user.id, body)
   return success(c, campaign, 'Campaign created', 201)
 })
 
-app.get('/campaigns/dashboard', (c) => {
-  const user = requireAuth(c)
-  const stats = campaignService.getDashboardStats(user.id)
+app.get('/campaigns/dashboard', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const stats = campaignService.getDashboardStats(orgId)
   return success(c, stats)
 })
 
-app.get('/campaigns/:id', (c) => {
-  const user = requireAuth(c)
+app.get('/campaigns/:id', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
 
   if (campaignId === 'dashboard') return c.notFound()
 
-  const campaign = campaignService.get(user.id, campaignId)
+  const campaign = campaignService.get(orgId, campaignId)
   if (!campaign) return error(c, 'Campaign not found', 404)
 
   return success(c, campaign)
 })
 
-app.put('/campaigns/:id', async (c) => {
-  const user = requireAuth(c)
+app.put('/campaigns/:id', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
   const body = await c.req.json()
 
-  const updated = campaignService.update(user.id, campaignId, body)
+  const updated = campaignService.update(orgId, campaignId, body)
   if (!updated) return error(c, 'Campaign not found or cannot be edited', 404)
 
   return success(c, undefined, 'Campaign updated')
 })
 
-app.delete('/campaigns/:id', (c) => {
-  const user = requireAuth(c)
+app.delete('/campaigns/:id', requirePermission(PERMISSIONS.CAMPAIGNS_DELETE), (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
 
-  const deleted = campaignService.delete(user.id, campaignId)
+  const deleted = campaignService.delete(orgId, campaignId)
   if (!deleted) return error(c, 'Campaign not found or cannot be deleted', 404)
 
   return success(c, undefined, 'Campaign deleted')
@@ -95,19 +98,19 @@ app.delete('/campaigns/:id', (c) => {
 // Campaign Lifecycle
 // ============================================================================
 
-app.post('/campaigns/:id/draft', async (c) => {
-  const user = requireAuth(c)
+app.post('/campaigns/:id/draft', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
   const body = await c.req.json()
 
-  const saved = campaignService.saveDraft(user.id, campaignId, body)
+  const saved = campaignService.saveDraft(orgId, campaignId, body)
   if (!saved) return error(c, 'Campaign not found', 404)
 
   return success(c, undefined, 'Draft saved')
 })
 
-app.post('/campaigns/:id/schedule', async (c) => {
-  const user = requireAuth(c)
+app.post('/campaigns/:id/schedule', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
   const body = await c.req.json()
 
@@ -115,57 +118,58 @@ app.post('/campaigns/:id/schedule', async (c) => {
     return error(c, 'scheduled_at is required', 400)
   }
 
-  const scheduled = campaignService.schedule(user.id, campaignId, body.scheduled_at)
+  const scheduled = campaignService.schedule(orgId, campaignId, body.scheduled_at)
   if (!scheduled) return error(c, 'Campaign not found or not in draft/testing status', 404)
 
   return success(c, undefined, 'Campaign scheduled')
 })
 
-app.post('/campaigns/:id/launch', (c) => {
-  const user = requireAuth(c)
+app.post('/campaigns/:id/launch', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
 
-  const launched = campaignService.setStatus(user.id, campaignId, 'sending')
+  const launched = campaignService.setStatus(orgId, campaignId, 'sending')
   if (!launched) return error(c, 'Campaign not found', 404)
 
   return success(c, undefined, 'Campaign launched')
 })
 
-app.post('/campaigns/:id/pause', (c) => {
-  const user = requireAuth(c)
+app.post('/campaigns/:id/pause', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
 
-  const paused = campaignService.setStatus(user.id, campaignId, 'paused')
+  const paused = campaignService.setStatus(orgId, campaignId, 'paused')
   if (!paused) return error(c, 'Campaign not found', 404)
 
   return success(c, undefined, 'Campaign paused')
 })
 
-app.post('/campaigns/:id/cancel', (c) => {
-  const user = requireAuth(c)
+app.post('/campaigns/:id/cancel', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
 
-  const cancelled = campaignService.setStatus(user.id, campaignId, 'cancelled')
+  const cancelled = campaignService.setStatus(orgId, campaignId, 'cancelled')
   if (!cancelled) return error(c, 'Campaign not found', 404)
 
   return success(c, undefined, 'Campaign cancelled')
 })
 
-app.post('/campaigns/:id/clone', (c) => {
+app.post('/campaigns/:id/clone', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
   const user = requireAuth(c)
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
 
-  const cloned = campaignService.clone(user.id, campaignId)
+  const cloned = campaignService.clone(orgId, user.id, campaignId)
   if (!cloned) return error(c, 'Campaign not found', 404)
 
   return success(c, cloned, 'Campaign cloned', 201)
 })
 
-app.post('/campaigns/:id/archive', (c) => {
-  const user = requireAuth(c)
+app.post('/campaigns/:id/archive', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
 
-  const archived = campaignService.setStatus(user.id, campaignId, 'archived')
+  const archived = campaignService.setStatus(orgId, campaignId, 'archived')
   if (!archived) return error(c, 'Campaign not found', 404)
 
   return success(c, undefined, 'Campaign archived')
@@ -175,11 +179,11 @@ app.post('/campaigns/:id/archive', (c) => {
 // Campaign Stats
 // ============================================================================
 
-app.get('/campaigns/:id/stats', (c) => {
-  const user = requireAuth(c)
+app.get('/campaigns/:id/stats', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
 
-  const stats = campaignService.getStats(user.id, campaignId)
+  const stats = campaignService.getStats(orgId, campaignId)
   if (!stats) return error(c, 'Campaign not found', 404)
 
   return success(c, {
@@ -199,12 +203,12 @@ app.get('/campaigns/:id/stats', (c) => {
 // A/B Testing
 // ============================================================================
 
-app.post('/campaigns/:id/ab/variant', async (c) => {
-  const user = requireAuth(c)
+app.post('/campaigns/:id/ab/variant', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
   const body = await c.req.json()
 
-  const campaign = campaignService.get(user.id, campaignId)
+  const campaign = campaignService.get(orgId, campaignId)
   if (!campaign) return error(c, 'Campaign not found', 404)
 
   const variant = campaignService.createABVariant(campaignId, body.label || 'A', body.percentage || 50, {
@@ -217,18 +221,18 @@ app.post('/campaigns/:id/ab/variant', async (c) => {
   return success(c, variant, 'Variant created', 201)
 })
 
-app.get('/campaigns/:id/ab/variants', (c) => {
-  const user = requireAuth(c)
+app.get('/campaigns/:id/ab/variants', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
 
-  const campaign = campaignService.get(user.id, campaignId)
+  const campaign = campaignService.get(orgId, campaignId)
   if (!campaign) return error(c, 'Campaign not found', 404)
 
   const variants = campaignService.getABVariants(campaignId)
   return success(c, { variants })
 })
 
-app.post('/campaigns/:id/ab/winner', async (c) => {
+app.post('/campaigns/:id/ab/winner', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const user = requireAuth(c)
   const campaignId = c.req.param('id')
   const body = await c.req.json()

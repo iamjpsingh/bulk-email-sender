@@ -17,6 +17,7 @@ export type EnrollmentStatus = 'active' | 'paused' | 'completed' | 'exited'
 
 export interface Automation {
   id: string
+  org_id: string
   user_id: string
   name: string
   description: string | null
@@ -110,6 +111,7 @@ class AutomationService {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS automations (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
@@ -165,6 +167,10 @@ class AutomationService {
       CREATE INDEX IF NOT EXISTS idx_ae_contact ON automation_enrollments(contact_id);
     `)
 
+    // Add org_id to existing tables (idempotent)
+    try { this.db.exec('ALTER TABLE automations ADD COLUMN org_id TEXT') } catch {}
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_auto_org ON automations(org_id)')
+
     logger.info('Automations database initialized (data/automations.db)')
   }
 
@@ -172,14 +178,14 @@ class AutomationService {
   // CRUD
   // --------------------------------------------------------------------------
 
-  create(userId: string, input: AutomationInput): Automation {
+  create(orgId: string, userId: string, input: AutomationInput): Automation {
     const id = `auto_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
 
     this.db.prepare(`
-      INSERT INTO automations (id, user_id, name, description, trigger_type, trigger_config, entry_list_id, flow_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO automations (id, org_id, user_id, name, description, trigger_type, trigger_config, entry_list_id, flow_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, userId, input.name,
+      id, orgId, userId, input.name,
       input.description || null,
       input.trigger_type,
       JSON.stringify(input.trigger_config || {}),
@@ -190,13 +196,13 @@ class AutomationService {
     return this.db.prepare('SELECT * FROM automations WHERE id = ?').get(id) as Automation
   }
 
-  get(userId: string, automationId: string): Automation | null {
+  get(orgId: string, automationId: string): Automation | null {
     return this.db.prepare(`
-      SELECT * FROM automations WHERE id = ? AND user_id = ?
-    `).get(automationId, userId) as Automation | null
+      SELECT * FROM automations WHERE id = ? AND org_id = ?
+    `).get(automationId, orgId) as Automation | null
   }
 
-  update(userId: string, automationId: string, updates: Partial<AutomationInput>): boolean {
+  update(orgId: string, automationId: string, updates: Partial<AutomationInput>): boolean {
     const sets: string[] = []
     const params: any[] = []
 
@@ -210,35 +216,35 @@ class AutomationService {
     if (sets.length === 0) return false
 
     sets.push("updated_at = datetime('now')")
-    params.push(automationId, userId)
+    params.push(automationId, orgId)
 
     const result = this.db.prepare(`
-      UPDATE automations SET ${sets.join(', ')} WHERE id = ? AND user_id = ? AND status IN ('draft', 'paused')
+      UPDATE automations SET ${sets.join(', ')} WHERE id = ? AND org_id = ? AND status IN ('draft', 'paused')
     `).run(...params)
 
     return result.changes > 0
   }
 
-  delete(userId: string, automationId: string): boolean {
+  delete(orgId: string, automationId: string): boolean {
     const result = this.db.prepare(`
-      DELETE FROM automations WHERE id = ? AND user_id = ? AND status IN ('draft', 'completed')
-    `).run(automationId, userId)
+      DELETE FROM automations WHERE id = ? AND org_id = ? AND status IN ('draft', 'completed')
+    `).run(automationId, orgId)
     return result.changes > 0
   }
 
-  list(userId: string): Automation[] {
+  list(orgId: string): Automation[] {
     return this.db.prepare(`
-      SELECT * FROM automations WHERE user_id = ? ORDER BY updated_at DESC
-    `).all(userId) as Automation[]
+      SELECT * FROM automations WHERE org_id = ? ORDER BY updated_at DESC
+    `).all(orgId) as Automation[]
   }
 
   // --------------------------------------------------------------------------
   // Lifecycle
   // --------------------------------------------------------------------------
 
-  activate(userId: string, automationId: string): boolean {
+  activate(orgId: string, automationId: string): boolean {
     // First, compile flow into steps
-    const automation = this.get(userId, automationId)
+    const automation = this.get(orgId, automationId)
     if (!automation) return false
 
     const flow: AutomationFlow = JSON.parse(automation.flow_json)
@@ -246,25 +252,25 @@ class AutomationService {
 
     const result = this.db.prepare(`
       UPDATE automations SET status = 'active', updated_at = datetime('now')
-      WHERE id = ? AND user_id = ? AND status IN ('draft', 'paused')
-    `).run(automationId, userId)
+      WHERE id = ? AND org_id = ? AND status IN ('draft', 'paused')
+    `).run(automationId, orgId)
 
     return result.changes > 0
   }
 
-  pause(userId: string, automationId: string): boolean {
+  pause(orgId: string, automationId: string): boolean {
     const result = this.db.prepare(`
       UPDATE automations SET status = 'paused', updated_at = datetime('now')
-      WHERE id = ? AND user_id = ? AND status = 'active'
-    `).run(automationId, userId)
+      WHERE id = ? AND org_id = ? AND status = 'active'
+    `).run(automationId, orgId)
     return result.changes > 0
   }
 
-  deactivate(userId: string, automationId: string): boolean {
+  deactivate(orgId: string, automationId: string): boolean {
     const result = this.db.prepare(`
       UPDATE automations SET status = 'completed', updated_at = datetime('now')
-      WHERE id = ? AND user_id = ?
-    `).run(automationId, userId)
+      WHERE id = ? AND org_id = ?
+    `).run(automationId, orgId)
     return result.changes > 0
   }
 

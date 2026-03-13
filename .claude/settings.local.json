@@ -17,7 +17,21 @@
       "Bash(done)",
       "Bash(sed:*)",
       "WebSearch",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(bun remove:*)",
+      "Bash(grep:*)",
+      "Bash(grep \"\"sass\"\":*)",
+      "Bash(npx vite:*)",
+      "Bash(for ext in underline link image text-align color highlight placeholder starter-kit)",
+      "Bash(do echo \"=== $ext ===\")",
+      "Read(//Users/jpsingh/Developer/Project/bulk-email-sender/frontend/node_modules/@tiptap/extension-$ext/dist/**)",
+      "Bash(for ext in underline link image text-align color highlight placeholder)",
+      "Read(//Users/jpsingh/.claude/projects/-Users-jpsingh-Developer-Project-bulk-email-sender/114366ce-dc18-421a-8f98-f41b97f67482/subagents/**)",
+      "Bash(bunx tsc:*)",
+      "Bash(bun:*)",
+      "Bash(lsof -ti:5500 | xargs kill -9 2>/dev/null; echo \"Port 5500 freed\")",
+      "Bash(lsof -i:5500 2>/dev/null | head -10)",
+      "Bash(pkill -f \"bun.*app.ts\" 2>/dev/null; sleep 1; ps aux | grep -i \"bun.*app.ts\" | grep -v grep)"
     ]
   },
   "enableAllProjectMcpServers": true,

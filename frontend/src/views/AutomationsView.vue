@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import MainLayout from '../components/layout/MainLayout.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
+import Modal from '../components/ui/Modal.vue'
+import StatusBadge from '../components/ui/StatusBadge.vue'
+import Skeleton from '../components/ui/Skeleton.vue'
+import StatCard from '../components/ui/StatCard.vue'
 import { automationsApi } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import {
@@ -18,6 +25,10 @@ import {
   GitBranch,
   ArrowDown,
   Inbox,
+  Users,
+  CheckCircle,
+  AlertTriangle,
+  Activity,
 } from 'lucide-vue-next'
 
 const toast = useToast()
@@ -56,6 +67,7 @@ const createForm = ref({ name: '', description: '', trigger_type: 'manual', entr
 const creating = ref(false)
 const showStepSelector = ref(false)
 const editingStepIndex = ref<number | null>(null)
+const deleteConfirm = ref<{ show: boolean; id: string }>({ show: false, id: '' })
 
 const selected = computed(() => automations.value.find((a) => a.id === selectedId.value) || null)
 
@@ -97,8 +109,13 @@ async function handleCreate() {
   }
 }
 
-async function handleDelete(id: string) {
-  if (!confirm('Delete this automation? This cannot be undone.')) return
+function promptDelete(id: string) {
+  deleteConfirm.value = { show: true, id }
+}
+
+async function confirmDelete() {
+  const id = deleteConfirm.value.id
+  deleteConfirm.value.show = false
   try {
     await automationsApi.delete(id)
     automations.value = automations.value.filter((a) => a.id !== id)
@@ -158,7 +175,6 @@ async function saveFlow() {
   }
 }
 
-const statusClass: Record<string, string> = { active: 'success', paused: 'warning', draft: 'info' }
 const triggerLabels: Record<string, string> = {
   list_join: 'List Join',
   tag_added: 'Tag Added',
@@ -202,43 +218,35 @@ fetchAutomations()
 
 <template>
   <MainLayout>
-    <header class="flex justify-between items-center mb-8">
-      <div>
-        <h1 class="text-[28px] font-bold mb-1 text-text-primary">Automations</h1>
-        <p class="text-text-muted">Build automated email workflows</p>
-      </div>
-      <button class="btn-primary" @click="showCreateModal = true"><Plus :size="18" /> New Automation</button>
-    </header>
+    <PageHeader title="Automations" subtitle="Build automated email workflows">
+      <template #actions>
+        <button class="btn-primary" @click="showCreateModal = true"><Plus :size="16" /> New Automation</button>
+      </template>
+    </PageHeader>
 
     <div class="flex gap-6 items-start max-[900px]:flex-col">
       <!-- List -->
-      <div class="w-[340px] min-w-[340px] max-[900px]:w-full max-[900px]:min-w-0 glass-card p-0 overflow-hidden">
-        <div v-if="loading" class="text-center py-10 px-5 text-text-muted flex flex-col items-center gap-2">
-          <Loader2 :size="24" class="spin" /> Loading...
+      <div class="w-[320px] min-w-[320px] max-[900px]:w-full max-[900px]:min-w-0 bg-bg-card border border-border rounded-xl overflow-hidden">
+        <div v-if="loading" class="flex flex-col">
+          <Skeleton variant="text" :count="5" height="56px" />
         </div>
-        <div
-          v-else-if="automations.length === 0"
-          class="text-center py-10 px-5 text-text-muted flex flex-col items-center gap-2"
-        >
-          <Inbox :size="40" />
-          <p>No automations yet</p>
-        </div>
+        <EmptyState v-else-if="automations.length === 0" :icon="Inbox" title="No automations yet" />
         <div v-else class="flex flex-col">
           <div
             v-for="a in automations"
             :key="a.id"
-            class="px-5 py-4 cursor-pointer border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-accent/5"
-            :class="{ 'bg-accent/10 border-l-[3px] border-l-accent': selectedId === a.id }"
+            class="px-4 py-3.5 cursor-pointer border-b border-border transition-all duration-150 last:border-b-0"
+            :class="selectedId === a.id ? 'bg-accent/8 border-l-[3px] border-l-accent' : 'hover:bg-bg-tertiary'"
             @click="selectAutomation(a.id)"
           >
-            <div class="flex justify-between items-center mb-2">
-              <span class="font-semibold text-sm text-text-primary">{{ a.name }}</span
-              ><span :class="`badge-${statusClass[a.status] || 'info'}`">{{ a.status }}</span>
+            <div class="flex justify-between items-center mb-1.5">
+              <span class="font-semibold text-sm text-text-primary truncate">{{ a.name }}</span>
+              <StatusBadge :status="a.status" type="automation" />
             </div>
             <div class="flex items-center gap-2.5 flex-wrap">
               <span class="badge-info">{{ triggerLabels[a.trigger_type] || a.trigger_type }}</span>
-              <span class="text-text-muted text-sm">{{ a.enrolled_count }} enrolled</span>
-              <span class="text-text-muted text-sm">{{ a.completed_count }} done</span>
+              <span class="text-text-muted text-[13px]">{{ a.enrolled_count }} enrolled</span>
+              <span class="text-text-muted text-[13px]">{{ a.completed_count }} done</span>
             </div>
           </div>
         </div>
@@ -246,111 +254,109 @@ fetchAutomations()
 
       <!-- Detail -->
       <div class="flex-1 min-w-0 flex flex-col gap-4" v-if="selected">
-        <div class="glass-card p-5 flex justify-between items-start gap-4">
+        <!-- Header card -->
+        <div class="bg-bg-card border border-border rounded-xl p-5 flex justify-between items-start gap-4">
           <div class="flex-1 min-w-0">
-            <h2 class="text-xl font-bold mb-1 text-text-primary">{{ selected.name }}</h2>
+            <h2 class="text-lg font-semibold mb-1 text-text-primary">{{ selected.name }}</h2>
             <p class="text-text-muted text-sm">{{ selected.description || 'No description' }}</p>
           </div>
-          <div class="flex gap-2 flex-wrap">
+          <div class="flex gap-2 flex-wrap shrink-0">
             <button
               v-if="selected.status !== 'active'"
               class="btn-primary text-sm px-3 py-1.5"
               @click="handleAction(selected.id, 'activate')"
             >
-              <Play :size="16" /> Activate
+              <Play :size="14" /> Activate
             </button>
             <button
               v-if="selected.status === 'active'"
               class="btn-secondary text-sm px-3 py-1.5"
               @click="handleAction(selected.id, 'pause')"
             >
-              <Pause :size="16" /> Pause
+              <Pause :size="14" /> Pause
             </button>
             <button
               v-if="selected.status !== 'draft'"
               class="btn-secondary text-sm px-3 py-1.5"
               @click="handleAction(selected.id, 'deactivate')"
             >
-              <Square :size="16" /> Deactivate
+              <Square :size="14" /> Deactivate
             </button>
-            <button class="btn-danger text-sm px-3 py-1.5" @click="handleDelete(selected.id)">
-              <Trash2 :size="16" /> Delete
+            <button class="btn-danger text-sm px-3 py-1.5" @click="promptDelete(selected.id)">
+              <Trash2 :size="14" /> Delete
             </button>
           </div>
         </div>
 
-        <div v-if="selected.status === 'active'" class="grid grid-cols-4 max-[900px]:grid-cols-2 gap-3">
-          <div
-            class="bg-bg-card border border-border rounded-lg p-4 text-center"
-            v-for="s in [
-              { v: stats.enrolled, l: 'Enrolled' },
-              { v: stats.active, l: 'Active' },
-              { v: stats.completed, l: 'Completed' },
-              { v: stats.failed, l: 'Failed' },
-            ]"
-            :key="s.l"
-          >
-            <span class="block text-2xl font-bold text-text-primary mb-1 font-mono">{{ s.v }}</span
-            ><span class="text-xs text-text-muted uppercase tracking-wider">{{ s.l }}</span>
-          </div>
+        <!-- Stats -->
+        <div v-if="selected.status === 'active'" class="grid grid-cols-4 max-[900px]:grid-cols-2 gap-4">
+          <StatCard :icon="Users" :value="stats.enrolled" label="Enrolled" />
+          <StatCard :icon="Activity" :value="stats.active" label="Active" color="accent" />
+          <StatCard :icon="CheckCircle" :value="stats.completed" label="Completed" color="success" />
+          <StatCard :icon="AlertTriangle" :value="stats.failed" label="Failed" color="danger" />
         </div>
 
-        <div class="glass-card p-6">
+        <!-- Workflow Steps -->
+        <div class="bg-bg-card border border-border rounded-xl p-6">
           <div class="flex justify-between items-center mb-6">
-            <h3 class="text-base font-semibold text-text-primary">Workflow Steps</h3>
+            <h3 class="text-sm font-semibold text-text-primary">Workflow Steps</h3>
             <button class="btn-secondary text-sm px-3 py-1.5" @click="saveFlow">Save Flow</button>
           </div>
-          <div
-            class="flex items-center gap-3 py-3.5 px-4 bg-accent/10 border border-border-glow rounded-lg text-accent font-semibold text-sm"
-          >
-            <Workflow :size="18" /><span>Trigger: {{ triggerLabels[selected.trigger_type] }}</span>
+
+          <!-- Trigger -->
+          <div class="flex items-center gap-3 py-3.5 px-4 bg-accent/8 border border-accent/20 rounded-lg text-accent font-semibold text-sm">
+            <Workflow :size="18" />
+            <span>Trigger: {{ triggerLabels[selected.trigger_type] }}</span>
           </div>
+
           <div class="flex justify-center py-2 text-text-muted" v-if="selected.steps.length">
             <ArrowDown :size="16" />
           </div>
 
           <template v-for="(step, idx) in selected.steps" :key="step.id">
+            <!-- Step card -->
             <div
-              class="flex items-center gap-3 py-3.5 px-4 bg-bg-secondary border border-border rounded-lg cursor-pointer transition-all duration-150 hover:border-accent/30"
-              :class="{ '!border-accent shadow-[0_0_0_2px_rgba(6,182,212,0.1)]': editingStepIndex === idx }"
+              class="flex items-center gap-3 py-3.5 px-4 bg-bg-tertiary border border-border rounded-lg cursor-pointer transition-all duration-150 hover:border-accent/30"
+              :class="{ '!border-accent shadow-[0_0_0_1px] shadow-accent/10': editingStepIndex === idx }"
               @click="editingStepIndex = editingStepIndex === idx ? null : idx"
             >
-              <component :is="stepIcons[step.type]" :size="18" />
+              <div class="w-8 h-8 rounded-lg bg-bg-card border border-border flex items-center justify-center shrink-0">
+                <component :is="stepIcons[step.type]" :size="16" class="text-text-secondary" />
+              </div>
               <div class="flex-1 min-w-0 flex flex-col">
-                <span class="font-semibold text-sm">{{ stepLabels[step.type] }}</span
-                ><span class="text-text-muted text-sm whitespace-nowrap overflow-hidden text-ellipsis">{{
-                  getStepSummary(step)
-                }}</span>
+                <span class="font-semibold text-sm text-text-primary">{{ stepLabels[step.type] }}</span>
+                <span class="text-text-muted text-[13px] whitespace-nowrap overflow-hidden text-ellipsis">{{ getStepSummary(step) }}</span>
               </div>
               <button
-                class="bg-transparent border-none cursor-pointer text-text-muted p-1 rounded transition-all duration-150 flex items-center hover:text-danger hover:bg-danger/10"
+                class="bg-transparent border-none cursor-pointer text-text-muted p-1.5 rounded-md transition-all duration-150 flex items-center hover:text-danger hover:bg-danger/10"
                 @click.stop="removeStep(idx)"
                 title="Remove"
               >
                 <X :size="14" />
               </button>
             </div>
+
             <!-- Step Config -->
             <div v-if="editingStepIndex === idx" class="mt-2 p-4 bg-bg-card border border-border rounded-lg">
               <template v-if="step.type === 'send_email'">
                 <div class="form-group">
-                  <label class="form-label">Template ID</label
-                  ><input class="form-input" v-model="step.config.template_id" placeholder="Select a template..." />
+                  <label class="form-label">Template ID</label>
+                  <input class="form-input" v-model="step.config.template_id" placeholder="Select a template..." />
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Subject</label
-                  ><input class="form-input" v-model="step.config.subject" placeholder="Email subject line" />
+                  <label class="form-label">Subject</label>
+                  <input class="form-input" v-model="step.config.subject" placeholder="Email subject line" />
                 </div>
               </template>
               <template v-else-if="step.type === 'wait'">
                 <div class="flex gap-3">
                   <div class="form-group flex-1">
-                    <label class="form-label">Duration</label
-                    ><input class="form-input" type="number" min="1" v-model.number="step.config.duration" />
+                    <label class="form-label">Duration</label>
+                    <input class="form-input" type="number" min="1" v-model.number="step.config.duration" />
                   </div>
                   <div class="form-group flex-1">
-                    <label class="form-label">Unit</label
-                    ><select class="form-select" v-model="step.config.unit">
+                    <label class="form-label">Unit</label>
+                    <select class="form-select" v-model="step.config.unit">
                       <option value="hours">Hours</option>
                       <option value="days">Days</option>
                       <option value="weeks">Weeks</option>
@@ -360,12 +366,12 @@ fetchAutomations()
               </template>
               <template v-else-if="step.type === 'condition'">
                 <div class="form-group">
-                  <label class="form-label">Field</label
-                  ><input class="form-input" v-model="step.config.field" placeholder="e.g. opened_last_email" />
+                  <label class="form-label">Field</label>
+                  <input class="form-input" v-model="step.config.field" placeholder="e.g. opened_last_email" />
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Operator</label
-                  ><select class="form-select" v-model="step.config.operator">
+                  <label class="form-label">Operator</label>
+                  <select class="form-select" v-model="step.config.operator">
                     <option value="equals">Equals</option>
                     <option value="not_equals">Not Equals</option>
                     <option value="greater_than">Greater Than</option>
@@ -374,23 +380,25 @@ fetchAutomations()
                   </select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Value</label
-                  ><input class="form-input" v-model="step.config.value" placeholder="Comparison value" />
+                  <label class="form-label">Value</label>
+                  <input class="form-input" v-model="step.config.value" placeholder="Comparison value" />
                 </div>
               </template>
               <template v-else-if="step.type === 'add_tag'">
                 <div class="form-group">
-                  <label class="form-label">Tag Name</label
-                  ><input class="form-input" v-model="step.config.tag" placeholder="Enter tag name" />
+                  <label class="form-label">Tag Name</label>
+                  <input class="form-input" v-model="step.config.tag" placeholder="Enter tag name" />
                 </div>
               </template>
             </div>
+
             <div class="flex justify-center py-2 text-text-muted" v-if="idx < selected.steps.length - 1">
               <ArrowDown :size="16" />
             </div>
           </template>
 
-          <div class="mt-4 flex justify-center">
+          <!-- Add Step -->
+          <div class="mt-5 flex justify-center">
             <button v-if="!showStepSelector" class="btn-secondary text-sm px-3 py-1.5" @click="showStepSelector = true">
               <Plus :size="16" /> Add Step
             </button>
@@ -398,10 +406,10 @@ fetchAutomations()
               <button
                 v-for="st in ['send_email', 'wait', 'condition', 'add_tag', 'end'] as const"
                 :key="st"
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-bg-secondary border border-border rounded-lg text-text-secondary text-[13px] font-medium cursor-pointer font-sans transition-all duration-150 hover:border-accent hover:text-accent hover:bg-accent/5"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-bg-tertiary border border-border rounded-lg text-text-secondary text-[13px] font-medium cursor-pointer font-sans transition-all duration-150 hover:border-accent hover:text-accent hover:bg-accent/5"
                 @click="addStep(st)"
               >
-                <component :is="stepIcons[st]" :size="16" /> {{ stepLabels[st] }}
+                <component :is="stepIcons[st]" :size="14" /> {{ stepLabels[st] }}
               </button>
               <button class="btn-ghost text-sm px-3 py-1.5" @click="showStepSelector = false">
                 <X :size="14" />
@@ -410,80 +418,58 @@ fetchAutomations()
           </div>
         </div>
       </div>
-      <div v-else class="flex-1 min-w-0 flex flex-col gap-4 items-center justify-center min-h-[400px]">
-        <Workflow :size="48" class="text-text-muted" />
-        <p class="text-text-muted">Select an automation to view its workflow</p>
-      </div>
+
+      <!-- Empty State -->
+      <EmptyState
+        v-else
+        :icon="Workflow"
+        title="No automation selected"
+        description="Select an automation to view its workflow"
+        class="flex-1 min-w-0 min-h-[400px]"
+      />
     </div>
   </MainLayout>
 
   <!-- Create Modal -->
-  <Transition name="modal">
-    <div
-      v-if="showCreateModal"
-      class="fixed inset-0 bg-black/60 flex items-center justify-center z-[200]"
-      @click.self="showCreateModal = false"
-    >
-      <div class="glass-card w-full max-w-[500px] mx-4">
-        <div class="flex justify-between items-center px-6 py-5 border-b border-border">
-          <h3 class="text-lg font-semibold">New Automation</h3>
-          <button
-            class="bg-transparent border-none cursor-pointer text-text-muted p-1 rounded transition-all duration-150 flex items-center hover:text-danger hover:bg-danger/10"
-            @click="showCreateModal = false"
-          >
-            <X :size="18" />
-          </button>
-        </div>
-        <div class="p-6">
-          <div class="form-group">
-            <label class="form-label">Name</label
-            ><input class="form-input" v-model="createForm.name" placeholder="Welcome sequence..." />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Description</label
-            ><input class="form-input" v-model="createForm.description" placeholder="Optional description" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Trigger Type</label>
-            <select class="form-select" v-model="createForm.trigger_type">
-              <option value="list_join">List Join</option>
-              <option value="tag_added">Tag Added</option>
-              <option value="score_change">Score Change</option>
-              <option value="manual">Manual</option>
-              <option value="api">API</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Entry List ID <span class="text-text-muted">(optional)</span></label
-            ><input class="form-input" v-model="createForm.entry_list_id" placeholder="Contact list to enroll from" />
-          </div>
-        </div>
-        <div class="flex justify-end gap-3 px-6 py-4 border-t border-border">
-          <button class="btn-ghost" @click="showCreateModal = false">Cancel</button>
-          <button class="btn-primary" :disabled="!createForm.name || creating" @click="handleCreate">
-            <Loader2 v-if="creating" :size="16" class="spin" /> Create Automation
-          </button>
-        </div>
-      </div>
+  <Modal :show="showCreateModal" title="New Automation" size="md" @close="showCreateModal = false">
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input class="form-input" v-model="createForm.name" placeholder="Welcome sequence..." />
     </div>
-  </Transition>
-</template>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input class="form-input" v-model="createForm.description" placeholder="Optional description" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Trigger Type</label>
+      <select class="form-select" v-model="createForm.trigger_type">
+        <option value="list_join">List Join</option>
+        <option value="tag_added">Tag Added</option>
+        <option value="score_change">Score Change</option>
+        <option value="manual">Manual</option>
+        <option value="api">API</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Entry List ID <span class="text-text-muted">(optional)</span></label>
+      <input class="form-input" v-model="createForm.entry_list_id" placeholder="Contact list to enroll from" />
+    </div>
+    <template #footer>
+      <button class="btn-ghost" @click="showCreateModal = false">Cancel</button>
+      <button class="btn-primary" :disabled="!createForm.name || creating" @click="handleCreate">
+        <Loader2 v-if="creating" :size="16" class="spin" /> Create Automation
+      </button>
+    </template>
+  </Modal>
 
-<style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s;
-}
-.modal-enter-active .glass-card,
-.modal-leave-active .glass-card {
-  transition: transform 0.2s;
-}
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-.modal-enter-from .glass-card,
-.modal-leave-to .glass-card {
-  transform: scale(0.95);
-}
-</style>
+  <!-- Delete Confirm -->
+  <ConfirmDialog
+    :show="deleteConfirm.show"
+    title="Delete Automation"
+    message="Delete this automation? This cannot be undone."
+    confirmText="Delete"
+    variant="danger"
+    @confirm="confirmDelete"
+    @cancel="deleteConfirm.show = false"
+  />
+</template>

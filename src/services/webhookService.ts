@@ -12,6 +12,7 @@ import { logger } from '../utils/logger'
 
 export interface Webhook {
   id: string
+  org_id: string
   user_id: string
   name: string
   url: string
@@ -69,6 +70,7 @@ class WebhookService {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS webhooks (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
         url TEXT NOT NULL,
@@ -101,6 +103,10 @@ class WebhookService {
       CREATE INDEX IF NOT EXISTS idx_whl_date ON webhook_logs(created_at);
     `)
 
+    // Add org_id to existing tables (idempotent)
+    try { this.db.exec('ALTER TABLE webhooks ADD COLUMN org_id TEXT') } catch {}
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_wh_org ON webhooks(org_id)')
+
     logger.info('Webhooks database initialized (data/webhooks.db)')
   }
 
@@ -115,15 +121,15 @@ class WebhookService {
   // CRUD
   // --------------------------------------------------------------------------
 
-  create(userId: string, input: WebhookInput): Webhook {
+  create(orgId: string, userId: string, input: WebhookInput): Webhook {
     const id = `wh_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
     const secret = this.generateSecret()
 
     this.db.prepare(`
-      INSERT INTO webhooks (id, user_id, name, url, secret, events, enabled)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO webhooks (id, org_id, user_id, name, url, secret, events, enabled)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, userId, input.name, input.url, secret,
+      id, orgId, userId, input.name, input.url, secret,
       JSON.stringify(input.events),
       input.enabled !== false ? 1 : 0
     )
@@ -131,13 +137,13 @@ class WebhookService {
     return this.db.prepare('SELECT * FROM webhooks WHERE id = ?').get(id) as Webhook
   }
 
-  get(userId: string, webhookId: string): Webhook | null {
+  get(orgId: string, webhookId: string): Webhook | null {
     return this.db.prepare(`
-      SELECT * FROM webhooks WHERE id = ? AND user_id = ?
-    `).get(webhookId, userId) as Webhook | null
+      SELECT * FROM webhooks WHERE id = ? AND org_id = ?
+    `).get(webhookId, orgId) as Webhook | null
   }
 
-  update(userId: string, webhookId: string, updates: Partial<WebhookInput>): boolean {
+  update(orgId: string, webhookId: string, updates: Partial<WebhookInput>): boolean {
     const sets: string[] = []
     const params: any[] = []
 
@@ -149,32 +155,32 @@ class WebhookService {
     if (sets.length === 0) return false
 
     sets.push("updated_at = datetime('now')")
-    params.push(webhookId, userId)
+    params.push(webhookId, orgId)
 
     const result = this.db.prepare(`
-      UPDATE webhooks SET ${sets.join(', ')} WHERE id = ? AND user_id = ?
+      UPDATE webhooks SET ${sets.join(', ')} WHERE id = ? AND org_id = ?
     `).run(...params)
 
     return result.changes > 0
   }
 
-  delete(userId: string, webhookId: string): boolean {
+  delete(orgId: string, webhookId: string): boolean {
     const result = this.db.prepare(`
-      DELETE FROM webhooks WHERE id = ? AND user_id = ?
-    `).run(webhookId, userId)
+      DELETE FROM webhooks WHERE id = ? AND org_id = ?
+    `).run(webhookId, orgId)
     return result.changes > 0
   }
 
-  list(userId: string): Webhook[] {
+  list(orgId: string): Webhook[] {
     return this.db.prepare(`
-      SELECT * FROM webhooks WHERE user_id = ? ORDER BY created_at DESC
-    `).all(userId) as Webhook[]
+      SELECT * FROM webhooks WHERE org_id = ? ORDER BY created_at DESC
+    `).all(orgId) as Webhook[]
   }
 
-  toggleEnabled(userId: string, webhookId: string, enabled: boolean): boolean {
+  toggleEnabled(orgId: string, webhookId: string, enabled: boolean): boolean {
     const result = this.db.prepare(`
-      UPDATE webhooks SET enabled = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?
-    `).run(enabled ? 1 : 0, webhookId, userId)
+      UPDATE webhooks SET enabled = ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?
+    `).run(enabled ? 1 : 0, webhookId, orgId)
     return result.changes > 0
   }
 
@@ -183,8 +189,9 @@ class WebhookService {
   // --------------------------------------------------------------------------
 
   private async dispatchForEvent(eventType: EventType, userId: string, payload: unknown): Promise<void> {
+    // userId here is actually orgId from eventBus context
     const webhooks = this.db.prepare(`
-      SELECT * FROM webhooks WHERE user_id = ? AND enabled = 1
+      SELECT * FROM webhooks WHERE org_id = ? AND enabled = 1
     `).all(userId) as Webhook[]
 
     for (const webhook of webhooks) {
@@ -287,8 +294,8 @@ class WebhookService {
   // Test
   // --------------------------------------------------------------------------
 
-  async testWebhook(userId: string, webhookId: string): Promise<{ success: boolean; statusCode?: number; error?: string }> {
-    const webhook = this.get(userId, webhookId)
+  async testWebhook(orgId: string, webhookId: string): Promise<{ success: boolean; statusCode?: number; error?: string }> {
+    const webhook = this.get(orgId, webhookId)
     if (!webhook) return { success: false, error: 'Webhook not found' }
 
     const body = JSON.stringify({

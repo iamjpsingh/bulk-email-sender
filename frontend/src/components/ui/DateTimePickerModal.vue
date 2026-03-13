@@ -32,7 +32,7 @@ if (props.modelValue) {
     const date = new Date(props.modelValue)
     selectedDate.value = date
     currentMonth.value = new Date(date.getFullYear(), date.getMonth(), 1)
-    
+
     let hours = date.getHours()
     selectedPeriod.value = hours >= 12 ? 'PM' : 'AM'
     selectedHour.value = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
@@ -54,19 +54,19 @@ const daysInMonth = computed(() => {
   const month = currentMonth.value.getMonth()
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
-  const daysInMonth = lastDay.getDate()
+  const daysCount = lastDay.getDate()
   const startingDayOfWeek = firstDay.getDay()
-  
-  const days = []
-  
+
+  const days: (Date | null)[] = []
+
   for (let i = 0; i < startingDayOfWeek; i++) {
     days.push(null)
   }
-  
-  for (let day = 1; day <= daysInMonth; day++) {
+
+  for (let day = 1; day <= daysCount; day++) {
     days.push(new Date(year, month, day))
   }
-  
+
   return days
 })
 
@@ -82,17 +82,17 @@ function handleDateSelect(date: Date) {
 
 function updateDateTime() {
   if (!selectedDate.value) return
-  
+
   let hours = selectedHour.value
   if (selectedPeriod.value === 'PM' && hours !== 12) {
     hours += 12
   } else if (selectedPeriod.value === 'AM' && hours === 12) {
     hours = 0
   }
-  
+
   const dateTime = new Date(selectedDate.value)
   dateTime.setHours(hours, selectedMinute.value, 0, 0)
-  
+
   emit('update:modelValue', dateTime.toISOString().slice(0, 16))
 }
 
@@ -125,12 +125,12 @@ function setToNow() {
   const now = new Date()
   selectedDate.value = now
   currentMonth.value = new Date(now.getFullYear(), now.getMonth(), 1)
-  
+
   let hours = now.getHours()
   selectedPeriod.value = hours >= 12 ? 'PM' : 'AM'
   selectedHour.value = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
   selectedMinute.value = now.getMinutes()
-  
+
   updateDateTime()
 }
 
@@ -147,7 +147,6 @@ function handleClose() {
   emit('close')
 }
 
-// Time picker functions
 function incrementHour() {
   selectedHour.value = selectedHour.value === 12 ? 1 : selectedHour.value + 1
 }
@@ -170,49 +169,51 @@ function togglePeriod() {
 </script>
 
 <template>
-  <Modal
-    :show="show"
-    :title="title"
-    size="md"
-    @close="handleClose"
-  >
-    <div class="datetime-picker-modal">
+  <Modal :show="show" :title="title" size="md" @close="handleClose">
+    <div class="py-2">
       <!-- Calendar Section -->
-      <div class="calendar-section">
-        <div class="calendar-header">
-          <button type="button" class="nav-btn" @click="previousMonth">
+      <div class="mb-6">
+        <div class="flex items-center justify-between mb-5">
+          <button
+            type="button"
+            class="flex items-center justify-center w-9 h-9 border-none bg-transparent text-text-secondary rounded-lg cursor-pointer transition-all hover:bg-accent/10 hover:text-accent"
+            @click="previousMonth"
+          >
             <ChevronLeft :size="18" />
           </button>
-          <h3 class="month-title">{{ monthName }}</h3>
-          <button type="button" class="nav-btn" @click="nextMonth">
+          <h3 class="text-base font-semibold text-text-primary m-0">{{ monthName }}</h3>
+          <button
+            type="button"
+            class="flex items-center justify-center w-9 h-9 border-none bg-transparent text-text-secondary rounded-lg cursor-pointer transition-all hover:bg-accent/10 hover:text-accent"
+            @click="nextMonth"
+          >
             <ChevronRight :size="18" />
           </button>
         </div>
-        
-        <div class="calendar-grid">
-          <div class="weekday-header">
-            <div class="weekday">Su</div>
-            <div class="weekday">Mo</div>
-            <div class="weekday">Tu</div>
-            <div class="weekday">We</div>
-            <div class="weekday">Th</div>
-            <div class="weekday">Fr</div>
-            <div class="weekday">Sa</div>
+
+        <div class="mb-4">
+          <div class="grid grid-cols-7 gap-1 mb-3">
+            <div
+              v-for="day in ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']"
+              :key="day"
+              class="text-center text-[11px] font-semibold text-text-muted uppercase tracking-wider py-2"
+            >
+              {{ day }}
+            </div>
           </div>
-          
-          <div class="days-grid">
+
+          <div class="grid grid-cols-7 gap-1">
             <button
               v-for="(day, index) in daysInMonth"
               :key="index"
               type="button"
-              :class="[
-                'day-btn',
-                {
-                  'is-today': day && isToday(day),
-                  'is-selected': day && isSelected(day),
-                  'is-empty': !day
-                }
-              ]"
+              class="flex items-center justify-center w-9 h-9 border-none bg-transparent text-text-secondary rounded-lg cursor-pointer text-sm font-medium transition-all"
+              :class="{
+                'hover:bg-accent/10 hover:text-accent': day && !isSelected(day),
+                'bg-accent/15 text-accent font-semibold border border-accent/30': day && isToday(day) && !isSelected(day),
+                'bg-accent text-white font-semibold hover:bg-accent': day && isSelected(day),
+                'opacity-0 pointer-events-none cursor-default': !day,
+              }"
               :disabled="!day"
               @click="day && handleDateSelect(day)"
             >
@@ -221,274 +222,69 @@ function togglePeriod() {
           </div>
         </div>
       </div>
-      
+
       <!-- Time Section -->
-      <div class="time-section">
-        <div class="time-header">
+      <div class="pt-5 border-t border-border">
+        <div class="flex items-center gap-2 text-sm font-semibold text-text-primary mb-4">
           <Clock :size="16" />
           <span>Time</span>
         </div>
-        
-        <div class="time-picker">
+
+        <div class="flex items-center justify-center gap-3 mb-4">
           <!-- Hour -->
-          <div class="time-column">
-            <button class="time-btn" @click="incrementHour">+</button>
-            <div class="time-display">{{ selectedHour.toString().padStart(2, '0') }}</div>
-            <button class="time-btn" @click="decrementHour">-</button>
+          <div class="flex flex-col items-center gap-2">
+            <button
+              class="w-8 h-8 border-none bg-bg-secondary text-text-primary rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
+              @click="incrementHour"
+            >+</button>
+            <div class="w-12 h-12 flex items-center justify-center bg-bg-secondary border border-border rounded-lg text-lg font-semibold text-text-primary font-mono">
+              {{ selectedHour.toString().padStart(2, '0') }}
+            </div>
+            <button
+              class="w-8 h-8 border-none bg-bg-secondary text-text-primary rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
+              @click="decrementHour"
+            >-</button>
           </div>
-          
-          <div class="time-separator">:</div>
-          
+
+          <div class="text-2xl font-semibold text-text-primary mx-2">:</div>
+
           <!-- Minute -->
-          <div class="time-column">
-            <button class="time-btn" @click="incrementMinute">+</button>
-            <div class="time-display">{{ selectedMinute.toString().padStart(2, '0') }}</div>
-            <button class="time-btn" @click="decrementMinute">-</button>
+          <div class="flex flex-col items-center gap-2">
+            <button
+              class="w-8 h-8 border-none bg-bg-secondary text-text-primary rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
+              @click="incrementMinute"
+            >+</button>
+            <div class="w-12 h-12 flex items-center justify-center bg-bg-secondary border border-border rounded-lg text-lg font-semibold text-text-primary font-mono">
+              {{ selectedMinute.toString().padStart(2, '0') }}
+            </div>
+            <button
+              class="w-8 h-8 border-none bg-bg-secondary text-text-primary rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
+              @click="decrementMinute"
+            >-</button>
           </div>
-          
+
           <!-- AM/PM -->
-          <div class="time-column">
-            <button class="period-btn" @click="togglePeriod">
+          <div class="flex flex-col items-center gap-2">
+            <button
+              class="w-12 h-12 border border-border bg-bg-secondary text-text-primary rounded-lg cursor-pointer text-sm font-semibold transition-all hover:bg-accent hover:text-white hover:border-accent"
+              @click="togglePeriod"
+            >
               {{ selectedPeriod }}
             </button>
           </div>
         </div>
-        
-        <div class="time-display-large">
+
+        <div class="text-center text-xl font-semibold text-accent font-mono py-3 bg-accent/10 rounded-lg border border-accent/20">
           {{ timeDisplay }} {{ selectedPeriod }}
         </div>
       </div>
     </div>
-    
+
     <!-- Footer Actions -->
     <template #footer>
-      <button class="btn btn-ghost" @click="clearDateTime">
-        Clear
-      </button>
-      <button class="btn btn-secondary" @click="setToNow">
-        Now
-      </button>
-      <button class="btn btn-primary" @click="handleConfirm" :disabled="!selectedDate">
-        Confirm
-      </button>
+      <button class="btn-ghost" @click="clearDateTime">Clear</button>
+      <button class="btn-secondary" @click="setToNow">Now</button>
+      <button class="btn-primary" @click="handleConfirm" :disabled="!selectedDate">Confirm</button>
     </template>
   </Modal>
 </template>
-
-<style scoped lang="scss">
-.datetime-picker-modal {
-  padding: 10px 0;
-}
-
-.calendar-section {
-  margin-bottom: 24px;
-}
-
-.calendar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.nav-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba(99, 102, 241, 0.1);
-    color: var(--color-accent);
-  }
-}
-
-.month-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.calendar-grid {
-  margin-bottom: 16px;
-}
-
-.weekday-header {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.weekday {
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  padding: 8px 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.days-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-}
-
-.day-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-
-  &:hover:not(:disabled):not(.is-empty) {
-    background: rgba(99, 102, 241, 0.1);
-    color: var(--color-accent);
-    transform: scale(1.05);
-  }
-
-  &.is-today {
-    background: rgba(99, 102, 241, 0.15);
-    color: var(--color-accent);
-    font-weight: 600;
-    border: 1px solid rgba(99, 102, 241, 0.3);
-  }
-
-  &.is-selected {
-    background: var(--color-accent);
-    color: var(--color-bg-primary);
-    font-weight: 600;
-
-    &:hover {
-      background: #4f46e5;
-      transform: scale(1.05);
-    }
-  }
-
-  &.is-empty {
-    cursor: default;
-    opacity: 0;
-    pointer-events: none;
-  }
-}
-
-.time-section {
-  padding: 20px 0;
-  border-top: 1px solid var(--color-border);
-}
-
-.time-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 16px;
-}
-
-.time-picker {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.time-column {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.time-btn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: var(--color-accent);
-    color: var(--color-bg-primary);
-    transform: scale(1.1);
-  }
-}
-
-.time-display {
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  font-family: var(--font-mono);
-}
-
-.time-separator {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 8px;
-}
-
-.period-btn {
-  width: 48px;
-  height: 48px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: var(--color-accent);
-    color: var(--color-bg-primary);
-    border-color: var(--color-accent);
-  }
-}
-
-.time-display-large {
-  text-align: center;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-accent);
-  font-family: var(--font-mono);
-  padding: 12px;
-  background: rgba(99, 102, 241, 0.1);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(99, 102, 241, 0.2);
-}
-</style>

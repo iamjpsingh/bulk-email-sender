@@ -13,9 +13,9 @@ const notifyEmail = defineModel<string>('notifyEmail', { required: true })
 
 <template>
   <!-- Batch settings -->
-  <div class="glass-card p-5">
-    <h3 class="text-[15px] mb-4 flex items-center gap-2">
-      <Zap :size="18" class="text-accent" />
+  <div class="bg-bg-card border border-border rounded-xl p-5">
+    <h3 class="text-sm font-semibold mb-4 flex items-center gap-2 text-text-primary">
+      <Zap :size="16" class="text-accent" />
       Batch Settings
     </h3>
     <label class="form-checkbox">
@@ -40,9 +40,9 @@ const notifyEmail = defineModel<string>('notifyEmail', { required: true })
   </div>
 
   <!-- Schedule settings -->
-  <div class="glass-card p-5">
-    <h3 class="text-[15px] mb-4 flex items-center gap-2">
-      <Clock :size="18" class="text-accent" />
+  <div class="bg-bg-card border border-border rounded-xl p-5">
+    <h3 class="text-sm font-semibold mb-4 flex items-center gap-2 text-text-primary">
+      <Clock :size="16" class="text-accent" />
       Schedule Settings
     </h3>
     <label class="form-checkbox">

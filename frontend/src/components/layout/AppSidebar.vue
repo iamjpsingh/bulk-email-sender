@@ -2,6 +2,8 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../../stores/auth'
+import { useSidebar } from '../../composables/useSidebar'
+import { cn } from '../../lib/utils'
 import {
   LayoutDashboard,
   PenSquare,
@@ -13,6 +15,7 @@ import {
   BarChart3,
   BarChart2,
   Settings,
+  Shield,
   LogOut,
   Menu,
   X,
@@ -20,9 +23,11 @@ import {
 } from 'lucide-vue-next'
 
 const route = useRoute()
+const router = useRouter()
 const { user, logout } = useAuth()
 const mobileOpen = ref(false)
-const collapsed = ref(false)
+const { collapsed, toggle: toggleCollapse } = useSidebar()
+const headerHovered = ref(false)
 
 const mainNav = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -39,11 +44,17 @@ const toolsNav = [
   { path: '/reports', label: 'Reports', icon: BarChart3 },
 ]
 
-const settingsNav = [{ path: '/configs', label: 'Settings', icon: Settings }]
+const settingsNav = [
+  { path: '/configs', label: 'Settings', icon: Settings },
+  { path: '/admin', label: 'Admin', icon: Shield },
+]
 
 const userInitial = computed(() => user.value?.name?.charAt(0).toUpperCase() || '?')
 
-const router = useRouter()
+function isActive(path: string): boolean {
+  if (path === '/') return route.path === '/'
+  return route.path.startsWith(path)
+}
 
 async function handleLogout() {
   await logout()
@@ -53,21 +64,24 @@ async function handleLogout() {
 function handleNavClick() {
   mobileOpen.value = false
 }
-
-function toggleCollapse() {
-  collapsed.value = !collapsed.value
-}
 </script>
 
 <template>
   <!-- Mobile hamburger button -->
   <button
-    class="fixed top-4 left-4 z-[200] p-2 rounded-lg bg-bg-secondary border border-border text-text-primary md:hidden"
+    :class="cn(
+      'fixed top-4 left-4 z-200 flex items-center justify-center',
+      'w-10 h-10 rounded-lg',
+      'bg-surface-1 border border-border text-text-primary',
+      'transition-colors duration-fast',
+      'hover:bg-surface-2',
+      'md:hidden'
+    )"
     @click="mobileOpen = !mobileOpen"
     :aria-label="mobileOpen ? 'Close menu' : 'Open menu'"
   >
-    <X v-if="mobileOpen" :size="20" />
-    <Menu v-else :size="20" />
+    <X v-if="mobileOpen" :size="18" />
+    <Menu v-else :size="18" />
   </button>
 
   <!-- Mobile overlay -->
@@ -77,353 +91,327 @@ function toggleCollapse() {
     enter-from-class="opacity-0"
     leave-to-class="opacity-0"
   >
-    <div v-if="mobileOpen" class="fixed inset-0 bg-black/60 z-[149] md:hidden" @click="mobileOpen = false" />
+    <div
+      v-if="mobileOpen"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm z-149 md:hidden"
+      @click="mobileOpen = false"
+    />
   </Transition>
 
   <!-- Sidebar -->
   <aside
-    class="sidebar"
-    :class="{ 'mobile-open': mobileOpen, 'is-collapsed': collapsed }"
+    :class="cn(
+      'fixed left-0 top-0 z-150 flex flex-col h-screen',
+      'bg-sidebar border-r border-sidebar-border',
+      'transition-all duration-200 ease-out',
+      collapsed ? 'w-16' : 'w-60',
+      mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+    )"
     role="navigation"
     aria-label="Main navigation"
   >
     <!-- Header -->
-    <div class="sidebar-header">
-      <router-link to="/" class="logo" @click="handleNavClick">
-        <SendIcon class="logo-icon" :size="24" />
-        <Transition name="fade">
-          <span v-if="!collapsed" class="logo-text">Dispatch</span>
-        </Transition>
-      </router-link>
-      <button
-        class="collapse-btn hidden md:flex"
-        @click="toggleCollapse"
-        :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-        :aria-label="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+    <div
+      :class="cn(
+        'flex items-center h-14 px-3 border-b border-sidebar-border shrink-0',
+        collapsed ? 'justify-center' : 'justify-between'
+      )"
+      @mouseenter="headerHovered = true"
+      @mouseleave="headerHovered = false"
+    >
+      <router-link
+        to="/"
+        :class="cn(
+          'flex items-center gap-2.5 no-underline overflow-hidden',
+          collapsed && 'justify-center'
+        )"
+        @click="handleNavClick"
       >
-        <ChevronsLeft :size="16" :class="{ 'rotate-180': collapsed }" />
+        <div
+          :class="cn(
+            'flex items-center justify-center shrink-0',
+            'w-8 h-8 rounded-lg',
+            'bg-accent/15'
+          )"
+        >
+          <SendIcon class="text-accent" :size="16" />
+        </div>
+        <span
+          v-if="!collapsed"
+          class="text-lg font-bold tracking-tight text-text-primary whitespace-nowrap"
+        >
+          Dispatch
+        </span>
+      </router-link>
+
+      <Transition
+        enter-active-class="transition-opacity duration-150"
+        leave-active-class="transition-opacity duration-100"
+        enter-from-class="opacity-0"
+        leave-to-class="opacity-0"
+      >
+        <button
+          v-if="!collapsed && headerHovered"
+          :class="cn(
+            'hidden md:flex items-center justify-center shrink-0',
+            'w-6 h-6 rounded-md',
+            'text-sidebar-muted hover:text-text-primary',
+            'hover:bg-white/[0.06]',
+            'transition-all duration-fast cursor-pointer'
+          )"
+          @click="toggleCollapse"
+          :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+          :aria-label="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+        >
+          <ChevronsLeft :size="14" />
+        </button>
+      </Transition>
+
+      <button
+        v-if="collapsed"
+        :class="cn(
+          'hidden md:flex items-center justify-center absolute -right-3',
+          'w-6 h-6 rounded-full',
+          'bg-sidebar border border-sidebar-border',
+          'text-sidebar-muted hover:text-text-primary',
+          'hover:bg-surface-2',
+          'transition-all duration-fast cursor-pointer',
+          'shadow-xs'
+        )"
+        @click="toggleCollapse"
+        title="Expand sidebar"
+        aria-label="Expand sidebar"
+      >
+        <ChevronsLeft :size="12" class="rotate-180" />
       </button>
     </div>
 
-    <!-- Main nav -->
-    <nav class="sidebar-nav">
-      <div class="nav-section">
+    <!-- Navigation -->
+    <nav class="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2">
+      <!-- Main section -->
+      <div class="flex flex-col gap-0.5">
         <router-link
           v-for="item in mainNav"
           :key="item.path"
           :to="item.path"
-          class="nav-item"
-          :class="{ active: route.path === item.path }"
+          :class="cn(
+            'group relative flex items-center gap-3 rounded-md text-sm font-medium',
+            'transition-all duration-fast whitespace-nowrap overflow-hidden',
+            collapsed ? 'justify-center px-2 py-2' : 'px-2.5 py-[7px]',
+            isActive(item.path)
+              ? 'bg-sidebar-accent text-accent'
+              : 'text-sidebar-muted-foreground hover:bg-white/[0.04] hover:text-text-primary'
+          )"
           :title="collapsed ? item.label : undefined"
           @click="handleNavClick"
         >
-          <component :is="item.icon" class="nav-icon" :size="20" />
-          <Transition name="fade">
-            <span v-if="!collapsed" class="nav-label">{{ item.label }}</span>
-          </Transition>
+          <!-- Active indicator bar -->
+          <div
+            v-if="isActive(item.path)"
+            class="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r-full bg-accent"
+          />
+          <component :is="item.icon" :size="18" class="shrink-0" />
+          <span v-if="!collapsed">{{ item.label }}</span>
+
+          <!-- Collapsed tooltip -->
+          <div
+            v-if="collapsed"
+            :class="cn(
+              'absolute left-full ml-2 px-2.5 py-1.5 rounded-md',
+              'bg-surface-3 text-text-primary text-xs font-medium',
+              'shadow-dropdown whitespace-nowrap',
+              'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
+              'transition-all duration-fast pointer-events-none',
+              'z-200'
+            )"
+          >
+            {{ item.label }}
+          </div>
         </router-link>
       </div>
 
-      <div class="nav-divider" />
+      <!-- Tools divider -->
+      <div class="my-3 mx-1">
+        <div v-if="!collapsed" class="flex items-center gap-2 mb-1">
+          <span class="text-[11px] font-semibold uppercase tracking-[0.06em] text-sidebar-muted px-1.5">
+            Tools
+          </span>
+          <div class="flex-1 h-px bg-sidebar-border" />
+        </div>
+        <div v-else class="h-px bg-sidebar-border" />
+      </div>
 
-      <div class="nav-section">
-        <span v-if="!collapsed" class="nav-section-title">Tools</span>
+      <!-- Tools section -->
+      <div class="flex flex-col gap-0.5">
         <router-link
           v-for="item in toolsNav"
           :key="item.path"
           :to="item.path"
-          class="nav-item"
-          :class="{ active: route.path === item.path }"
+          :class="cn(
+            'group relative flex items-center gap-3 rounded-md text-sm font-medium',
+            'transition-all duration-fast whitespace-nowrap overflow-hidden',
+            collapsed ? 'justify-center px-2 py-2' : 'px-2.5 py-[7px]',
+            isActive(item.path)
+              ? 'bg-sidebar-accent text-accent'
+              : 'text-sidebar-muted-foreground hover:bg-white/[0.04] hover:text-text-primary'
+          )"
           :title="collapsed ? item.label : undefined"
           @click="handleNavClick"
         >
-          <component :is="item.icon" class="nav-icon" :size="20" />
-          <Transition name="fade">
-            <span v-if="!collapsed" class="nav-label">{{ item.label }}</span>
-          </Transition>
+          <div
+            v-if="isActive(item.path)"
+            class="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r-full bg-accent"
+          />
+          <component :is="item.icon" :size="18" class="shrink-0" />
+          <span v-if="!collapsed">{{ item.label }}</span>
+
+          <div
+            v-if="collapsed"
+            :class="cn(
+              'absolute left-full ml-2 px-2.5 py-1.5 rounded-md',
+              'bg-surface-3 text-text-primary text-xs font-medium',
+              'shadow-dropdown whitespace-nowrap',
+              'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
+              'transition-all duration-fast pointer-events-none',
+              'z-200'
+            )"
+          >
+            {{ item.label }}
+          </div>
         </router-link>
       </div>
 
-      <div class="nav-divider" />
+      <!-- Settings divider -->
+      <div class="my-3 mx-1 h-px bg-sidebar-border" />
 
-      <div class="nav-section">
+      <!-- Settings section -->
+      <div class="flex flex-col gap-0.5">
         <router-link
           v-for="item in settingsNav"
           :key="item.path"
           :to="item.path"
-          class="nav-item"
-          :class="{ active: route.path === item.path }"
+          :class="cn(
+            'group relative flex items-center gap-3 rounded-md text-sm font-medium',
+            'transition-all duration-fast whitespace-nowrap overflow-hidden',
+            collapsed ? 'justify-center px-2 py-2' : 'px-2.5 py-[7px]',
+            isActive(item.path)
+              ? 'bg-sidebar-accent text-accent'
+              : 'text-sidebar-muted-foreground hover:bg-white/[0.04] hover:text-text-primary'
+          )"
           :title="collapsed ? item.label : undefined"
           @click="handleNavClick"
         >
-          <component :is="item.icon" class="nav-icon" :size="20" />
-          <Transition name="fade">
-            <span v-if="!collapsed" class="nav-label">{{ item.label }}</span>
-          </Transition>
+          <div
+            v-if="isActive(item.path)"
+            class="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r-full bg-accent"
+          />
+          <component :is="item.icon" :size="18" class="shrink-0" />
+          <span v-if="!collapsed">{{ item.label }}</span>
+
+          <div
+            v-if="collapsed"
+            :class="cn(
+              'absolute left-full ml-2 px-2.5 py-1.5 rounded-md',
+              'bg-surface-3 text-text-primary text-xs font-medium',
+              'shadow-dropdown whitespace-nowrap',
+              'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
+              'transition-all duration-fast pointer-events-none',
+              'z-200'
+            )"
+          >
+            {{ item.label }}
+          </div>
         </router-link>
       </div>
     </nav>
 
     <!-- Footer -->
-    <div class="sidebar-footer">
-      <div class="user-info" v-if="user">
-        <div class="user-avatar" :title="user.name || 'User'">
-          {{ userInitial }}
-        </div>
-        <Transition name="fade">
-          <div v-if="!collapsed" class="user-details">
-            <div class="user-name">{{ user.name || 'User' }}</div>
-            <div class="user-email">{{ user.email || '' }}</div>
+    <div
+      :class="cn(
+        'shrink-0 border-t border-sidebar-border',
+        collapsed ? 'p-2' : 'p-3'
+      )"
+    >
+      <div v-if="user" :class="cn('flex items-center', collapsed ? 'justify-center' : 'gap-2.5')">
+        <!-- User avatar + info -->
+        <div
+          :class="cn(
+            'group relative flex items-center flex-1 min-w-0',
+            collapsed ? 'justify-center' : 'gap-2.5'
+          )"
+        >
+          <div
+            :class="cn(
+              'flex items-center justify-center shrink-0',
+              'w-8 h-8 rounded-lg',
+              'bg-linear-to-br from-accent to-accent-secondary',
+              'text-white text-xs font-bold'
+            )"
+            :title="collapsed ? (user.name || 'User') : undefined"
+          >
+            {{ userInitial }}
           </div>
-        </Transition>
+
+          <div v-if="!collapsed" class="flex-1 min-w-0">
+            <div class="text-[13px] font-semibold text-text-primary truncate leading-tight">
+              {{ user.name || 'User' }}
+            </div>
+            <div class="text-[11px] text-sidebar-muted truncate leading-tight mt-0.5">
+              {{ user.email || '' }}
+            </div>
+          </div>
+
+          <!-- Collapsed tooltip for user -->
+          <div
+            v-if="collapsed"
+            :class="cn(
+              'absolute left-full ml-2 px-2.5 py-1.5 rounded-md',
+              'bg-surface-3 text-text-primary text-xs font-medium',
+              'shadow-dropdown whitespace-nowrap',
+              'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
+              'transition-all duration-fast pointer-events-none',
+              'z-200'
+            )"
+          >
+            <div class="font-semibold">{{ user.name || 'User' }}</div>
+            <div class="text-sidebar-muted-foreground text-[10px] mt-0.5">{{ user.email || '' }}</div>
+          </div>
+        </div>
+
+        <!-- Logout button -->
+        <button
+          :class="cn(
+            'group/logout relative flex items-center justify-center shrink-0',
+            'w-8 h-8 rounded-md',
+            'text-sidebar-muted hover:text-danger',
+            'hover:bg-danger/10',
+            'transition-all duration-fast cursor-pointer',
+            collapsed && 'mt-2'
+          )"
+          @click="handleLogout"
+          :title="collapsed ? 'Logout' : 'Logout'"
+          aria-label="Logout"
+        >
+          <LogOut :size="15" />
+
+          <div
+            v-if="collapsed"
+            :class="cn(
+              'absolute left-full ml-2 px-2.5 py-1.5 rounded-md',
+              'bg-surface-3 text-text-primary text-xs font-medium',
+              'shadow-dropdown whitespace-nowrap',
+              'opacity-0 invisible group-hover/logout:opacity-100 group-hover/logout:visible',
+              'transition-all duration-fast pointer-events-none',
+              'z-200'
+            )"
+          >
+            Logout
+          </div>
+        </button>
       </div>
-      <button class="logout-btn" @click="handleLogout" :title="collapsed ? 'Logout' : undefined">
-        <LogOut :size="16" />
-        <Transition name="fade">
-          <span v-if="!collapsed">Logout</span>
-        </Transition>
-      </button>
+
+      <!-- Collapsed: stack avatar and logout vertically -->
+      <div v-if="user && collapsed" class="hidden" />
     </div>
   </aside>
 </template>
-
-<style lang="scss" scoped>
-.sidebar {
-  width: 240px;
-  min-height: 100vh;
-  background: var(--color-bg-secondary);
-  border-right: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 150;
-  transition: width 0.2s ease;
-
-  &.is-collapsed {
-    width: 68px;
-  }
-}
-
-.sidebar-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 60px;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  overflow: hidden;
-}
-
-.logo-icon {
-  color: var(--color-accent);
-  flex-shrink: 0;
-}
-
-.logo-text {
-  font-size: 20px;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  letter-spacing: -0.5px;
-  white-space: nowrap;
-}
-
-.collapse-btn {
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-
-  &:hover {
-    background: rgba(99, 102, 241, 0.08);
-    color: var(--color-text-primary);
-  }
-
-  svg {
-    transition: transform 0.2s ease;
-  }
-}
-
-.sidebar-nav {
-  flex: 1;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.nav-section {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.nav-section-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 8px 12px 4px;
-  white-space: nowrap;
-}
-
-.nav-divider {
-  height: 1px;
-  background: var(--color-border);
-  margin: 6px 8px;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 12px;
-  border-radius: 8px;
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-  overflow: hidden;
-  position: relative;
-
-  &:hover {
-    background: rgba(99, 102, 241, 0.08);
-    color: var(--color-text-primary);
-  }
-
-  &.active {
-    background: rgba(99, 102, 241, 0.15);
-    color: var(--color-accent);
-
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 6px;
-      bottom: 6px;
-      width: 3px;
-      border-radius: 0 3px 3px 0;
-      background: var(--color-accent);
-    }
-  }
-}
-
-.nav-icon {
-  flex-shrink: 0;
-}
-
-.sidebar-footer {
-  padding: 12px;
-  border-top: 1px solid var(--color-border);
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-  overflow: hidden;
-}
-
-.user-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-secondary));
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.user-details {
-  overflow: hidden;
-}
-
-.user-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-email {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.logout-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  cursor: pointer;
-  border-radius: 8px;
-  width: 100%;
-  font-family: inherit;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-  overflow: hidden;
-
-  &:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: var(--color-danger);
-  }
-}
-
-// Fade transition for collapsible text
-.fade-enter-active {
-  transition: opacity 0.15s ease 0.05s;
-}
-.fade-leave-active {
-  transition: opacity 0.1s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 768px) {
-  .sidebar {
-    width: 240px !important;
-    transform: translateX(-100%);
-    &.mobile-open {
-      transform: translateX(0);
-    }
-  }
-}
-</style>

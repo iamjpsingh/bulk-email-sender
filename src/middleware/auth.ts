@@ -1,17 +1,20 @@
 /**
  * Authentication Middleware
- * Handles session validation and user context
+ * Local SQLite auth with org context
  */
 import type { Context, Next } from 'hono'
 import { getCookie } from 'hono/cookie'
-import { d1UserDatabase, type D1User } from '../services/d1UserDatabase'
+import { authLocalService, type AuthUser } from '../services/authLocalService'
 import { COOKIE } from '../config'
 
 // User type for context
-export type User = D1User
+export type User = AuthUser
 
-// Extend Hono Context with user
+// Extend Hono Context with user and orgId
 declare module 'hono' {
+  interface ContextVariableMap {
+    orgId: string | null
+  }
   interface Context {
     user?: User
   }
@@ -19,7 +22,7 @@ declare module 'hono' {
 
 /**
  * Authentication middleware
- * Validates session token and attaches user to context
+ * Validates session token, attaches user and org context
  */
 export async function authMiddleware(c: Context, next: Next) {
   const token = getToken(c)
@@ -28,19 +31,19 @@ export async function authMiddleware(c: Context, next: Next) {
     return c.json({ success: false, message: 'Authentication required' }, 401)
   }
 
-  const user = await d1UserDatabase.validateSession(token)
+  const session = authLocalService.validateSession(token)
 
-  if (!user) {
+  if (!session) {
     return c.json({ success: false, message: 'Invalid or expired session' }, 401)
   }
 
-  c.user = user
+  c.user = session.user
+  c.set('orgId', session.orgId)
   return next()
 }
 
 /**
  * Require authenticated user
- * Throws if user is not authenticated
  */
 export function requireAuth(c: Context): User {
   if (!c.user) {
@@ -50,16 +53,23 @@ export function requireAuth(c: Context): User {
 }
 
 /**
+ * Get current org ID from context
+ */
+export function getOrgId(c: Context): string {
+  const orgId = c.get('orgId')
+  if (!orgId) {
+    throw new Error('No organization context')
+  }
+  return orgId
+}
+
+/**
  * Extract token from request
- * Checks Authorization header and cookies
  */
 function getToken(c: Context): string | undefined {
-  // Check Authorization header first
   const authHeader = c.req.header('Authorization')
   if (authHeader?.startsWith('Bearer ')) {
     return authHeader.slice(7)
   }
-
-  // Fall back to cookie
   return getCookie(c, COOKIE.SESSION_NAME)
 }

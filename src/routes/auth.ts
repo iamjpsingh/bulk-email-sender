@@ -4,7 +4,9 @@
  */
 import { Hono } from 'hono'
 import { setCookie, deleteCookie, getCookie } from 'hono/cookie'
-import { d1UserDatabase } from '../services/d1UserDatabase'
+import { authLocalService } from '../services/authLocalService'
+import { orgService } from '../services/orgService'
+import { rbacService } from '../services/rbacService'
 import { COOKIE, isHttps } from '../config'
 import { error, success, ErrorMessages } from '../utils/response'
 import { logger } from '../utils/logger'
@@ -21,29 +23,24 @@ app.post('/auth/register', async (c) => {
     const body = await c.req.json()
     const { email, name, password } = body
 
-    // Validate required fields
     if (!email || !name || !password) {
       return error(c, 'Email, name, and password are required', 400)
     }
 
-    // Validate email format
     if (!isValidEmail(email)) {
       return error(c, 'Invalid email format', 400)
     }
 
-    // Validate password
     const passwordValidation = validatePassword(password)
     if (!passwordValidation.valid) {
       return error(c, passwordValidation.message, 400)
     }
 
-    // Register user
-    const session = await d1UserDatabase.register(email, password, name)
+    const session = await authLocalService.register(email, password, name)
     if (!session) {
       return error(c, 'Registration failed. Email may already exist.', 400)
     }
 
-    // Set session cookie
     const secure = isHttps(c.req.raw.headers, c.req.url)
     setCookie(c, COOKIE.SESSION_NAME, session.token, {
       ...COOKIE.OPTIONS,
@@ -66,18 +63,17 @@ app.post('/auth/login', async (c) => {
     const body = await c.req.json()
     const { email, password } = body
 
-    // Validate required fields
     if (!email || !password) {
       return error(c, 'Email and password are required', 400)
     }
 
-    // Authenticate
-    const session = await d1UserDatabase.login(email, password)
+    const ipAddress = c.req.header('x-forwarded-for') || c.req.header('x-real-ip')
+    const userAgent = c.req.header('user-agent')
+    const session = await authLocalService.login(email, password, ipAddress, userAgent)
     if (!session) {
       return error(c, 'Invalid email or password', 401)
     }
 
-    // Set session cookie
     const secure = isHttps(c.req.raw.headers, c.req.url)
     setCookie(c, COOKIE.SESSION_NAME, session.token, {
       ...COOKIE.OPTIONS,
@@ -95,11 +91,11 @@ app.post('/auth/login', async (c) => {
  * Logout user
  * POST /auth/logout
  */
-app.post('/auth/logout', async (c) => {
+app.post('/auth/logout', (c) => {
   try {
     const token = getCookie(c, COOKIE.SESSION_NAME)
     if (token) {
-      await d1UserDatabase.logout(token)
+      authLocalService.logout(token)
     }
     deleteCookie(c, COOKIE.SESSION_NAME)
     return success(c, undefined, 'Logged out successfully')
@@ -113,23 +109,66 @@ app.post('/auth/logout', async (c) => {
  * Get current user
  * GET /auth/me
  */
-app.get('/auth/me', async (c) => {
+app.get('/auth/me', (c) => {
   try {
     const token = getCookie(c, COOKIE.SESSION_NAME)
     if (!token) {
       return error(c, ErrorMessages.UNAUTHORIZED, 401)
     }
 
-    const user = await d1UserDatabase.validateSession(token)
-    if (!user) {
+    const session = authLocalService.validateSession(token)
+    if (!session) {
       deleteCookie(c, COOKIE.SESSION_NAME)
       return error(c, ErrorMessages.SESSION_EXPIRED, 401)
     }
 
-    return success(c, { user })
+    const { user, orgId } = session
+    const orgs = orgService.listForUser(user.id)
+    const role = orgId ? rbacService.getUserRole(user.id, orgId) : null
+
+    return success(c, {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        is_platform_admin: !!user.is_platform_admin,
+      },
+      orgId,
+      role,
+      orgs: orgs.map(o => ({ id: o.id, name: o.name, slug: o.slug, role: o.role })),
+    })
   } catch (err) {
     logger.error('Auth check error:', err)
     return error(c, 'Auth check failed', 500)
+  }
+})
+
+/**
+ * Switch active organization
+ * POST /auth/switch-org
+ */
+app.post('/auth/switch-org', async (c) => {
+  try {
+    const token = getCookie(c, COOKIE.SESSION_NAME)
+    if (!token) return error(c, ErrorMessages.UNAUTHORIZED, 401)
+
+    const body = await c.req.json()
+    const { orgId } = body
+    if (!orgId) return error(c, 'orgId is required', 400)
+
+    const session = authLocalService.validateSession(token)
+    if (!session) return error(c, ErrorMessages.SESSION_EXPIRED, 401)
+
+    // Verify user is member of target org
+    if (!rbacService.isMember(session.user.id, orgId) && !rbacService.isPlatformAdmin(session.user.id)) {
+      return error(c, 'You are not a member of this organization', 403)
+    }
+
+    authLocalService.switchOrg(token, orgId)
+    return success(c, { orgId }, 'Organization switched')
+  } catch (err) {
+    logger.error('Switch org error:', err)
+    return error(c, 'Failed to switch organization', 500)
   }
 })
 

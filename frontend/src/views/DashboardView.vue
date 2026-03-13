@@ -3,6 +3,12 @@ import { computed } from 'vue'
 import { useDashboardStats, usePauseJob, useResumeJob, useCancelJob } from '../lib/query'
 import { useAuth } from '../stores/auth'
 import MainLayout from '../components/layout/MainLayout.vue'
+import StatCard from '../components/ui/StatCard.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import AlertBanner from '../components/ui/AlertBanner.vue'
+import Skeleton from '../components/ui/Skeleton.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import ProgressBar from '../components/ui/ProgressBar.vue'
 import {
   Mail,
   CheckCircle,
@@ -20,11 +26,11 @@ import {
   Inbox,
   Users,
   FileText,
-  ArrowUpRight,
+  RefreshCw,
 } from 'lucide-vue-next'
 
 const { user } = useAuth()
-const { data: dashboardData, isLoading } = useDashboardStats()
+const { data: dashboardData, isLoading, error, refetch } = useDashboardStats()
 
 const stats = computed(() => dashboardData.value?.stats || { total: 0, sent: 0, failed: 0 })
 const successRate = computed(() => {
@@ -97,12 +103,6 @@ const statusColorMap: Record<string, string> = {
   failed: 'text-danger',
 }
 
-const fillStyleMap: Record<string, string> = {
-  running: 'background: linear-gradient(90deg, var(--color-accent), var(--color-accent-secondary))',
-  pending: 'background: var(--color-warning)',
-  paused: 'background: var(--color-text-muted)',
-}
-
 const greeting = computed(() => {
   const hour = new Date().getHours()
   if (hour < 12) return 'Good morning'
@@ -114,140 +114,115 @@ const firstName = computed(() => {
   const n = user.value?.name
   return n ? n.split(' ')[0] : ''
 })
+
+const currentDate = computed(() => {
+  const now = new Date()
+  return now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
+})
 </script>
 
 <template>
   <MainLayout>
     <!-- Header -->
-    <header class="flex justify-between items-start mb-8">
-      <div>
-        <h1 class="text-[28px] font-bold mb-1">
-          {{ greeting }}<span v-if="firstName">, {{ firstName }}</span>
-        </h1>
-        <p class="text-text-muted text-sm">Here's what's happening with your campaigns</p>
+    <PageHeader :title="`${greeting}${firstName ? `, ${firstName}` : ''}`" :subtitle="currentDate">
+      <template #actions>
+        <router-link to="/compose" class="btn-primary">
+          <Plus :size="16" />
+          New Campaign
+        </router-link>
+      </template>
+    </PageHeader>
+
+    <!-- Stats Grid: Skeleton Loading -->
+    <div v-if="isLoading" class="grid grid-cols-4 gap-4 mb-6 max-lg:grid-cols-2 max-[480px]:grid-cols-1">
+      <Skeleton variant="stat-card" :count="4" />
+    </div>
+
+    <!-- Stats Grid: Error State -->
+    <AlertBanner v-else-if="error" type="error">
+      <div class="flex items-center gap-3">
+        <span>{{ (error as Error).message || 'Failed to load dashboard data' }}</span>
+        <button class="btn-ghost btn-sm" @click="refetch()">
+          <RefreshCw :size="14" /> Retry
+        </button>
       </div>
-      <router-link to="/compose" class="btn-primary">
-        <Plus :size="18" />
-        New Campaign
-      </router-link>
-    </header>
+    </AlertBanner>
 
     <!-- Stats Grid -->
-    <div class="grid grid-cols-4 gap-4 mb-8 max-lg:grid-cols-2 max-[480px]:grid-cols-1">
-      <div class="stat-card group">
-        <div
-          class="flex items-center justify-center w-11 h-11 bg-bg-tertiary rounded-xl text-text-secondary group-hover:bg-accent/10 group-hover:text-accent transition-colors duration-200"
-        >
-          <Mail :size="22" />
-        </div>
-        <div class="flex-1">
-          <div class="text-[26px] font-bold text-text-primary leading-tight font-mono">{{ stats.total }}</div>
-          <div class="text-[12px] text-text-muted uppercase tracking-wider">Total Sent</div>
-        </div>
-      </div>
-
-      <div class="stat-card border-l-[3px] border-l-success group">
-        <div class="flex items-center justify-center w-11 h-11 rounded-xl bg-success/15 text-success">
-          <CheckCircle :size="22" />
-        </div>
-        <div class="flex-1">
-          <div class="text-[26px] font-bold text-text-primary leading-tight font-mono">{{ stats.sent }}</div>
-          <div class="text-[12px] text-text-muted uppercase tracking-wider">Delivered</div>
-        </div>
-      </div>
-
-      <div class="stat-card border-l-[3px] border-l-danger group">
-        <div class="flex items-center justify-center w-11 h-11 rounded-xl bg-danger/15 text-danger">
-          <XCircle :size="22" />
-        </div>
-        <div class="flex-1">
-          <div class="text-[26px] font-bold text-text-primary leading-tight font-mono">{{ stats.failed }}</div>
-          <div class="text-[12px] text-text-muted uppercase tracking-wider">Failed</div>
-        </div>
-      </div>
-
-      <div class="stat-card border-l-[3px] border-l-accent group">
-        <div class="flex items-center justify-center w-11 h-11 rounded-xl bg-accent/15 text-accent">
-          <TrendingUp :size="22" />
-        </div>
-        <div class="flex-1">
-          <div class="text-[26px] font-bold leading-tight font-mono text-accent">{{ successRate }}%</div>
-          <div class="text-[12px] text-text-muted uppercase tracking-wider">Success Rate</div>
-        </div>
-      </div>
+    <div v-else class="grid grid-cols-4 gap-4 mb-6 max-lg:grid-cols-2 max-[480px]:grid-cols-1">
+      <StatCard :icon="Mail" :value="stats.total" label="Total Sent" />
+      <StatCard :icon="CheckCircle" :value="stats.sent" label="Delivered" color="success" />
+      <StatCard :icon="XCircle" :value="stats.failed" label="Failed" color="danger" />
+      <StatCard :icon="TrendingUp" :value="`${successRate}%`" label="Success Rate" color="accent" />
     </div>
 
     <!-- Job Queue -->
-    <div v-if="hasQueueActivity || allVisibleJobs.length > 0" class="glass-card p-6 mb-8">
-      <div class="flex justify-between items-center mb-5">
-        <h3 class="flex items-center gap-2.5 text-base font-semibold m-0">
-          <Inbox :size="18" class="text-accent" />
+    <div v-if="hasQueueActivity || allVisibleJobs.length > 0" class="bg-bg-card border border-border rounded-xl overflow-hidden mb-6">
+      <div class="flex justify-between items-center px-5 py-3.5 border-b border-border">
+        <h3 class="flex items-center gap-2.5 text-sm font-semibold text-text-primary m-0">
+          <Inbox :size="16" class="text-accent" />
           Active Jobs
         </h3>
-        <div class="flex gap-2">
+        <div class="flex items-center gap-2">
           <span v-if="queueData.stats.running > 0" class="badge-info">
             <Loader2 :size="12" class="animate-spin" />
             {{ queueData.stats.running }} running
           </span>
-          <span v-if="queueData.stats.pending > 0" class="badge-warning">
+          <span v-if="queueData.stats.pending > 0" class="inline-flex items-center gap-1 px-2 py-[3px] text-[11px] font-semibold rounded-full bg-warning/12 text-warning">
             <Clock :size="12" />
             {{ queueData.stats.pending }} queued
           </span>
-          <span
-            v-if="queueData.stats.paused > 0"
-            class="inline-flex items-center gap-1 py-1 px-2.5 rounded-xl text-xs font-semibold bg-[rgba(107,114,128,0.15)] text-text-muted"
-          >
+          <span v-if="queueData.stats.paused > 0" class="inline-flex items-center gap-1 px-2 py-[3px] text-[11px] font-semibold rounded-full bg-[rgba(107,114,128,0.12)] text-text-muted">
             <Pause :size="12" />
             {{ queueData.stats.paused }} paused
           </span>
         </div>
       </div>
 
-      <div v-if="allVisibleJobs.length > 0" class="flex flex-col gap-2.5">
+      <div v-if="allVisibleJobs.length > 0" class="flex flex-col">
         <div
-          v-for="job in allVisibleJobs"
+          v-for="(job, idx) in allVisibleJobs"
           :key="job.id"
-          class="flex items-center gap-4 py-3 px-4 bg-bg-secondary border border-border rounded-xl transition-all duration-200 hover:border-border-glow"
+          :class="['flex items-center gap-4 px-5 py-3 transition-colors duration-150 hover:bg-accent/3', idx > 0 && 'border-t border-[rgba(148,163,184,0.06)]']"
         >
           <div class="flex-1 min-w-0">
-            <div class="text-sm font-semibold text-text-primary truncate mb-0.5">
+            <div class="text-[13px] font-semibold text-text-primary truncate mb-0.5">
               {{ job.subject || 'Untitled' }}
             </div>
             <div class="flex items-center gap-2 text-xs text-text-muted">
-              <span class="font-semibold uppercase tracking-wider text-[11px]" :class="statusColorMap[job.status]">{{
+              <span class="font-semibold uppercase tracking-wider text-[10px]" :class="statusColorMap[job.status]">{{
                 statusLabel(job.status)
               }}</span>
-              <span class="text-text-muted">·</span>
+              <span class="opacity-40">|</span>
               <span>{{ job.sent_count }}/{{ job.total_count }} sent</span>
               <template v-if="job.config_name">
-                <span class="text-text-muted">·</span>
+                <span class="opacity-40">|</span>
                 <span>{{ job.config_name }}</span>
               </template>
             </div>
           </div>
-          <div class="flex items-center gap-2 w-[140px] shrink-0">
-            <div class="flex-1 h-1.5 bg-bg-primary rounded-full overflow-hidden">
-              <div
-                class="h-full rounded-full transition-all duration-500 ease-out"
-                :style="[{ width: job.progress + '%' }, fillStyleMap[job.status] || '']"
-              ></div>
-            </div>
-            <span class="text-xs text-text-secondary w-9 text-right font-mono">{{ job.progress }}%</span>
+          <div class="flex items-center gap-2.5 w-[140px] shrink-0">
+            <ProgressBar :value="job.progress" :variant="job.status === 'running' ? 'accent' : job.status === 'pending' ? 'warning' : 'default'" size="sm" class="flex-1" />
+            <span class="text-[11px] text-text-muted w-9 text-right font-mono tabular-nums">{{ job.progress }}%</span>
           </div>
           <div class="flex gap-1 shrink-0">
-            <button v-if="job.status === 'running'" class="job-action-btn" title="Pause" @click="handlePause(job.id)">
-              <Pause :size="14" />
+            <button v-if="job.status === 'running'" class="flex items-center justify-center w-7 h-7 border border-border rounded-md bg-transparent text-text-muted cursor-pointer transition-all duration-150 hover:bg-bg-tertiary hover:text-text-primary hover:border-border-hover" title="Pause" @click="handlePause(job.id)">
+              <Pause :size="13" />
             </button>
-            <button v-if="job.status === 'paused'" class="job-action-btn" title="Resume" @click="handleResume(job.id)">
-              <Play :size="14" />
+            <button v-if="job.status === 'paused'" class="flex items-center justify-center w-7 h-7 border border-border rounded-md bg-transparent text-text-muted cursor-pointer transition-all duration-150 hover:bg-bg-tertiary hover:text-text-primary hover:border-border-hover" title="Resume" @click="handleResume(job.id)">
+              <Play :size="13" />
             </button>
             <button
               v-if="['running', 'paused', 'pending'].includes(job.status)"
-              class="job-action-btn hover:text-danger! hover:border-danger!"
+              class="flex items-center justify-center w-7 h-7 border border-border rounded-md bg-transparent text-text-muted cursor-pointer transition-all duration-150 hover:text-danger hover:border-danger hover:bg-danger/8"
               title="Cancel"
               @click="handleCancel(job.id)"
             >
-              <X :size="14" />
+              <X :size="13" />
             </button>
           </div>
         </div>
@@ -255,130 +230,50 @@ const firstName = computed(() => {
     </div>
 
     <!-- Onboarding / Welcome (only when no campaigns yet) -->
-    <div v-if="!hasAnyCampaigns && !isLoading" class="glass-card p-10 text-center mb-8">
-      <div
-        class="w-16 h-16 rounded-2xl bg-linear-to-br from-accent/20 to-accent-secondary/20 flex items-center justify-center mx-auto mb-5"
+    <div v-if="!hasAnyCampaigns && !isLoading && !error" class="bg-bg-card border border-border rounded-xl mb-6">
+      <EmptyState
+        :icon="PenSquare"
+        title="Ready to send your first campaign?"
+        description="Set up your SMTP configuration, upload your contacts, and compose your first email. It only takes a few minutes."
       >
-        <PenSquare :size="28" class="text-accent" />
-      </div>
-      <h3 class="text-2xl mb-2 text-text-primary">Ready to send your first campaign?</h3>
-      <p class="text-text-muted mb-6 text-sm max-w-md mx-auto">
-        Set up your SMTP configuration, upload your contacts, and compose your first email. It only takes a few minutes.
-      </p>
-      <div class="flex justify-center gap-3 flex-wrap">
-        <router-link to="/configs" class="btn-secondary">
-          <Settings :size="16" />
-          Setup SMTP
-        </router-link>
-        <router-link to="/compose" class="btn-primary">
-          <PenSquare :size="16" />
-          Create Campaign
-        </router-link>
-      </div>
+        <template #actions>
+          <router-link to="/configs" class="btn-secondary">
+            <Settings :size="16" />
+            Setup SMTP
+          </router-link>
+          <router-link to="/compose" class="btn-primary">
+            <PenSquare :size="16" />
+            Create Campaign
+          </router-link>
+        </template>
+      </EmptyState>
     </div>
 
     <!-- Quick Actions -->
     <div>
-      <h3 class="text-base font-semibold mb-4 text-text-primary">Quick Actions</h3>
+      <h3 class="text-sm font-semibold mb-3 text-text-muted uppercase tracking-wider">Quick Actions</h3>
       <div class="grid grid-cols-5 gap-3 max-lg:grid-cols-3 max-md:grid-cols-2 max-[480px]:grid-cols-1">
-        <router-link to="/compose" class="quick-action group">
-          <PenSquare :size="22" class="text-accent transition-transform duration-200 group-hover:scale-110" />
-          <span class="text-[13px] font-medium">Compose</span>
-          <ArrowUpRight
-            :size="14"
-            class="absolute top-3 right-3 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          />
+        <router-link to="/compose" class="flex flex-col items-center gap-2 py-5 px-4 bg-bg-secondary border border-border rounded-xl no-underline transition-all duration-150 hover:border-accent group">
+          <PenSquare :size="20" class="text-accent" />
+          <span class="text-[13px] font-medium text-text-secondary group-hover:text-text-primary transition-colors">Compose</span>
         </router-link>
-        <router-link to="/campaigns" class="quick-action group">
-          <Mail :size="22" class="text-accent transition-transform duration-200 group-hover:scale-110" />
-          <span class="text-[13px] font-medium">Campaigns</span>
-          <ArrowUpRight
-            :size="14"
-            class="absolute top-3 right-3 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          />
+        <router-link to="/campaigns" class="flex flex-col items-center gap-2 py-5 px-4 bg-bg-secondary border border-border rounded-xl no-underline transition-all duration-150 hover:border-accent group">
+          <Mail :size="20" class="text-accent" />
+          <span class="text-[13px] font-medium text-text-secondary group-hover:text-text-primary transition-colors">Campaigns</span>
         </router-link>
-        <router-link to="/contacts" class="quick-action group">
-          <Users :size="22" class="text-accent transition-transform duration-200 group-hover:scale-110" />
-          <span class="text-[13px] font-medium">Contacts</span>
-          <ArrowUpRight
-            :size="14"
-            class="absolute top-3 right-3 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          />
+        <router-link to="/contacts" class="flex flex-col items-center gap-2 py-5 px-4 bg-bg-secondary border border-border rounded-xl no-underline transition-all duration-150 hover:border-accent group">
+          <Users :size="20" class="text-accent" />
+          <span class="text-[13px] font-medium text-text-secondary group-hover:text-text-primary transition-colors">Contacts</span>
         </router-link>
-        <router-link to="/reports" class="quick-action group">
-          <BarChart3 :size="22" class="text-accent transition-transform duration-200 group-hover:scale-110" />
-          <span class="text-[13px] font-medium">Reports</span>
-          <ArrowUpRight
-            :size="14"
-            class="absolute top-3 right-3 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          />
+        <router-link to="/reports" class="flex flex-col items-center gap-2 py-5 px-4 bg-bg-secondary border border-border rounded-xl no-underline transition-all duration-150 hover:border-accent group">
+          <BarChart3 :size="20" class="text-accent" />
+          <span class="text-[13px] font-medium text-text-secondary group-hover:text-text-primary transition-colors">Reports</span>
         </router-link>
-        <router-link to="/templates" class="quick-action group">
-          <FileText :size="22" class="text-accent transition-transform duration-200 group-hover:scale-110" />
-          <span class="text-[13px] font-medium">Templates</span>
-          <ArrowUpRight
-            :size="14"
-            class="absolute top-3 right-3 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          />
+        <router-link to="/templates" class="flex flex-col items-center gap-2 py-5 px-4 bg-bg-secondary border border-border rounded-xl no-underline transition-all duration-150 hover:border-accent group">
+          <FileText :size="20" class="text-accent" />
+          <span class="text-[13px] font-medium text-text-secondary group-hover:text-text-primary transition-colors">Templates</span>
         </router-link>
       </div>
     </div>
   </MainLayout>
 </template>
-
-<style scoped>
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 20px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  transition: all 0.2s ease;
-}
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.job-action-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.job-action-btn:hover {
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  border-color: var(--color-accent);
-}
-
-.quick-action {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 24px 16px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  text-decoration: none;
-  color: var(--color-text-secondary);
-  transition: all 0.2s ease;
-}
-.quick-action:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
-}
-</style>

@@ -1,6 +1,17 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import MainLayout from '../components/layout/MainLayout.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import AppTabs from '../components/ui/AppTabs.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import AppPagination from '../components/ui/AppPagination.vue'
+import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
+import Modal from '../components/ui/Modal.vue'
+import StatusBadge from '../components/ui/StatusBadge.vue'
+import ProgressBar from '../components/ui/ProgressBar.vue'
+import SearchInput from '../components/ui/SearchInput.vue'
+import Skeleton from '../components/ui/Skeleton.vue'
+import AlertBanner from '../components/ui/AlertBanner.vue'
 import { campaignsApi, templatesApi, contactsApi } from '../lib/api'
 import type { Campaign as CampaignType } from '../lib/api'
 import { useToast } from '../composables/useToast'
@@ -15,15 +26,14 @@ import {
   X,
   Archive,
   Trash2,
-  Search,
   Loader2,
   Inbox,
-  ChevronLeft,
-  ChevronRight,
   Eye,
   MousePointer,
   Clock,
   Rocket,
+  RefreshCw,
+  MoreHorizontal,
 } from 'lucide-vue-next'
 const toast = useToast()
 // ============================================================================
@@ -73,13 +83,16 @@ const form = ref<CampaignForm>({
 const templates = ref<{ id: string; name: string }[]>([])
 const contactLists = ref<{ id: string; name: string; contact_count: number }[]>([])
 const statusTabs = [
-  { value: 'all', label: 'All' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'sending', label: 'Sending' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'archived', label: 'Archived' },
+  { key: 'all', label: 'All' },
+  { key: 'draft', label: 'Draft' },
+  { key: 'scheduled', label: 'Scheduled' },
+  { key: 'sending', label: 'Sending' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'archived', label: 'Archived' },
 ]
+
+const deleteConfirm = ref<{ show: boolean; id: string }>({ show: false, id: '' })
+const openMenuId = ref<string | null>(null)
 // ============================================================================
 // Data Loading
 // ============================================================================
@@ -135,6 +148,7 @@ function setStatusFilter(value: string) {
 }
 
 async function campaignAction(id: string, action: string) {
+  openMenuId.value = null
   actionLoading.value = `${id}-${action}`
   try {
     const actionMap: Record<string, (id: string) => Promise<any>> = {
@@ -155,8 +169,14 @@ async function campaignAction(id: string, action: string) {
     actionLoading.value = null
   }
 }
-async function deleteCampaign(id: string) {
-  if (!confirm('Are you sure you want to delete this campaign?')) return
+function promptDelete(id: string) {
+  openMenuId.value = null
+  deleteConfirm.value = { show: true, id }
+}
+
+async function confirmDelete() {
+  const id = deleteConfirm.value.id
+  deleteConfirm.value = { show: false, id: '' }
   actionLoading.value = `${id}-delete`
   try {
     await campaignsApi.delete(id)
@@ -188,19 +208,27 @@ function openCreateModal() {
   showCreateModal.value = true
 }
 // ============================================================================
+// Dropdown Menu
+// ============================================================================
+function toggleMenu(id: string) {
+  openMenuId.value = openMenuId.value === id ? null : id
+}
+function handleOutsideClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target.closest('[data-menu-trigger]') && !target.closest('[data-menu-panel]')) {
+    openMenuId.value = null
+  }
+}
+onMounted(() => {
+  document.addEventListener('click', handleOutsideClick)
+  fetchCampaigns()
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleOutsideClick)
+})
+// ============================================================================
 // Helpers
 // ============================================================================
-function statusBadgeClass(status: string): string {
-  const map: Record<string, string> = {
-    draft: 'badge-muted',
-    scheduled: 'badge-warning',
-    sending: 'badge-info',
-    completed: 'badge-success',
-    cancelled: 'badge-danger',
-    archived: 'badge-muted',
-  }
-  return map[status] || 'badge-muted'
-}
 function formatDate(d: string | null): string {
   if (!d) return '-'
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -208,9 +236,6 @@ function formatDate(d: string | null): string {
 function pct(value: number, total: number): string {
   if (!total) return '0'
   return Math.round((value / total) * 100).toString()
-}
-function isActionLoading(id: string, action: string): boolean {
-  return actionLoading.value === `${id}-${action}`
 }
 function changePage(p: number) {
   currentPage.value = p
@@ -223,301 +248,282 @@ watch(searchQuery, () => {
   currentPage.value = 1
   fetchCampaigns()
 })
-onMounted(() => fetchCampaigns())
 </script>
 <template>
   <MainLayout>
-    <header class="flex justify-between items-center mb-7">
-      <div>
-        <h1 class="text-[28px] font-bold mb-1">Campaigns</h1>
-        <p class="text-text-muted text-sm">Create and manage email campaigns</p>
-      </div>
-      <button class="btn btn-primary" @click="openCreateModal"><Plus :size="16" /> New Campaign</button>
-    </header>
-    <!-- Status Tabs -->
-    <div class="flex items-center gap-1 mb-6 pb-3 border-b border-border flex-wrap">
-      <button
-        v-for="tab in statusTabs"
-        :key="tab.value"
-        class="px-4 py-2 border-none rounded-[--radius-md] text-[13px] font-medium cursor-pointer transition-all duration-200"
-        :class="
-          statusFilter === tab.value
-            ? 'bg-accent text-bg-primary font-semibold'
-            : 'bg-transparent text-text-secondary hover:bg-white/5 hover:text-text-primary'
-        "
-        @click="setStatusFilter(tab.value)"
-      >
-        {{ tab.label }}
-      </button>
-      <div class="ml-auto relative">
-        <Search :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          class="form-input pl-9 w-[220px] h-9 text-[13px]"
-          placeholder="Search campaigns..."
-        />
-      </div>
+    <PageHeader title="Campaigns" subtitle="Create and manage email campaigns">
+      <template #actions>
+        <button class="btn btn-primary" @click="openCreateModal"><Plus :size="16" /> New Campaign</button>
+      </template>
+    </PageHeader>
+
+    <!-- Filter Row -->
+    <div class="flex items-center gap-2 mb-6 flex-wrap">
+      <AppTabs
+        :tabs="statusTabs"
+        :model-value="statusFilter"
+        variant="pill"
+        @update:model-value="setStatusFilter"
+      />
+      <SearchInput v-model="searchQuery" placeholder="Search campaigns..." class="ml-auto w-60" />
     </div>
-    <!-- Loading / Empty / Error -->
-    <div v-if="loading" class="text-center py-[60px] px-5 text-text-muted flex flex-col items-center gap-3">
-      <Loader2 :size="24" class="spin" /> Loading campaigns...
+
+    <!-- Loading -->
+    <div v-if="loading" class="flex flex-col gap-4">
+      <Skeleton variant="card" :count="3" />
     </div>
-    <div v-else-if="error" class="text-center py-[60px] px-5 text-danger flex flex-col items-center gap-3">
+
+    <!-- Error -->
+    <AlertBanner v-else-if="error" type="error">
       {{ error }}
-    </div>
-    <div
+      <button class="btn-ghost btn-sm ml-2" @click="fetchCampaigns()"><RefreshCw :size="14" /> Retry</button>
+    </AlertBanner>
+
+    <!-- Empty -->
+    <EmptyState
       v-else-if="campaigns.length === 0"
-      class="text-center py-[60px] px-5 text-text-muted flex flex-col items-center gap-3"
-    >
-      <Inbox :size="48" class="opacity-40" />
-      <p>No campaigns found</p>
-      <p class="text-text-muted text-sm">Create your first campaign to get started</p>
-    </div>
+      :icon="Inbox"
+      title="No campaigns found"
+      description="Create your first campaign to get started"
+    />
+
     <!-- Campaign Cards -->
-    <div v-else class="flex flex-col gap-4">
+    <div v-else class="flex flex-col gap-3">
       <div
         v-for="c in campaigns"
         :key="c.id"
-        class="p-5 bg-bg-card border border-border rounded-[--radius-lg] transition-colors duration-200 hover:border-accent"
+        class="group relative bg-bg-card border border-border rounded-lg transition-all duration-200 hover:border-accent/50 hover:shadow-sm"
       >
-        <!-- Header row -->
-        <div class="flex justify-between items-start mb-3">
-          <div class="flex items-center gap-3">
-            <router-link
-              :to="`/campaigns/${c.id}`"
-              class="text-base font-semibold text-text-primary m-0 no-underline hover:text-accent transition-colors"
-              >{{ c.name }}</router-link
-            >
-            <span
-              class="inline-flex items-center px-2.5 py-0.5 rounded-xl text-[11px] font-semibold capitalize tracking-[0.3px]"
-              :class="statusBadgeClass(c.status)"
-              >{{ c.status }}</span
-            >
+        <div class="p-5">
+          <!-- Top Row: Name + Status + Actions Trigger -->
+          <div class="flex items-start justify-between gap-4 mb-2">
+            <div class="flex items-center gap-3 min-w-0">
+              <router-link
+                :to="`/campaigns/${c.id}`"
+                class="text-[15px] font-semibold text-text-primary no-underline hover:text-accent transition-colors truncate"
+              >{{ c.name }}</router-link>
+              <StatusBadge :status="c.status" type="campaign" />
+            </div>
+
+            <!-- Actions Dropdown Trigger -->
+            <div class="relative shrink-0">
+              <button
+                data-menu-trigger
+                class="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-text-muted hover:bg-bg-secondary transition-colors"
+                :disabled="!!actionLoading"
+                @click.stop="toggleMenu(c.id)"
+              >
+                <Loader2 v-if="actionLoading && actionLoading.startsWith(c.id)" :size="15" class="spin" />
+                <MoreHorizontal v-else :size="15" />
+              </button>
+
+              <!-- Dropdown Panel -->
+              <div
+                v-if="openMenuId === c.id"
+                data-menu-panel
+                class="absolute right-0 top-full mt-1 z-30 min-w-40 bg-bg-secondary border border-border rounded-lg shadow-lg p-1"
+              >
+                <button
+                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
+                  @click="campaignAction(c.id, 'edit')"
+                >
+                  <Pencil :size="14" /> Edit
+                </button>
+                <button
+                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
+                  @click="campaignAction(c.id, 'clone')"
+                >
+                  <Copy :size="14" /> Clone
+                </button>
+                <button
+                  v-if="c.status === 'draft' || c.status === 'scheduled'"
+                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
+                  @click="campaignAction(c.id, 'launch')"
+                >
+                  <Rocket :size="14" /> Launch
+                </button>
+                <button
+                  v-if="c.status === 'sending'"
+                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
+                  @click="campaignAction(c.id, 'pause')"
+                >
+                  <Pause :size="14" /> Pause
+                </button>
+                <button
+                  v-if="c.status === 'sending' || c.status === 'scheduled'"
+                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
+                  @click="campaignAction(c.id, 'cancel')"
+                >
+                  <X :size="14" /> Cancel
+                </button>
+                <button
+                  v-if="c.status === 'completed' || c.status === 'cancelled'"
+                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
+                  @click="campaignAction(c.id, 'archive')"
+                >
+                  <Archive :size="14" /> Archive
+                </button>
+                <div class="my-1 border-t border-border"></div>
+                <button
+                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-danger rounded-md hover:bg-danger/10 transition-colors text-left"
+                  @click="promptDelete(c.id)"
+                >
+                  <Trash2 :size="14" /> Delete
+                </button>
+              </div>
+            </div>
           </div>
-          <div class="flex gap-1">
-            <button
-              class="btn-ghost px-2 py-1 text-xs"
-              title="Edit"
-              :disabled="!!actionLoading"
-              @click="campaignAction(c.id, 'edit')"
-            >
-              <Pencil :size="14" />
-            </button>
-            <button
-              class="btn-ghost px-2 py-1 text-xs"
-              title="Clone"
-              :disabled="!!actionLoading"
-              @click="campaignAction(c.id, 'clone')"
-            >
-              <Loader2 v-if="isActionLoading(c.id, 'clone')" :size="14" class="spin" /><Copy v-else :size="14" />
-            </button>
-            <button
-              v-if="c.status === 'draft' || c.status === 'scheduled'"
-              class="btn-ghost px-2 py-1 text-xs"
-              title="Launch"
-              :disabled="!!actionLoading"
-              @click="campaignAction(c.id, 'launch')"
-            >
-              <Loader2 v-if="isActionLoading(c.id, 'launch')" :size="14" class="spin" /><Rocket v-else :size="14" />
-            </button>
-            <button
-              v-if="c.status === 'sending'"
-              class="btn-ghost px-2 py-1 text-xs"
-              title="Pause"
-              :disabled="!!actionLoading"
-              @click="campaignAction(c.id, 'pause')"
-            >
-              <Loader2 v-if="isActionLoading(c.id, 'pause')" :size="14" class="spin" /><Pause v-else :size="14" />
-            </button>
-            <button
-              v-if="c.status === 'sending' || c.status === 'scheduled'"
-              class="btn-ghost px-2 py-1 text-xs"
-              title="Cancel"
-              :disabled="!!actionLoading"
-              @click="campaignAction(c.id, 'cancel')"
-            >
-              <Loader2 v-if="isActionLoading(c.id, 'cancel')" :size="14" class="spin" /><X v-else :size="14" />
-            </button>
-            <button
-              v-if="c.status === 'completed' || c.status === 'cancelled'"
-              class="btn-ghost px-2 py-1 text-xs"
-              title="Archive"
-              :disabled="!!actionLoading"
-              @click="campaignAction(c.id, 'archive')"
-            >
-              <Archive :size="14" />
-            </button>
-            <button
-              class="btn-ghost px-2 py-1 text-xs opacity-50 transition-opacity duration-200 hover:opacity-100 hover:text-danger"
-              title="Delete"
-              :disabled="!!actionLoading"
-              @click="deleteCampaign(c.id)"
-            >
-              <Loader2 v-if="isActionLoading(c.id, 'delete')" :size="14" class="spin" /><Trash2 v-else :size="14" />
-            </button>
+
+          <!-- Subject + Meta -->
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-text-muted">
+            <span class="inline-flex items-center gap-1.5"><Mail :size="13" /> {{ c.subject || 'No subject' }}</span>
+            <span class="inline-flex items-center gap-1.5"><Users :size="13" /> {{ c.total_recipients }} recipients</span>
+            <span class="inline-flex items-center gap-1.5"><Clock :size="13" /> {{ formatDate(c.created_at) }}</span>
+            <span v-if="c.scheduled_at" class="inline-flex items-center gap-1.5 text-warning">
+              <Clock :size="13" /> Scheduled: {{ formatDate(c.scheduled_at) }}
+            </span>
           </div>
-        </div>
-        <!-- Meta row -->
-        <div class="flex flex-wrap gap-4 mb-3.5 text-[13px] text-text-secondary">
-          <span class="inline-flex items-center gap-1.5"><Mail :size="14" /> {{ c.subject || 'No subject' }}</span>
-          <span class="inline-flex items-center gap-1.5"><Users :size="14" /> {{ c.total_recipients }} recipients</span>
-          <span class="inline-flex items-center gap-1.5"><Clock :size="14" /> {{ formatDate(c.created_at) }}</span>
-          <span v-if="c.scheduled_at" class="inline-flex items-center gap-1.5 text-warning"
-            ><Clock :size="14" /> Scheduled: {{ formatDate(c.scheduled_at) }}</span
+
+          <!-- Stats Bar -->
+          <div
+            v-if="c.sent_count > 0 || c.status !== 'draft'"
+            class="flex items-center gap-5 pt-4 mt-4 border-t border-border text-[13px] flex-wrap"
           >
-        </div>
-        <!-- Stats bar -->
-        <div
-          v-if="c.sent_count > 0 || c.status !== 'draft'"
-          class="flex items-center gap-5 pt-3 border-t border-border text-[13px] flex-wrap"
-        >
-          <div class="inline-flex items-center gap-1 text-text-secondary">
-            <Send :size="13" />
-            <span class="font-semibold text-text-primary">{{ c.sent_count }}</span>
-            <span class="text-text-muted">sent</span>
-            <span v-if="c.total_recipients" class="text-text-muted text-xs"
-              >({{ pct(c.sent_count, c.total_recipients) }}%)</span
-            >
-          </div>
-          <div class="inline-flex items-center gap-1 text-blue-500">
-            <Eye :size="13" />
-            <span class="font-semibold text-blue-500">{{ c.open_count }}</span>
-            <span class="text-text-muted">opened</span>
-            <span v-if="c.sent_count" class="text-text-muted text-xs">({{ pct(c.open_count, c.sent_count) }}%)</span>
-          </div>
-          <div class="inline-flex items-center gap-1 text-accent">
-            <MousePointer :size="13" />
-            <span class="font-semibold text-accent">{{ c.click_count }}</span>
-            <span class="text-text-muted">clicked</span>
-            <span v-if="c.sent_count" class="text-text-muted text-xs">({{ pct(c.click_count, c.sent_count) }}%)</span>
-          </div>
-          <div v-if="c.total_recipients" class="flex-1 min-w-[80px] h-1 bg-bg-secondary rounded-sm overflow-hidden">
-            <div
-              class="h-full rounded-sm transition-[width] duration-300 ease-in-out progress-fill"
-              :style="{ width: pct(c.sent_count, c.total_recipients) + '%' }"
-            ></div>
+            <div class="inline-flex items-center gap-1 text-text-secondary">
+              <Send :size="13" />
+              <span class="font-semibold text-text-primary">{{ c.sent_count }}</span>
+              <span>sent</span>
+              <span v-if="c.total_recipients" class="text-text-muted text-xs">({{ pct(c.sent_count, c.total_recipients) }}%)</span>
+            </div>
+            <div class="inline-flex items-center gap-1 text-blue-500">
+              <Eye :size="13" />
+              <span class="font-semibold">{{ c.open_count }}</span>
+              <span class="text-text-muted">opened</span>
+              <span v-if="c.sent_count" class="text-text-muted text-xs">({{ pct(c.open_count, c.sent_count) }}%)</span>
+            </div>
+            <div class="inline-flex items-center gap-1 text-accent">
+              <MousePointer :size="13" />
+              <span class="font-semibold">{{ c.click_count }}</span>
+              <span class="text-text-muted">clicked</span>
+              <span v-if="c.sent_count" class="text-text-muted text-xs">({{ pct(c.click_count, c.sent_count) }}%)</span>
+            </div>
+            <ProgressBar
+              v-if="c.total_recipients"
+              :value="Number(pct(c.sent_count, c.total_recipients))"
+              variant="accent"
+              size="sm"
+              class="flex-1 min-w-20"
+            />
           </div>
         </div>
       </div>
     </div>
+
     <!-- Pagination -->
-    <div v-if="totalPages > 1" class="flex items-center justify-center gap-4 pt-6">
-      <button class="btn btn-ghost text-sm" :disabled="currentPage <= 1" @click="changePage(currentPage - 1)">
-        <ChevronLeft :size="16" /> Prev
-      </button>
-      <span class="text-[13px] text-text-muted"
-        >Page {{ currentPage }} of {{ totalPages }} ({{ totalCount }} total)</span
-      >
-      <button class="btn btn-ghost text-sm" :disabled="currentPage >= totalPages" @click="changePage(currentPage + 1)">
-        Next <ChevronRight :size="16" />
-      </button>
-    </div>
-  </MainLayout>
-  <!-- Create Campaign Modal -->
-  <Teleport to="body">
-    <div
-      v-if="showCreateModal"
-      class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-5"
-      @click.self="showCreateModal = false"
-    >
-      <div
-        class="bg-bg-card border border-border rounded-[--radius-lg] w-full max-w-[640px] max-h-[90vh] overflow-y-auto"
-      >
-        <div class="flex justify-between items-center px-6 py-5 border-b border-border">
-          <h2 class="text-lg font-semibold m-0">New Campaign</h2>
-          <button class="btn-ghost px-2 py-1 text-xs" @click="showCreateModal = false"><X :size="18" /></button>
+    <AppPagination
+      v-if="totalPages > 1"
+      class="mt-6"
+      :page="currentPage"
+      :total-pages="totalPages"
+      :total="totalCount"
+      :showing="campaigns.length"
+      @update:page="changePage"
+    />
+
+    <!-- Delete Confirm Dialog -->
+    <ConfirmDialog
+      :show="deleteConfirm.show"
+      title="Delete Campaign"
+      message="Are you sure you want to delete this campaign? This action cannot be undone."
+      confirm-text="Delete"
+      variant="danger"
+      @confirm="confirmDelete"
+      @cancel="deleteConfirm = { show: false, id: '' }"
+    />
+
+    <!-- Create Campaign Modal -->
+    <Modal :show="showCreateModal" title="New Campaign" size="lg" @close="showCreateModal = false">
+      <form @submit.prevent="createCampaign" class="space-y-5">
+        <div class="grid grid-cols-2 gap-x-4 gap-y-5">
+          <div class="flex flex-col gap-1.5 col-span-2">
+            <label class="text-[13px] font-medium text-text-secondary">Campaign Name *</label>
+            <input v-model="form.name" type="text" class="form-input" required placeholder="e.g. March Newsletter" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-medium text-text-secondary">Type</label>
+            <select v-model="form.type" class="form-select">
+              <option value="one_time">One-time</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-medium text-text-secondary">Subject *</label>
+            <input v-model="form.subject" type="text" class="form-input" required placeholder="Email subject line" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-medium text-text-secondary">From Name</label>
+            <input v-model="form.from_name" type="text" class="form-input" placeholder="Sender name" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-medium text-text-secondary">From Email *</label>
+            <input
+              v-model="form.from_email"
+              type="email"
+              class="form-input"
+              required
+              placeholder="sender@example.com"
+            />
+          </div>
+          <div class="flex flex-col gap-1.5 col-span-2">
+            <label class="text-[13px] font-medium text-text-secondary">Reply-To</label>
+            <input
+              v-model="form.reply_to"
+              type="email"
+              class="form-input"
+              placeholder="reply@example.com (optional)"
+            />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-medium text-text-secondary">Template</label>
+            <select v-model="form.template_id" class="form-select">
+              <option value="">-- No template --</option>
+              <option v-for="t in templates" :key="t.id" :value="t.id">{{ t.name }}</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-medium text-text-secondary">Contact List</label>
+            <select v-model="form.contact_list_id" class="form-select">
+              <option value="">-- Select list --</option>
+              <option v-for="l in contactLists" :key="l.id" :value="l.id">
+                {{ l.name }} ({{ l.contact_count }})
+              </option>
+            </select>
+          </div>
         </div>
-        <form class="p-6" @submit.prevent="createCampaign">
-          <div class="grid grid-cols-2 gap-4">
-            <div class="flex flex-col gap-1.5 col-span-2">
-              <label class="text-[13px] font-medium text-text-secondary">Campaign Name *</label>
-              <input v-model="form.name" type="text" class="form-input" required placeholder="e.g. March Newsletter" />
+
+        <fieldset class="border border-border rounded-lg p-4">
+          <legend class="text-[13px] font-semibold text-text-secondary px-2">Batch Settings</legend>
+          <div class="grid grid-cols-3 gap-4">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[13px] font-medium text-text-secondary">Batch Size</label>
+              <input v-model.number="form.batch_size" type="number" class="form-input" min="1" max="500" />
             </div>
             <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-medium text-text-secondary">Type</label>
-              <select v-model="form.type" class="form-select">
-                <option value="one_time">One-time</option>
-              </select>
+              <label class="text-[13px] font-medium text-text-secondary">Email Delay (ms)</label>
+              <input v-model.number="form.email_delay" type="number" class="form-input" min="0" step="100" />
             </div>
             <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-medium text-text-secondary">Subject *</label>
-              <input v-model="form.subject" type="text" class="form-input" required placeholder="Email subject line" />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-medium text-text-secondary">From Name</label>
-              <input v-model="form.from_name" type="text" class="form-input" placeholder="Sender name" />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-medium text-text-secondary">From Email *</label>
-              <input
-                v-model="form.from_email"
-                type="email"
-                class="form-input"
-                required
-                placeholder="sender@example.com"
-              />
-            </div>
-            <div class="flex flex-col gap-1.5 col-span-2">
-              <label class="text-[13px] font-medium text-text-secondary">Reply-To</label>
-              <input
-                v-model="form.reply_to"
-                type="email"
-                class="form-input"
-                placeholder="reply@example.com (optional)"
-              />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-medium text-text-secondary">Template</label>
-              <select v-model="form.template_id" class="form-select">
-                <option value="">-- No template --</option>
-                <option v-for="t in templates" :key="t.id" :value="t.id">{{ t.name }}</option>
-              </select>
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-medium text-text-secondary">Contact List</label>
-              <select v-model="form.contact_list_id" class="form-select">
-                <option value="">-- Select list --</option>
-                <option v-for="l in contactLists" :key="l.id" :value="l.id">
-                  {{ l.name }} ({{ l.contact_count }})
-                </option>
-              </select>
+              <label class="text-[13px] font-medium text-text-secondary">Batch Delay (ms)</label>
+              <input v-model.number="form.batch_delay" type="number" class="form-input" min="0" step="1000" />
             </div>
           </div>
-          <fieldset class="border border-border rounded-[--radius-md] p-4 mt-4">
-            <legend class="text-[13px] font-semibold text-text-secondary px-2">Batch Settings</legend>
-            <div class="grid grid-cols-3 gap-4">
-              <div class="flex flex-col gap-1.5">
-                <label class="text-[13px] font-medium text-text-secondary">Batch Size</label>
-                <input v-model.number="form.batch_size" type="number" class="form-input" min="1" max="500" />
-              </div>
-              <div class="flex flex-col gap-1.5">
-                <label class="text-[13px] font-medium text-text-secondary">Email Delay (ms)</label>
-                <input v-model.number="form.email_delay" type="number" class="form-input" min="0" step="100" />
-              </div>
-              <div class="flex flex-col gap-1.5">
-                <label class="text-[13px] font-medium text-text-secondary">Batch Delay (ms)</label>
-                <input v-model.number="form.batch_delay" type="number" class="form-input" min="0" step="1000" />
-              </div>
-            </div>
-          </fieldset>
-          <div class="flex justify-end gap-3 pt-5 border-t border-border mt-5">
-            <button type="button" class="btn btn-ghost" @click="showCreateModal = false">Cancel</button>
-            <button type="submit" class="btn btn-primary" :disabled="saving">
-              <Loader2 v-if="saving" :size="16" class="spin" /> {{ saving ? 'Creating...' : 'Create Campaign' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </Teleport>
+        </fieldset>
+      </form>
+      <template #footer>
+        <button type="button" class="btn btn-ghost" @click="showCreateModal = false">Cancel</button>
+        <button class="btn btn-primary" :disabled="saving" @click="createCampaign">
+          <Loader2 v-if="saving" :size="16" class="spin" /> {{ saving ? 'Creating...' : 'Create Campaign' }}
+        </button>
+      </template>
+    </Modal>
+  </MainLayout>
 </template>
-<style scoped>
-.badge-muted {
-  background: rgba(148, 163, 184, 0.15);
-  color: var(--color-text-muted);
-}
-.progress-fill {
-  background: linear-gradient(90deg, var(--color-accent), var(--color-success));
-}
-</style>

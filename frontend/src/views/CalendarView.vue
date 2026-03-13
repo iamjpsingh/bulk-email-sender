@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { ChevronLeft, ChevronRight, X as XIcon, Calendar } from 'lucide-vue-next'
 import { useCampaigns } from '../lib/query'
 import MainLayout from '../components/layout/MainLayout.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
 
 type ViewMode = 'month' | 'week' | 'day'
 
@@ -136,88 +138,74 @@ function isToday(date: Date): boolean {
 
 <template>
   <MainLayout>
-    <header class="pb-4 border-b border-border">
-      <div class="mb-4">
-        <h1 class="text-[22px] font-semibold m-0">Campaign Calendar</h1>
-        <p class="text-[13px] text-text-secondary mt-1">Schedule and track your email campaigns</p>
-      </div>
-      <div class="flex items-center gap-4">
-        <button
-          class="py-1.5 px-3.5 bg-transparent border border-border rounded-md text-text-primary text-[13px] cursor-pointer hover:bg-bg-tertiary"
-          @click="goToToday"
-        >
-          Today
-        </button>
+    <PageHeader title="Campaign Calendar" subtitle="Schedule and track your email campaigns">
+      <template #actions>
+        <button class="btn-ghost" @click="goToToday">Today</button>
         <div class="flex items-center gap-2">
           <button
-            class="flex items-center justify-center w-[30px] h-[30px] bg-transparent border border-border rounded-md text-text-secondary cursor-pointer hover:bg-bg-tertiary hover:text-text-primary"
+            class="flex items-center justify-center w-8 h-8 bg-transparent border border-border rounded-lg text-text-secondary cursor-pointer transition-colors duration-150 hover:bg-bg-tertiary hover:text-text-primary"
             @click="navigate(-1)"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
+            <ChevronLeft :size="16" />
           </button>
-          <span class="text-[15px] font-semibold min-w-[180px] text-center">{{ headerTitle }}</span>
+          <span class="text-sm font-semibold min-w-[180px] text-center text-text-primary">{{ headerTitle }}</span>
           <button
-            class="flex items-center justify-center w-[30px] h-[30px] bg-transparent border border-border rounded-md text-text-secondary cursor-pointer hover:bg-bg-tertiary hover:text-text-primary"
+            class="flex items-center justify-center w-8 h-8 bg-transparent border border-border rounded-lg text-text-secondary cursor-pointer transition-colors duration-150 hover:bg-bg-tertiary hover:text-text-primary"
             @click="navigate(1)"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
+            <ChevronRight :size="16" />
           </button>
         </div>
-        <div class="flex bg-bg-secondary border border-border rounded-md overflow-hidden ml-auto">
+        <div class="flex bg-bg-tertiary rounded-lg overflow-hidden p-0.5">
           <button
             v-for="mode in ['month', 'week', 'day'] as ViewMode[]"
             :key="mode"
-            class="view-btn py-1.5 px-3.5 bg-transparent border-none text-[13px] cursor-pointer"
-            :class="viewMode === mode ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'"
+            class="view-btn py-1.5 px-4 border-none text-[13px] font-medium cursor-pointer rounded-md transition-all duration-150"
+            :class="viewMode === mode ? 'bg-accent text-white shadow-sm' : 'bg-transparent text-text-secondary hover:text-text-primary'"
             @click="viewMode = mode"
           >
             {{ mode.charAt(0).toUpperCase() + mode.slice(1) }}
           </button>
         </div>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <div class="flex-1 flex overflow-hidden pt-4 gap-4">
       <div class="flex-1 overflow-y-auto transition-[flex] duration-200">
         <!-- Month View -->
-        <div v-if="viewMode === 'month'" class="grid grid-cols-7 border border-border rounded-lg overflow-hidden">
+        <div v-if="viewMode === 'month'" class="grid grid-cols-7 bg-bg-card border border-border rounded-xl overflow-hidden">
           <div
             v-for="day in dayNames"
             :key="day"
-            class="p-2.5 text-center text-xs font-semibold text-text-secondary uppercase bg-bg-secondary border-b border-border"
+            class="p-2.5 text-center text-[11px] font-semibold text-text-muted uppercase tracking-wider bg-bg-tertiary border-b border-border"
           >
             {{ day }}
           </div>
           <div
             v-for="(cell, i) in calendarDays"
             :key="i"
-            class="day-cell min-h-[80px] p-2 border-r border-b border-border bg-bg-primary cursor-pointer transition-colors duration-150 relative hover:bg-bg-tertiary"
+            class="day-cell min-h-[80px] p-2 border-r border-b border-border bg-bg-card cursor-pointer transition-colors duration-150 relative hover:bg-bg-tertiary"
             :class="{
-              'opacity-35': !cell.inMonth,
+              'opacity-30': !cell.inMonth,
               'is-today': isToday(cell.date),
               'is-selected': selectedDate && isSameDay(cell.date, selectedDate),
             }"
             @click="selectDate(cell.date)"
           >
-            <span class="day-number text-[13px] font-medium">{{ cell.date.getDate() }}</span>
+            <span class="day-number text-[13px] font-medium text-text-secondary">{{ cell.date.getDate() }}</span>
             <div class="flex gap-1 mt-1.5 flex-wrap">
               <span
                 v-for="c in getCampaignsForDate(cell.date).slice(0, 3)"
                 :key="c.id"
-                class="w-[7px] h-[7px] rounded-full shrink-0"
+                class="w-1.5 h-1.5 rounded-full shrink-0"
                 :style="{ backgroundColor: statusColors[c.status] || '#71717a' }"
                 :title="c.name"
               />
             </div>
             <span
               v-if="getCampaignsForDate(cell.date).length > 3"
-              class="text-[10px] text-text-secondary absolute bottom-1 right-1.5"
-              >+{{ getCampaignsForDate(cell.date).length - 3 }}</span
-            >
+              class="text-[10px] text-text-muted absolute bottom-1 right-1.5"
+            >+{{ getCampaignsForDate(cell.date).length - 3 }}</span>
           </div>
         </div>
 
@@ -226,29 +214,32 @@ function isToday(date: Date): boolean {
           <div
             v-for="day in weekDays"
             :key="day.toISOString()"
-            class="bg-bg-secondary border border-border rounded-lg min-h-[300px] cursor-pointer transition-colors duration-150"
+            class="bg-bg-card border border-border rounded-xl min-h-[300px] cursor-pointer transition-all duration-150"
             :class="{
               'border-accent': isToday(day),
-              '!bg-[rgba(59,130,246,0.05)] !border-accent': selectedDate && isSameDay(day, selectedDate),
-              'hover:border-text-secondary': true,
+              '!bg-accent/5 !border-accent': selectedDate && isSameDay(day, selectedDate),
+              'hover:border-text-muted': true,
             }"
             @click="selectDate(day)"
           >
             <div class="flex justify-between items-center py-2.5 px-3 border-b border-border">
-              <span class="text-xs text-text-secondary uppercase font-semibold">{{ dayNames[day.getDay()] }}</span>
-              <span class="text-sm font-semibold">{{ day.getDate() }}</span>
+              <span class="text-[11px] text-text-muted uppercase font-semibold tracking-wider">{{ dayNames[day.getDay()] }}</span>
+              <span
+                class="text-sm font-semibold"
+                :class="isToday(day) ? 'text-accent' : 'text-text-primary'"
+              >{{ day.getDate() }}</span>
             </div>
-            <div class="p-2 flex flex-col gap-1.5">
+            <div class="p-2 flex flex-col gap-2">
               <div
                 v-for="c in getCampaignsForDate(day)"
                 :key="c.id"
                 class="py-1.5 px-2 bg-bg-tertiary border-l-[3px] rounded text-xs flex flex-col gap-0.5"
                 :style="{ borderLeftColor: statusColors[c.status] }"
               >
-                <span class="font-medium whitespace-nowrap overflow-hidden text-ellipsis">{{ c.name }}</span>
-                <span class="text-text-secondary text-[11px]">{{ formatTime(c.scheduledAt) }}</span>
+                <span class="font-medium whitespace-nowrap overflow-hidden text-ellipsis text-text-primary">{{ c.name }}</span>
+                <span class="text-text-muted text-[11px]">{{ formatTime(c.scheduledAt) }}</span>
               </div>
-              <div v-if="getCampaignsForDate(day).length === 0" class="text-xs text-text-secondary py-2 text-center">
+              <div v-if="getCampaignsForDate(day).length === 0" class="text-[11px] text-text-muted py-3 text-center">
                 No campaigns
               </div>
             </div>
@@ -256,24 +247,24 @@ function isToday(date: Date): boolean {
         </div>
 
         <!-- Day View -->
-        <div v-if="viewMode === 'day'" class="flex flex-col">
-          <div v-for="hour in 24" :key="hour" class="flex min-h-[52px] border-b border-border">
-            <span class="w-[60px] shrink-0 text-xs text-text-secondary pt-2 pr-3 text-right"
-              >{{ (hour - 1).toString().padStart(2, '0') }}:00</span
-            >
-            <div class="flex-1 py-1 px-2 flex flex-col gap-1">
+        <div v-if="viewMode === 'day'" class="bg-bg-card border border-border rounded-xl overflow-hidden">
+          <div v-for="hour in 24" :key="hour" class="flex min-h-[52px] border-b border-border last:border-b-0">
+            <span class="w-[60px] shrink-0 text-xs text-text-muted pt-2.5 pr-3 text-right">
+              {{ (hour - 1).toString().padStart(2, '0') }}:00
+            </span>
+            <div class="flex-1 py-1 px-2 flex flex-col gap-1 border-l border-border">
               <div
                 v-for="c in getCampaignsForDate(currentDate).filter(
                   (c) => new Date(c.scheduledAt).getHours() === hour - 1
                 )"
                 :key="c.id"
-                class="py-1.5 px-2.5 bg-bg-secondary border-l-[3px] rounded text-[13px] flex flex-col gap-0.5"
+                class="py-1.5 px-2.5 bg-bg-tertiary border-l-[3px] rounded text-[13px] flex flex-col gap-0.5"
                 :style="{ borderLeftColor: statusColors[c.status] }"
               >
-                <strong>{{ c.name }}</strong>
-                <span class="text-xs text-text-secondary"
-                  >{{ formatTime(c.scheduledAt) }} &middot; {{ c.recipientCount }} recipients</span
-                >
+                <strong class="text-text-primary">{{ c.name }}</strong>
+                <span class="text-xs text-text-muted">
+                  {{ formatTime(c.scheduledAt) }} &middot; {{ c.recipientCount }} recipients
+                </span>
               </div>
             </div>
           </div>
@@ -282,48 +273,31 @@ function isToday(date: Date): boolean {
 
       <!-- Side Panel -->
       <transition name="panel">
-        <div v-if="selectedDate" class="w-80 shrink-0 bg-bg-secondary border border-border rounded-lg overflow-y-auto">
+        <div v-if="selectedDate" class="w-80 shrink-0 bg-bg-card border border-border rounded-xl overflow-y-auto">
           <div class="flex justify-between items-center p-4 border-b border-border">
-            <h3 class="text-[15px] font-semibold m-0">
+            <h3 class="text-sm font-semibold m-0 text-text-primary">
               {{ selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) }}
             </h3>
             <button
-              class="flex items-center justify-center w-7 h-7 bg-transparent border border-border rounded-md text-text-secondary cursor-pointer hover:bg-bg-tertiary hover:text-text-primary"
+              class="flex items-center justify-center w-7 h-7 bg-transparent border border-border rounded-lg text-text-secondary cursor-pointer transition-colors duration-150 hover:bg-bg-tertiary hover:text-text-primary"
               @click="selectedDate = null"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
+              <XIcon :size="14" />
             </button>
           </div>
-          <div class="py-3 px-4 flex flex-col gap-2.5">
-            <div v-if="selectedDayCampaigns.length === 0" class="text-center py-8">
-              <svg
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--text-secondary)"
-                stroke-width="1.5"
-              >
-                <rect x="3" y="4" width="18" height="18" rx="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              <p class="text-text-secondary text-sm mt-3">No campaigns scheduled</p>
+          <div class="py-3 px-4 flex flex-col gap-3">
+            <div v-if="selectedDayCampaigns.length === 0" class="text-center py-10">
+              <Calendar :size="36" class="text-text-muted mx-auto" />
+              <p class="text-text-muted text-sm mt-3">No campaigns scheduled</p>
             </div>
             <div v-for="c in selectedDayCampaigns" :key="c.id" class="flex gap-3 p-3 bg-bg-tertiary rounded-lg">
-              <div class="w-1 rounded shrink-0" :style="{ backgroundColor: statusColors[c.status] }" />
+              <div class="w-1 rounded-full shrink-0" :style="{ backgroundColor: statusColors[c.status] }" />
               <div class="flex-1 min-w-0">
-                <h4 class="text-sm font-semibold m-0 mb-1.5 whitespace-nowrap overflow-hidden text-ellipsis">
+                <h4 class="text-sm font-semibold m-0 mb-1.5 whitespace-nowrap overflow-hidden text-ellipsis text-text-primary">
                   {{ c.name }}
                 </h4>
-                <div class="flex flex-col gap-[3px] text-xs text-text-secondary">
-                  <span class="font-semibold capitalize" :style="{ color: statusColors[c.status] }">{{
-                    c.status
-                  }}</span>
+                <div class="flex flex-col gap-0.5 text-xs text-text-muted">
+                  <span class="font-semibold capitalize" :style="{ color: statusColors[c.status] }">{{ c.status }}</span>
                   <span>{{ c.recipientCount }} recipients</span>
                   <span>{{ formatTime(c.scheduledAt) }}</span>
                 </div>
@@ -352,17 +326,13 @@ function isToday(date: Date): boolean {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-weight: 600;
 }
 
 /* Selected day cell */
 .day-cell.is-selected {
-  background: rgba(59, 130, 246, 0.1);
-  box-shadow: inset 0 0 0 1px #3b82f6;
-}
-
-/* View switcher button borders */
-.view-btn + .view-btn {
-  border-left: 1px solid var(--color-border, #27272a);
+  background: rgba(6, 182, 212, 0.06);
+  box-shadow: inset 0 0 0 1px var(--color-accent, #06b6d4);
 }
 
 /* Panel transition */

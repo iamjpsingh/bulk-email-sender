@@ -15,7 +15,9 @@ onMounted(async () => {
 <template>
   <div id="app">
     <RouterView v-slot="{ Component }" :key="route.fullPath">
-      <component :is="Component" />
+      <Transition name="page" mode="out-in">
+        <component :is="Component" />
+      </Transition>
     </RouterView>
     <ToastContainer />
   </div>

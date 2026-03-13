@@ -1,7 +1,9 @@
 // src/routes/apikeys.ts - API Key Management
 
 import { Hono } from 'hono'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, getOrgId } from '../middleware/auth'
+import { requirePermission } from '../middleware/rbac'
+import { PERMISSIONS } from '../services/rbacService'
 import { success, error } from '../utils/response'
 import { logger } from '../utils/logger'
 import Database from 'bun:sqlite'
@@ -14,6 +16,7 @@ import { dirname } from 'path'
 
 interface ApiKey {
   id: string
+  org_id: string
   user_id: string
   name: string
   key_prefix: string // First 8 chars for identification
@@ -41,6 +44,7 @@ db.exec('PRAGMA busy_timeout=5000')
 db.exec(`
   CREATE TABLE IF NOT EXISTS api_keys (
     id TEXT PRIMARY KEY,
+    org_id TEXT,
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
     key_prefix TEXT NOT NULL,
@@ -56,6 +60,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_ak_prefix ON api_keys(key_prefix);
 `)
 
+// Idempotent migration for existing databases
+try { db.exec('ALTER TABLE api_keys ADD COLUMN org_id TEXT') } catch {}
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_ak_org ON api_keys(org_id)') } catch {}
+
 logger.info('API Keys database initialized (data/apikeys.db)')
 
 // ============================================================================
@@ -67,13 +75,13 @@ const app = new Hono()
 /**
  * GET /api-keys - List API keys for user
  */
-app.get('/api-keys', (c) => {
-  const user = requireAuth(c)
+app.get('/api-keys', requirePermission(PERMISSIONS.APIKEYS_VIEW), (c) => {
+  const orgId = getOrgId(c)
 
   const keys = db.prepare(`
     SELECT id, name, key_prefix, scopes, last_used_at, expires_at, enabled, created_at
-    FROM api_keys WHERE user_id = ? ORDER BY created_at DESC
-  `).all(user.id) as Omit<ApiKey, 'key_hash' | 'user_id'>[]
+    FROM api_keys WHERE org_id = ? ORDER BY created_at DESC
+  `).all(orgId) as Omit<ApiKey, 'key_hash' | 'user_id' | 'org_id'>[]
 
   return success(c, { keys })
 })
@@ -81,8 +89,9 @@ app.get('/api-keys', (c) => {
 /**
  * POST /api-keys - Create a new API key
  */
-app.post('/api-keys', async (c) => {
+app.post('/api-keys', requirePermission(PERMISSIONS.APIKEYS_MANAGE), async (c) => {
   const user = requireAuth(c)
+  const orgId = getOrgId(c)
   const body = await c.req.json()
 
   if (!body.name?.trim()) {
@@ -99,10 +108,10 @@ app.post('/api-keys', async (c) => {
   const keyHash = await Bun.password.hash(rawKey, { algorithm: 'argon2id' })
 
   db.prepare(`
-    INSERT INTO api_keys (id, user_id, name, key_prefix, key_hash, scopes, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO api_keys (id, org_id, user_id, name, key_prefix, key_hash, scopes, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, user.id, body.name.trim(), keyPrefix, keyHash,
+    id, orgId, user.id, body.name.trim(), keyPrefix, keyHash,
     JSON.stringify(scopes),
     body.expires_at || null
   )
@@ -121,11 +130,11 @@ app.post('/api-keys', async (c) => {
 /**
  * DELETE /api-keys/:id - Revoke an API key
  */
-app.delete('/api-keys/:id', (c) => {
-  const user = requireAuth(c)
+app.delete('/api-keys/:id', requirePermission(PERMISSIONS.APIKEYS_MANAGE), (c) => {
+  const orgId = getOrgId(c)
   const keyId = c.req.param('id')
 
-  const result = db.prepare('DELETE FROM api_keys WHERE id = ? AND user_id = ?').run(keyId, user.id)
+  const result = db.prepare('DELETE FROM api_keys WHERE id = ? AND org_id = ?').run(keyId, orgId)
   if (result.changes === 0) return error(c, 'API key not found', 404)
 
   return success(c, undefined, 'API key revoked')
@@ -134,14 +143,14 @@ app.delete('/api-keys/:id', (c) => {
 /**
  * POST /api-keys/:id/toggle - Enable/disable a key
  */
-app.post('/api-keys/:id/toggle', async (c) => {
-  const user = requireAuth(c)
+app.post('/api-keys/:id/toggle', requirePermission(PERMISSIONS.APIKEYS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const keyId = c.req.param('id')
   const body = await c.req.json()
 
   const result = db.prepare(`
-    UPDATE api_keys SET enabled = ? WHERE id = ? AND user_id = ?
-  `).run(body.enabled ? 1 : 0, keyId, user.id)
+    UPDATE api_keys SET enabled = ? WHERE id = ? AND org_id = ?
+  `).run(body.enabled ? 1 : 0, keyId, orgId)
 
   if (result.changes === 0) return error(c, 'API key not found', 404)
   return success(c, undefined, body.enabled ? 'Key enabled' : 'Key disabled')
@@ -150,8 +159,8 @@ app.post('/api-keys/:id/toggle', async (c) => {
 /**
  * PUT /api-keys/:id/scopes - Update key scopes
  */
-app.put('/api-keys/:id/scopes', async (c) => {
-  const user = requireAuth(c)
+app.put('/api-keys/:id/scopes', requirePermission(PERMISSIONS.APIKEYS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const keyId = c.req.param('id')
   const body = await c.req.json()
 
@@ -163,8 +172,8 @@ app.put('/api-keys/:id/scopes', async (c) => {
   }
 
   const result = db.prepare(`
-    UPDATE api_keys SET scopes = ? WHERE id = ? AND user_id = ?
-  `).run(JSON.stringify(scopes), keyId, user.id)
+    UPDATE api_keys SET scopes = ? WHERE id = ? AND org_id = ?
+  `).run(JSON.stringify(scopes), keyId, orgId)
 
   if (result.changes === 0) return error(c, 'API key not found', 404)
   return success(c, undefined, 'Scopes updated')
@@ -174,7 +183,7 @@ app.put('/api-keys/:id/scopes', async (c) => {
 // API Key Validation (exported for auth middleware)
 // ============================================================================
 
-export async function validateApiKey(key: string): Promise<{ userId: string; scopes: string[] } | null> {
+export async function validateApiKey(key: string): Promise<{ userId: string; orgId: string; scopes: string[] } | null> {
   const prefix = key.substring(0, 8)
 
   const candidates = db.prepare(`
@@ -194,6 +203,7 @@ export async function validateApiKey(key: string): Promise<{ userId: string; sco
 
       return {
         userId: candidate.user_id,
+        orgId: candidate.org_id,
         scopes: JSON.parse(candidate.scopes),
       }
     }

@@ -12,6 +12,8 @@
     "test": "bunx vitest run",
     "lint": "bunx eslint src/ --ext .ts",
     "format": "bunx prettier --write src/",
+    "create-admin": "bun run scripts/create-admin.ts",
+    "reset-all": "rm -f data/dispatch.db data/logs.db data/queue.db data/contacts.db data/campaigns.db data/templates.db data/segments.db data/webhooks.db data/automations.db data/apikeys.db data/analytics.db data/routing.db data/warmup.db data/plugins.db",
     "dispatch": "bun run bin/dispatch.ts"
   },
   "keywords": [

@@ -1,7 +1,9 @@
 // src/routes/webhooks.ts - Webhook Management API
 
 import { Hono } from 'hono'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, getOrgId } from '../middleware/auth'
+import { requirePermission } from '../middleware/rbac'
+import { PERMISSIONS } from '../services/rbacService'
 import { webhookService } from '../services/webhookService'
 import { success, error } from '../utils/response'
 
@@ -11,17 +13,18 @@ const app = new Hono()
 // Webhook CRUD
 // ============================================================================
 
-app.get('/webhooks', (c) => {
-  const user = requireAuth(c)
-  const webhooks = webhookService.list(user.id)
+app.get('/webhooks', requirePermission(PERMISSIONS.WEBHOOKS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const webhooks = webhookService.list(orgId)
 
   // Hide secrets in list view
   const safe = webhooks.map(w => ({ ...w, secret: w.secret.substring(0, 8) + '...' }))
   return success(c, { webhooks: safe })
 })
 
-app.post('/webhooks', async (c) => {
+app.post('/webhooks', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), async (c) => {
   const user = requireAuth(c)
+  const orgId = getOrgId(c)
   const body = await c.req.json()
 
   if (!body.name?.trim() || !body.url?.trim()) {
@@ -39,36 +42,36 @@ app.post('/webhooks', async (c) => {
     return error(c, 'Invalid URL format', 400)
   }
 
-  const webhook = webhookService.create(user.id, body)
+  const webhook = webhookService.create(orgId, user.id, body)
   return success(c, webhook, 'Webhook created', 201)
 })
 
-app.get('/webhooks/:id', (c) => {
-  const user = requireAuth(c)
+app.get('/webhooks/:id', requirePermission(PERMISSIONS.WEBHOOKS_VIEW), (c) => {
+  const orgId = getOrgId(c)
   const webhookId = c.req.param('id')
 
-  const webhook = webhookService.get(user.id, webhookId)
+  const webhook = webhookService.get(orgId, webhookId)
   if (!webhook) return error(c, 'Webhook not found', 404)
 
   return success(c, webhook)
 })
 
-app.put('/webhooks/:id', async (c) => {
-  const user = requireAuth(c)
+app.put('/webhooks/:id', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const webhookId = c.req.param('id')
   const body = await c.req.json()
 
-  const updated = webhookService.update(user.id, webhookId, body)
+  const updated = webhookService.update(orgId, webhookId, body)
   if (!updated) return error(c, 'Webhook not found', 404)
 
   return success(c, undefined, 'Webhook updated')
 })
 
-app.delete('/webhooks/:id', (c) => {
-  const user = requireAuth(c)
+app.delete('/webhooks/:id', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), (c) => {
+  const orgId = getOrgId(c)
   const webhookId = c.req.param('id')
 
-  const deleted = webhookService.delete(user.id, webhookId)
+  const deleted = webhookService.delete(orgId, webhookId)
   if (!deleted) return error(c, 'Webhook not found', 404)
 
   return success(c, undefined, 'Webhook deleted')
@@ -78,22 +81,22 @@ app.delete('/webhooks/:id', (c) => {
 // Webhook Actions
 // ============================================================================
 
-app.post('/webhooks/:id/toggle', async (c) => {
-  const user = requireAuth(c)
+app.post('/webhooks/:id/toggle', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const webhookId = c.req.param('id')
   const body = await c.req.json()
 
-  const toggled = webhookService.toggleEnabled(user.id, webhookId, !!body.enabled)
+  const toggled = webhookService.toggleEnabled(orgId, webhookId, !!body.enabled)
   if (!toggled) return error(c, 'Webhook not found', 404)
 
   return success(c, undefined, body.enabled ? 'Webhook enabled' : 'Webhook disabled')
 })
 
-app.post('/webhooks/:id/test', async (c) => {
-  const user = requireAuth(c)
+app.post('/webhooks/:id/test', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const webhookId = c.req.param('id')
 
-  const result = await webhookService.testWebhook(user.id, webhookId)
+  const result = await webhookService.testWebhook(orgId, webhookId)
   return success(c, result, result.success ? 'Test successful' : 'Test failed')
 })
 
@@ -101,24 +104,24 @@ app.post('/webhooks/:id/test', async (c) => {
 // Webhook Logs
 // ============================================================================
 
-app.get('/webhooks/:id/logs', (c) => {
-  const user = requireAuth(c)
+app.get('/webhooks/:id/logs', requirePermission(PERMISSIONS.WEBHOOKS_VIEW), (c) => {
+  const orgId = getOrgId(c)
   const webhookId = c.req.param('id')
   const limit = parseInt(c.req.query('limit') || '50')
   const offset = parseInt(c.req.query('offset') || '0')
 
-  const webhook = webhookService.get(user.id, webhookId)
+  const webhook = webhookService.get(orgId, webhookId)
   if (!webhook) return error(c, 'Webhook not found', 404)
 
   const logs = webhookService.getLogs(webhookId, limit, offset)
   return success(c, { logs })
 })
 
-app.delete('/webhooks/:id/logs', (c) => {
-  const user = requireAuth(c)
+app.delete('/webhooks/:id/logs', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), (c) => {
+  const orgId = getOrgId(c)
   const webhookId = c.req.param('id')
 
-  const webhook = webhookService.get(user.id, webhookId)
+  const webhook = webhookService.get(orgId, webhookId)
   if (!webhook) return error(c, 'Webhook not found', 404)
 
   const cleared = webhookService.clearLogs(webhookId)

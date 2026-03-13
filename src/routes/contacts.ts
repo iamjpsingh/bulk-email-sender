@@ -1,7 +1,9 @@
 // src/routes/contacts.ts - Contact Management API
 
 import { Hono } from 'hono'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, getOrgId } from '../middleware/auth'
+import { requirePermission } from '../middleware/rbac'
+import { PERMISSIONS } from '../services/rbacService'
 import { contactService } from '../services/contactService'
 import { validationService } from '../services/validationService'
 import { FileService } from '../services/fileService'
@@ -13,8 +15,9 @@ const app = new Hono()
 // Contact Lists
 // ============================================================================
 
-app.post('/contacts/lists', async (c) => {
+app.post('/contacts/lists', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
   const user = requireAuth(c)
+  const orgId = getOrgId(c)
   const body = await c.req.json()
   const { name, description } = body
 
@@ -22,31 +25,31 @@ app.post('/contacts/lists', async (c) => {
     return error(c, 'List name is required', 400)
   }
 
-  const list = contactService.createList(user.id, name.trim(), description)
+  const list = contactService.createList(orgId, user.id, name.trim(), description)
   return success(c, list, 'Contact list created')
 })
 
-app.get('/contacts/lists', (c) => {
-  const user = requireAuth(c)
-  const lists = contactService.getLists(user.id)
+app.get('/contacts/lists', requirePermission(PERMISSIONS.CONTACTS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const lists = contactService.getLists(orgId)
   return success(c, { lists })
 })
 
-app.put('/contacts/lists/:id', async (c) => {
-  const user = requireAuth(c)
+app.put('/contacts/lists/:id', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const listId = c.req.param('id')
   const body = await c.req.json()
 
-  const updated = contactService.updateList(user.id, listId, body.name, body.description)
+  const updated = contactService.updateList(orgId, listId, body.name, body.description)
   if (!updated) return error(c, 'List not found', 404)
   return success(c, undefined, 'List updated')
 })
 
-app.delete('/contacts/lists/:id', (c) => {
-  const user = requireAuth(c)
+app.delete('/contacts/lists/:id', requirePermission(PERMISSIONS.CONTACTS_MANAGE), (c) => {
+  const orgId = getOrgId(c)
   const listId = c.req.param('id')
 
-  const deleted = contactService.deleteList(user.id, listId)
+  const deleted = contactService.deleteList(orgId, listId)
   if (!deleted) return error(c, 'List not found', 404)
   return success(c, undefined, 'List deleted')
 })
@@ -55,15 +58,15 @@ app.delete('/contacts/lists/:id', (c) => {
 // Search (must be before :listId param route)
 // ============================================================================
 
-app.get('/contacts/search', (c) => {
-  const user = requireAuth(c)
+app.get('/contacts/search', requirePermission(PERMISSIONS.CONTACTS_VIEW), (c) => {
+  const orgId = getOrgId(c)
   const q = c.req.query('q') || ''
 
   if (q.length < 2) {
     return success(c, { contacts: [] })
   }
 
-  const contacts = contactService.searchContacts(user.id, q)
+  const contacts = contactService.searchContacts(orgId, q)
   return success(c, { contacts })
 })
 
@@ -71,9 +74,9 @@ app.get('/contacts/search', (c) => {
 // Import History (must be before :listId param route)
 // ============================================================================
 
-app.get('/contacts/import-history', (c) => {
-  const user = requireAuth(c)
-  const history = contactService.getImportHistory(user.id)
+app.get('/contacts/import-history', requirePermission(PERMISSIONS.CONTACTS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const history = contactService.getImportHistory(orgId)
   return success(c, { history })
 })
 
@@ -81,8 +84,8 @@ app.get('/contacts/import-history', (c) => {
 // Validation (must be before :listId param route)
 // ============================================================================
 
-app.post('/contacts/validate', async (c) => {
-  const user = requireAuth(c)
+app.post('/contacts/validate', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const body = await c.req.json()
   const { emails } = body
 
@@ -92,18 +95,18 @@ app.post('/contacts/validate', async (c) => {
 
   // Limit to 100 at a time
   const batch = emails.slice(0, 100)
-  const result = await validationService.validateBulk(batch, user.id)
+  const result = await validationService.validateBulk(batch, orgId)
   return success(c, result)
 })
 
-app.post('/contacts/validate-single', async (c) => {
-  const user = requireAuth(c)
+app.post('/contacts/validate-single', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const body = await c.req.json()
   const { email } = body
 
   if (!email) return error(c, 'Email is required', 400)
 
-  const result = await validationService.validateEmail(email, user.id)
+  const result = await validationService.validateEmail(email, orgId)
   return success(c, result)
 })
 
@@ -111,8 +114,8 @@ app.post('/contacts/validate-single', async (c) => {
 // Contacts CRUD (parameterized routes after specific routes)
 // ============================================================================
 
-app.get('/contacts/:listId', (c) => {
-  const user = requireAuth(c)
+app.get('/contacts/:listId', requirePermission(PERMISSIONS.CONTACTS_VIEW), (c) => {
+  const orgId = getOrgId(c)
   const listId = c.req.param('listId')
 
   const filters = {
@@ -125,7 +128,7 @@ app.get('/contacts/:listId', (c) => {
     sort_order: c.req.query('sort_order') as 'asc' | 'desc' | undefined,
   }
 
-  const { contacts, total } = contactService.getContacts(user.id, listId, filters)
+  const { contacts, total } = contactService.getContacts(orgId, listId, filters)
   const page = filters.page || 1
   const limit = filters.limit || 50
 
@@ -144,8 +147,9 @@ app.get('/contacts/:listId', (c) => {
   })
 })
 
-app.post('/contacts/:listId', async (c) => {
+app.post('/contacts/:listId', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
   const user = requireAuth(c)
+  const orgId = getOrgId(c)
   const listId = c.req.param('listId')
 
   const body = await c.req.json()
@@ -155,7 +159,7 @@ app.post('/contacts/:listId', async (c) => {
   }
 
   try {
-    const contact = contactService.addContact(user.id, listId, body)
+    const contact = contactService.addContact(orgId, user.id, listId, body)
     return success(c, contact, 'Contact added')
   } catch (err: any) {
     if (err.message?.includes('UNIQUE')) {
@@ -165,12 +169,12 @@ app.post('/contacts/:listId', async (c) => {
   }
 })
 
-app.put('/contacts/item/:id', async (c) => {
-  const user = requireAuth(c)
+app.put('/contacts/item/:id', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const contactId = c.req.param('id')
   const body = await c.req.json()
 
-  const updated = contactService.updateContact(user.id, contactId, body)
+  const updated = contactService.updateContact(orgId, contactId, body)
   if (!updated) return error(c, 'Contact not found', 404)
   return success(c, undefined, 'Contact updated')
 })
@@ -179,8 +183,8 @@ app.put('/contacts/item/:id', async (c) => {
 // Bulk Operations
 // ============================================================================
 
-app.post('/contacts/bulk/delete', async (c) => {
-  const user = requireAuth(c)
+app.post('/contacts/bulk/delete', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const body = await c.req.json()
   const { ids } = body
 
@@ -188,12 +192,12 @@ app.post('/contacts/bulk/delete', async (c) => {
     return error(c, 'Contact IDs array is required', 400)
   }
 
-  const deleted = contactService.deleteContacts(user.id, ids)
+  const deleted = contactService.deleteContacts(orgId, ids)
   return success(c, { deleted }, `${deleted} contact(s) deleted`)
 })
 
-app.post('/contacts/bulk/tag', async (c) => {
-  const user = requireAuth(c)
+app.post('/contacts/bulk/tag', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const body = await c.req.json()
   const { ids, tags } = body
 
@@ -201,12 +205,12 @@ app.post('/contacts/bulk/tag', async (c) => {
     return error(c, 'Contact IDs and tags are required', 400)
   }
 
-  const updated = contactService.tagContacts(user.id, ids, tags)
+  const updated = contactService.tagContacts(orgId, ids, tags)
   return success(c, { updated }, `${updated} contact(s) tagged`)
 })
 
-app.post('/contacts/bulk/move', async (c) => {
-  const user = requireAuth(c)
+app.post('/contacts/bulk/move', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const body = await c.req.json()
   const { ids, target_list_id } = body
 
@@ -214,7 +218,7 @@ app.post('/contacts/bulk/move', async (c) => {
     return error(c, 'Contact IDs and target list ID are required', 400)
   }
 
-  const moved = contactService.moveContacts(user.id, ids, target_list_id)
+  const moved = contactService.moveContacts(orgId, ids, target_list_id)
   return success(c, { moved }, `${moved} contact(s) moved`)
 })
 
@@ -222,8 +226,9 @@ app.post('/contacts/bulk/move', async (c) => {
 // Import
 // ============================================================================
 
-app.post('/contacts/:listId/import', async (c) => {
+app.post('/contacts/:listId/import', requirePermission(PERMISSIONS.CONTACTS_IMPORT), async (c) => {
   const user = requireAuth(c)
+  const orgId = getOrgId(c)
   const listId = c.req.param('listId')
 
   const formData = await c.req.formData()
@@ -272,13 +277,13 @@ app.post('/contacts/:listId/import', async (c) => {
   }
 
   // Import
-  const result = contactService.importContacts(user.id, listId, rows, fieldMapping, {
+  const result = contactService.importContacts(orgId, user.id, listId, rows, fieldMapping, {
     skipDuplicates,
     source: `import_${format}`,
   })
 
   // Record history
-  contactService.recordImport(user.id, listId, file.name, format, result, fieldMapping)
+  contactService.recordImport(orgId, user.id, listId, file.name, format, result, fieldMapping)
 
   return success(
     c,

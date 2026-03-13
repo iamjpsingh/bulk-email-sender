@@ -1,6 +1,9 @@
 // src/routes/queue.ts - Queue Management API Routes
 
 import { Hono } from 'hono'
+import { requireAuth } from '../middleware/auth'
+import { requirePermission } from '../middleware/rbac'
+import { PERMISSIONS } from '../services/rbacService'
 import { queueEngine } from '../services/queueEngine'
 import type { JobStatus } from '../services/queueEngine'
 import { success, error } from '../utils/response'
@@ -15,13 +18,13 @@ const queue = new Hono()
  * GET /queue/jobs - List jobs for the authenticated user
  * Query params: status, limit, offset
  */
-queue.get('/queue/jobs', (c) => {
-  const userId = c.get('userId') as string
+queue.get('/queue/jobs', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const user = requireAuth(c)
   const status = c.req.query('status') as JobStatus | undefined
   const limit = parseInt(c.req.query('limit') || '20')
   const offset = parseInt(c.req.query('offset') || '0')
 
-  const jobs = queueEngine.getJobs(userId, status, limit, offset)
+  const jobs = queueEngine.getJobs(user.id, status, limit, offset)
 
   // Strip large JSON fields from list view
   const jobSummaries = jobs.map((job) => ({
@@ -52,7 +55,7 @@ queue.get('/queue/jobs', (c) => {
 /**
  * GET /queue/jobs/:id - Get a specific job
  */
-queue.get('/queue/jobs/:id', (c) => {
+queue.get('/queue/jobs/:id', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
   const jobId = c.req.param('id')
   const job = queueEngine.getJob(jobId)
 
@@ -72,7 +75,7 @@ queue.get('/queue/jobs/:id', (c) => {
 /**
  * POST /queue/jobs/:id/pause - Pause a running job
  */
-queue.post('/queue/jobs/:id/pause', (c) => {
+queue.post('/queue/jobs/:id/pause', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
   const jobId = c.req.param('id')
   const paused = queueEngine.pause(jobId)
 
@@ -86,7 +89,7 @@ queue.post('/queue/jobs/:id/pause', (c) => {
 /**
  * POST /queue/jobs/:id/resume - Resume a paused job
  */
-queue.post('/queue/jobs/:id/resume', (c) => {
+queue.post('/queue/jobs/:id/resume', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
   const jobId = c.req.param('id')
   const resumed = queueEngine.resume(jobId)
 
@@ -100,7 +103,7 @@ queue.post('/queue/jobs/:id/resume', (c) => {
 /**
  * DELETE /queue/jobs/:id - Cancel a job
  */
-queue.delete('/queue/jobs/:id', (c) => {
+queue.delete('/queue/jobs/:id', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
   const jobId = c.req.param('id')
   const cancelled = queueEngine.cancel(jobId)
 
@@ -118,9 +121,9 @@ queue.delete('/queue/jobs/:id', (c) => {
 /**
  * GET /queue/stats - Get queue statistics for the authenticated user
  */
-queue.get('/queue/stats', (c) => {
-  const userId = c.get('userId') as string
-  const stats = queueEngine.getStats(userId)
+queue.get('/queue/stats', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const user = requireAuth(c)
+  const stats = queueEngine.getStats(user.id)
   return success(c, stats)
 })
 
@@ -132,7 +135,7 @@ queue.get('/queue/stats', (c) => {
  * GET /queue/dead-letters - List dead letters
  * Query params: job_id, limit, offset
  */
-queue.get('/queue/dead-letters', (c) => {
+queue.get('/queue/dead-letters', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
   const jobId = c.req.query('job_id')
   const limit = parseInt(c.req.query('limit') || '50')
   const offset = parseInt(c.req.query('offset') || '0')
@@ -148,20 +151,20 @@ queue.get('/queue/dead-letters', (c) => {
 /**
  * GET /queue/suppression - Get suppression list
  */
-queue.get('/queue/suppression', (c) => {
-  const userId = c.get('userId') as string
+queue.get('/queue/suppression', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const user = requireAuth(c)
   const limit = parseInt(c.req.query('limit') || '50')
   const offset = parseInt(c.req.query('offset') || '0')
 
-  const list = queueEngine.getSuppressionList(userId, limit, offset)
+  const list = queueEngine.getSuppressionList(user.id, limit, offset)
   return success(c, list)
 })
 
 /**
  * POST /queue/suppression - Add email to suppression list
  */
-queue.post('/queue/suppression', async (c) => {
-  const userId = c.get('userId') as string
+queue.post('/queue/suppression', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const user = requireAuth(c)
   const body = await c.req.json()
   const { email, reason } = body
 
@@ -169,18 +172,18 @@ queue.post('/queue/suppression', async (c) => {
     return error(c, 'email and reason are required', 400)
   }
 
-  queueEngine.suppress(userId, email, reason, 'manual')
+  queueEngine.suppress(user.id, email, reason, 'manual')
   return success(c, undefined, `${email} added to suppression list`)
 })
 
 /**
  * DELETE /queue/suppression/:email - Remove email from suppression list
  */
-queue.delete('/queue/suppression/:email', (c) => {
-  const userId = c.get('userId') as string
+queue.delete('/queue/suppression/:email', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
+  const user = requireAuth(c)
   const email = decodeURIComponent(c.req.param('email'))
 
-  const removed = queueEngine.unsuppress(userId, email)
+  const removed = queueEngine.unsuppress(user.id, email)
   if (!removed) {
     return error(c, 'Email not found in suppression list', 404)
   }

@@ -1,7 +1,9 @@
 // src/routes/templates.ts - Template Management API
 
 import { Hono } from 'hono'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, getOrgId } from '../middleware/auth'
+import { requirePermission } from '../middleware/rbac'
+import { PERMISSIONS } from '../services/rbacService'
 import { templateService, type TemplateCategory } from '../services/templateService'
 import { success, error } from '../utils/response'
 
@@ -11,8 +13,8 @@ const app = new Hono()
 // Template CRUD
 // ============================================================================
 
-app.get('/templates', (c) => {
-  const user = requireAuth(c)
+app.get('/templates', requirePermission(PERMISSIONS.TEMPLATES_VIEW), (c) => {
+  const orgId = getOrgId(c)
 
   const filters = {
     category: c.req.query('category') as TemplateCategory | undefined,
@@ -21,7 +23,7 @@ app.get('/templates', (c) => {
     limit: parseInt(c.req.query('limit') || '50'),
   }
 
-  const { templates, total } = templateService.list(user.id, filters)
+  const { templates, total } = templateService.list(orgId, filters)
 
   return c.json({
     success: true,
@@ -38,15 +40,16 @@ app.get('/templates', (c) => {
   })
 })
 
-app.post('/templates', async (c) => {
+app.post('/templates', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), async (c) => {
   const user = requireAuth(c)
+  const orgId = getOrgId(c)
   const body = await c.req.json()
 
   if (!body.name?.trim() || !body.html_content?.trim()) {
     return error(c, 'Name and HTML content are required', 400)
   }
 
-  const template = templateService.create(user.id, body)
+  const template = templateService.create(orgId, user.id, body)
   return success(c, template, 'Template created', 201)
 })
 
@@ -55,34 +58,34 @@ app.get('/templates/starters', (c) => {
   return success(c, { templates: starters })
 })
 
-app.get('/templates/:id', (c) => {
-  const user = requireAuth(c)
+app.get('/templates/:id', requirePermission(PERMISSIONS.TEMPLATES_VIEW), (c) => {
+  const orgId = getOrgId(c)
   const templateId = c.req.param('id')
 
   if (templateId === 'starters') return c.notFound()
 
-  const template = templateService.get(user.id, templateId)
+  const template = templateService.get(orgId, templateId)
   if (!template) return error(c, 'Template not found', 404)
 
   return success(c, template)
 })
 
-app.put('/templates/:id', async (c) => {
-  const user = requireAuth(c)
+app.put('/templates/:id', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
   const templateId = c.req.param('id')
   const body = await c.req.json()
 
-  const updated = templateService.update(user.id, templateId, body)
+  const updated = templateService.update(orgId, templateId, body)
   if (!updated) return error(c, 'Template not found or is a starter template', 404)
 
   return success(c, undefined, 'Template updated')
 })
 
-app.delete('/templates/:id', (c) => {
-  const user = requireAuth(c)
+app.delete('/templates/:id', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), (c) => {
+  const orgId = getOrgId(c)
   const templateId = c.req.param('id')
 
-  const deleted = templateService.delete(user.id, templateId)
+  const deleted = templateService.delete(orgId, templateId)
   if (!deleted) return error(c, 'Template not found or cannot be deleted', 404)
 
   return success(c, undefined, 'Template deleted')
@@ -92,31 +95,32 @@ app.delete('/templates/:id', (c) => {
 // Template Operations
 // ============================================================================
 
-app.post('/templates/:id/duplicate', async (c) => {
+app.post('/templates/:id/duplicate', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), async (c) => {
   const user = requireAuth(c)
+  const orgId = getOrgId(c)
   const templateId = c.req.param('id')
   const body = await c.req.json().catch(() => ({}))
   const newName = body.name || 'Copy'
 
-  const duplicate = templateService.duplicate(user.id, templateId, newName)
+  const duplicate = templateService.duplicate(orgId, user.id, templateId, newName)
   if (!duplicate) return error(c, 'Template not found', 404)
 
   return success(c, duplicate, 'Template duplicated', 201)
 })
 
-app.post('/templates/:id/preview', async (c) => {
-  const user = requireAuth(c)
+app.post('/templates/:id/preview', requirePermission(PERMISSIONS.TEMPLATES_VIEW), async (c) => {
+  const orgId = getOrgId(c)
   const templateId = c.req.param('id')
   const body = await c.req.json()
 
-  const template = templateService.get(user.id, templateId)
+  const template = templateService.get(orgId, templateId)
   if (!template) return error(c, 'Template not found', 404)
 
   const rendered = templateService.renderPreview(template.html_content, body.data || {})
   return success(c, { html: rendered, variables: JSON.parse(template.variables) })
 })
 
-app.post('/templates/preview', async (c) => {
+app.post('/templates/preview', requirePermission(PERMISSIONS.TEMPLATES_VIEW), async (c) => {
   const body = await c.req.json()
   if (!body.html) return error(c, 'HTML content is required', 400)
 

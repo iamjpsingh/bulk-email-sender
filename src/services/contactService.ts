@@ -11,6 +11,7 @@ import { logger } from '../utils/logger';
 
 export interface ContactList {
   id: string;
+  org_id: string;
   user_id: string;
   name: string;
   description: string | null;
@@ -21,6 +22,7 @@ export interface ContactList {
 
 export interface Contact {
   id: string;
+  org_id: string;
   user_id: string;
   list_id: string;
   email: string;
@@ -69,6 +71,7 @@ export interface ImportResult {
 
 export interface ImportHistory {
   id: string;
+  org_id: string;
   user_id: string;
   list_id: string;
   filename: string;
@@ -106,6 +109,7 @@ class ContactService {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS contact_lists (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
@@ -118,6 +122,7 @@ class ContactService {
 
       CREATE TABLE IF NOT EXISTS contacts (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         list_id TEXT NOT NULL,
         email TEXT NOT NULL,
@@ -144,6 +149,7 @@ class ContactService {
 
       CREATE TABLE IF NOT EXISTS import_history (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         list_id TEXT NOT NULL,
         filename TEXT NOT NULL,
@@ -157,6 +163,14 @@ class ContactService {
       );
     `);
 
+    // Add org_id to existing tables (idempotent)
+    try { this.db.exec('ALTER TABLE contact_lists ADD COLUMN org_id TEXT') } catch {}
+    try { this.db.exec('ALTER TABLE contacts ADD COLUMN org_id TEXT') } catch {}
+    try { this.db.exec('ALTER TABLE import_history ADD COLUMN org_id TEXT') } catch {}
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_cl_org ON contact_lists(org_id)');
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_c_org ON contacts(org_id)');
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_ih_org ON import_history(org_id)');
+
     logger.info('Contacts database initialized (data/contacts.db)');
   }
 
@@ -164,45 +178,44 @@ class ContactService {
   // Lists
   // --------------------------------------------------------------------------
 
-  createList(userId: string, name: string, description?: string): ContactList {
+  createList(orgId: string, userId: string, name: string, description?: string): ContactList {
     const id = `list_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     this.db.prepare(`
-      INSERT INTO contact_lists (id, user_id, name, description)
-      VALUES (?, ?, ?, ?)
-    `).run(id, userId, name, description || null);
+      INSERT INTO contact_lists (id, org_id, user_id, name, description)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, orgId, userId, name, description || null);
     return this.db.prepare('SELECT * FROM contact_lists WHERE id = ?').get(id) as ContactList;
   }
 
-  getLists(userId: string): ContactList[] {
-    // Refresh counts
+  getLists(orgId: string): ContactList[] {
     this.db.exec(`
       UPDATE contact_lists SET contact_count = (
         SELECT COUNT(*) FROM contacts WHERE contacts.list_id = contact_lists.id
       )
     `);
     return this.db.prepare(`
-      SELECT * FROM contact_lists WHERE user_id = ? ORDER BY created_at DESC
-    `).all(userId) as ContactList[];
+      SELECT * FROM contact_lists WHERE org_id = ? ORDER BY created_at DESC
+    `).all(orgId) as ContactList[];
   }
 
-  getList(userId: string, listId: string): ContactList | null {
+  getList(orgId: string, listId: string): ContactList | null {
     return this.db.prepare(`
-      SELECT * FROM contact_lists WHERE id = ? AND user_id = ?
-    `).get(listId, userId) as ContactList | null;
+      SELECT * FROM contact_lists WHERE id = ? AND org_id = ?
+    `).get(listId, orgId) as ContactList | null;
   }
 
-  updateList(userId: string, listId: string, name: string, description?: string): boolean {
+  updateList(orgId: string, listId: string, name: string, description?: string): boolean {
     const result = this.db.prepare(`
       UPDATE contact_lists SET name = ?, description = ?, updated_at = datetime('now')
-      WHERE id = ? AND user_id = ?
-    `).run(name, description || null, listId, userId);
+      WHERE id = ? AND org_id = ?
+    `).run(name, description || null, listId, orgId);
     return result.changes > 0;
   }
 
-  deleteList(userId: string, listId: string): boolean {
+  deleteList(orgId: string, listId: string): boolean {
     const result = this.db.prepare(`
-      DELETE FROM contact_lists WHERE id = ? AND user_id = ?
-    `).run(listId, userId);
+      DELETE FROM contact_lists WHERE id = ? AND org_id = ?
+    `).run(listId, orgId);
     return result.changes > 0;
   }
 
@@ -210,13 +223,13 @@ class ContactService {
   // Contacts CRUD
   // --------------------------------------------------------------------------
 
-  addContact(userId: string, listId: string, input: ContactInput): Contact {
+  addContact(orgId: string, userId: string, listId: string, input: ContactInput): Contact {
     const id = `con_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     this.db.prepare(`
-      INSERT INTO contacts (id, user_id, list_id, email, first_name, last_name, company, phone, tags, custom_fields, status, source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO contacts (id, org_id, user_id, list_id, email, first_name, last_name, company, phone, tags, custom_fields, status, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, userId, listId,
+      id, orgId, userId, listId,
       input.email.toLowerCase().trim(),
       input.first_name || null,
       input.last_name || null,
@@ -230,7 +243,7 @@ class ContactService {
     return this.db.prepare('SELECT * FROM contacts WHERE id = ?').get(id) as Contact;
   }
 
-  updateContact(userId: string, contactId: string, updates: Partial<ContactInput>): boolean {
+  updateContact(orgId: string, contactId: string, updates: Partial<ContactInput>): boolean {
     const sets: string[] = [];
     const params: any[] = [];
 
@@ -246,31 +259,31 @@ class ContactService {
     if (sets.length === 0) return false;
 
     sets.push("updated_at = datetime('now')");
-    params.push(contactId, userId);
+    params.push(contactId, orgId);
 
     const result = this.db.prepare(`
-      UPDATE contacts SET ${sets.join(', ')} WHERE id = ? AND user_id = ?
+      UPDATE contacts SET ${sets.join(', ')} WHERE id = ? AND org_id = ?
     `).run(...params);
     return result.changes > 0;
   }
 
-  deleteContacts(userId: string, contactIds: string[]): number {
+  deleteContacts(orgId: string, contactIds: string[]): number {
     const placeholders = contactIds.map(() => '?').join(',');
     const result = this.db.prepare(`
-      DELETE FROM contacts WHERE id IN (${placeholders}) AND user_id = ?
-    `).run(...contactIds, userId);
+      DELETE FROM contacts WHERE id IN (${placeholders}) AND org_id = ?
+    `).run(...contactIds, orgId);
     return result.changes;
   }
 
-  getContacts(userId: string, listId: string, filters: ContactFilters = {}): { contacts: Contact[]; total: number } {
+  getContacts(orgId: string, listId: string, filters: ContactFilters = {}): { contacts: Contact[]; total: number } {
     const page = filters.page || 1;
     const limit = Math.min(filters.limit || 50, 200);
     const offset = (page - 1) * limit;
     const sortBy = filters.sort_by || 'created_at';
     const sortOrder = filters.sort_order === 'asc' ? 'ASC' : 'DESC';
 
-    const conditions: string[] = ['user_id = ?', 'list_id = ?'];
-    const params: any[] = [userId, listId];
+    const conditions: string[] = ['org_id = ?', 'list_id = ?'];
+    const params: any[] = [orgId, listId];
 
     if (filters.status) {
       conditions.push('status = ?');
@@ -303,19 +316,19 @@ class ContactService {
     return { contacts, total };
   }
 
-  getContact(userId: string, contactId: string): Contact | null {
+  getContact(orgId: string, contactId: string): Contact | null {
     return this.db.prepare(`
-      SELECT * FROM contacts WHERE id = ? AND user_id = ?
-    `).get(contactId, userId) as Contact | null;
+      SELECT * FROM contacts WHERE id = ? AND org_id = ?
+    `).get(contactId, orgId) as Contact | null;
   }
 
-  searchContacts(userId: string, query: string, limit = 20): Contact[] {
+  searchContacts(orgId: string, query: string, limit = 20): Contact[] {
     const q = `%${query}%`;
     return this.db.prepare(`
-      SELECT * FROM contacts WHERE user_id = ?
+      SELECT * FROM contacts WHERE org_id = ?
       AND (email LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR company LIKE ?)
       ORDER BY email ASC LIMIT ?
-    `).all(userId, q, q, q, q, limit) as Contact[];
+    `).all(orgId, q, q, q, q, limit) as Contact[];
   }
 
   // --------------------------------------------------------------------------
@@ -323,6 +336,7 @@ class ContactService {
   // --------------------------------------------------------------------------
 
   importContacts(
+    orgId: string,
     userId: string,
     listId: string,
     rows: Record<string, string>[],
@@ -332,8 +346,8 @@ class ContactService {
     const result: ImportResult = { total: rows.length, imported: 0, duplicates: 0, invalid: 0, errors: [] };
 
     const insertStmt = this.db.prepare(`
-      INSERT OR IGNORE INTO contacts (id, user_id, list_id, email, first_name, last_name, company, phone, tags, custom_fields, source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', ?)
+      INSERT OR IGNORE INTO contacts (id, org_id, user_id, list_id, email, first_name, last_name, company, phone, tags, custom_fields, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}', ?)
     `);
 
     const checkStmt = this.db.prepare(`
@@ -345,7 +359,6 @@ class ContactService {
         const row = rows[i];
         const mapped: Record<string, string> = {};
 
-        // Apply field mapping
         for (const [sourceCol, targetField] of Object.entries(fieldMapping)) {
           if (row[sourceCol] !== undefined) {
             mapped[targetField] = row[sourceCol];
@@ -359,7 +372,6 @@ class ContactService {
           continue;
         }
 
-        // Check duplicate
         if (options.skipDuplicates !== false) {
           const exists = checkStmt.get(listId, email);
           if (exists) {
@@ -372,7 +384,7 @@ class ContactService {
 
         try {
           insertStmt.run(
-            id, userId, listId, email,
+            id, orgId, userId, listId, email,
             mapped.first_name || null,
             mapped.last_name || null,
             mapped.company || null,
@@ -381,7 +393,6 @@ class ContactService {
           );
           result.imported++;
         } catch (err) {
-          // Duplicate constraint
           result.duplicates++;
         }
       }
@@ -391,31 +402,31 @@ class ContactService {
     return result;
   }
 
-  recordImport(userId: string, listId: string, filename: string, format: string, result: ImportResult, fieldMapping: Record<string, string>) {
+  recordImport(orgId: string, userId: string, listId: string, filename: string, format: string, result: ImportResult, fieldMapping: Record<string, string>) {
     const id = `imp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     this.db.prepare(`
-      INSERT INTO import_history (id, user_id, list_id, filename, format, total_rows, imported, duplicates, invalid, field_mapping)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, userId, listId, filename, format, result.total, result.imported, result.duplicates, result.invalid, JSON.stringify(fieldMapping));
+      INSERT INTO import_history (id, org_id, user_id, list_id, filename, format, total_rows, imported, duplicates, invalid, field_mapping)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, orgId, userId, listId, filename, format, result.total, result.imported, result.duplicates, result.invalid, JSON.stringify(fieldMapping));
   }
 
-  getImportHistory(userId: string, limit = 20): ImportHistory[] {
+  getImportHistory(orgId: string, limit = 20): ImportHistory[] {
     return this.db.prepare(`
-      SELECT * FROM import_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?
-    `).all(userId, limit) as ImportHistory[];
+      SELECT * FROM import_history WHERE org_id = ? ORDER BY created_at DESC LIMIT ?
+    `).all(orgId, limit) as ImportHistory[];
   }
 
   // --------------------------------------------------------------------------
   // Bulk Operations
   // --------------------------------------------------------------------------
 
-  tagContacts(userId: string, contactIds: string[], tagsToAdd: string[]): number {
+  tagContacts(orgId: string, contactIds: string[], tagsToAdd: string[]): number {
     let updated = 0;
-    const getStmt = this.db.prepare('SELECT id, tags FROM contacts WHERE id = ? AND user_id = ?');
+    const getStmt = this.db.prepare('SELECT id, tags FROM contacts WHERE id = ? AND org_id = ?');
     const updateStmt = this.db.prepare("UPDATE contacts SET tags = ?, updated_at = datetime('now') WHERE id = ?");
 
     for (const contactId of contactIds) {
-      const contact = getStmt.get(contactId, userId) as { id: string; tags: string } | null;
+      const contact = getStmt.get(contactId, orgId) as { id: string; tags: string } | null;
       if (!contact) continue;
 
       const existingTags: string[] = JSON.parse(contact.tags || '[]');
@@ -427,24 +438,24 @@ class ContactService {
     return updated;
   }
 
-  moveContacts(userId: string, contactIds: string[], targetListId: string): number {
+  moveContacts(orgId: string, contactIds: string[], targetListId: string): number {
     const placeholders = contactIds.map(() => '?').join(',');
     const result = this.db.prepare(`
       UPDATE contacts SET list_id = ?, updated_at = datetime('now')
-      WHERE id IN (${placeholders}) AND user_id = ?
-    `).run(targetListId, ...contactIds, userId);
+      WHERE id IN (${placeholders}) AND org_id = ?
+    `).run(targetListId, ...contactIds, orgId);
     return result.changes;
   }
 
   /**
    * Get contacts for a list as array (for email sending)
    */
-  getContactsForSending(userId: string, listId: string): { Email: string; FirstName?: string; LastName?: string; Company?: string }[] {
+  getContactsForSending(orgId: string, listId: string): { Email: string; FirstName?: string; LastName?: string; Company?: string }[] {
     const contacts = this.db.prepare(`
       SELECT email, first_name, last_name, company FROM contacts
-      WHERE user_id = ? AND list_id = ? AND status = 'active'
+      WHERE org_id = ? AND list_id = ? AND status = 'active'
       ORDER BY email ASC
-    `).all(userId, listId) as any[];
+    `).all(orgId, listId) as any[];
 
     return contacts.map(c => ({
       Email: c.email,

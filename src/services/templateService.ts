@@ -11,6 +11,7 @@ import { logger } from '../utils/logger'
 
 export interface Template {
   id: string
+  org_id: string
   user_id: string
   name: string
   description: string | null
@@ -70,6 +71,7 @@ class TemplateService {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS templates (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
@@ -92,6 +94,10 @@ class TemplateService {
       CREATE INDEX IF NOT EXISTS idx_tpl_category ON templates(category);
       CREATE INDEX IF NOT EXISTS idx_tpl_starter ON templates(is_starter);
     `)
+
+    // Add org_id to existing tables (idempotent)
+    try { this.db.exec('ALTER TABLE templates ADD COLUMN org_id TEXT') } catch {}
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_tpl_org ON templates(org_id)')
 
     logger.info('Templates database initialized (data/templates.db)')
   }
@@ -159,15 +165,15 @@ class TemplateService {
   // CRUD
   // --------------------------------------------------------------------------
 
-  create(userId: string, input: TemplateInput): Template {
+  create(orgId: string, userId: string, input: TemplateInput): Template {
     const id = `tpl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
     const variables = this.extractVariables(input.html_content)
 
     this.db.prepare(`
-      INSERT INTO templates (id, user_id, name, description, category, subject, html_content, text_content, variables)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO templates (id, org_id, user_id, name, description, category, subject, html_content, text_content, variables)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, userId,
+      id, orgId, userId,
       input.name,
       input.description || null,
       input.category || 'general',
@@ -180,13 +186,13 @@ class TemplateService {
     return this.db.prepare('SELECT * FROM templates WHERE id = ?').get(id) as Template
   }
 
-  get(userId: string, templateId: string): Template | null {
+  get(orgId: string, templateId: string): Template | null {
     return this.db.prepare(`
-      SELECT * FROM templates WHERE id = ? AND (user_id = ? OR is_starter = 1)
-    `).get(templateId, userId) as Template | null
+      SELECT * FROM templates WHERE id = ? AND (org_id = ? OR is_starter = 1)
+    `).get(templateId, orgId) as Template | null
   }
 
-  update(userId: string, templateId: string, updates: Partial<TemplateInput>): boolean {
+  update(orgId: string, templateId: string, updates: Partial<TemplateInput>): boolean {
     const sets: string[] = []
     const params: any[] = []
 
@@ -206,29 +212,29 @@ class TemplateService {
 
     sets.push("updated_at = datetime('now')")
     sets.push('version = version + 1')
-    params.push(templateId, userId)
+    params.push(templateId, orgId)
 
     const result = this.db.prepare(`
-      UPDATE templates SET ${sets.join(', ')} WHERE id = ? AND user_id = ?
+      UPDATE templates SET ${sets.join(', ')} WHERE id = ? AND org_id = ?
     `).run(...params)
 
     return result.changes > 0
   }
 
-  delete(userId: string, templateId: string): boolean {
+  delete(orgId: string, templateId: string): boolean {
     const result = this.db.prepare(`
-      DELETE FROM templates WHERE id = ? AND user_id = ? AND is_starter = 0
-    `).run(templateId, userId)
+      DELETE FROM templates WHERE id = ? AND org_id = ? AND is_starter = 0
+    `).run(templateId, orgId)
     return result.changes > 0
   }
 
-  list(userId: string, filters: TemplateFilters = {}): { templates: Template[]; total: number } {
+  list(orgId: string, filters: TemplateFilters = {}): { templates: Template[]; total: number } {
     const page = filters.page || 1
     const limit = Math.min(filters.limit || 50, 200)
     const offset = (page - 1) * limit
 
-    const conditions: string[] = ['(user_id = ? OR is_starter = 1)']
-    const params: any[] = [userId]
+    const conditions: string[] = ['(org_id = ? OR is_starter = 1)']
+    const params: any[] = [orgId]
 
     if (filters.category) {
       conditions.push('category = ?')
@@ -258,11 +264,11 @@ class TemplateService {
   // Operations
   // --------------------------------------------------------------------------
 
-  duplicate(userId: string, templateId: string, newName: string): Template | null {
-    const original = this.get(userId, templateId)
+  duplicate(orgId: string, userId: string, templateId: string, newName: string): Template | null {
+    const original = this.get(orgId, templateId)
     if (!original) return null
 
-    return this.create(userId, {
+    return this.create(orgId, userId, {
       name: newName,
       description: original.description || undefined,
       category: original.category,
@@ -309,18 +315,18 @@ class TemplateService {
   // Multi-Language Support
   // --------------------------------------------------------------------------
 
-  createTranslation(userId: string, templateId: string, language: string, input: TemplateInput): Template | null {
-    const parent = this.get(userId, templateId)
+  createTranslation(orgId: string, userId: string, templateId: string, language: string, input: TemplateInput): Template | null {
+    const parent = this.get(orgId, templateId)
     if (!parent) return null
 
     const id = `tpl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
     const variables = this.extractVariables(input.html_content)
 
     this.db.prepare(`
-      INSERT INTO templates (id, user_id, name, description, category, subject, html_content, text_content, variables, parent_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO templates (id, org_id, user_id, name, description, category, subject, html_content, text_content, variables, parent_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, userId,
+      id, orgId, userId,
       `${input.name} [${language.toUpperCase()}]`,
       input.description || `${language} translation of ${parent.name}`,
       parent.category,
@@ -334,24 +340,24 @@ class TemplateService {
     return this.db.prepare('SELECT * FROM templates WHERE id = ?').get(id) as Template
   }
 
-  getTranslations(userId: string, templateId: string): Template[] {
+  getTranslations(orgId: string, templateId: string): Template[] {
     return this.db.prepare(`
-      SELECT * FROM templates WHERE parent_id = ? AND (user_id = ? OR is_starter = 1)
+      SELECT * FROM templates WHERE parent_id = ? AND (org_id = ? OR is_starter = 1)
       ORDER BY name ASC
-    `).all(templateId, userId) as Template[]
+    `).all(templateId, orgId) as Template[]
   }
 
-  getTemplateForLanguage(userId: string, templateId: string, language: string): Template | null {
+  getTemplateForLanguage(orgId: string, templateId: string, language: string): Template | null {
     // Try to find translation matching the language code in the name suffix
     const langTag = `[${language.toUpperCase()}]`
     const translation = this.db.prepare(`
-      SELECT * FROM templates WHERE parent_id = ? AND (user_id = ? OR is_starter = 1) AND name LIKE ?
-    `).get(templateId, userId, `%${langTag}`) as Template | null
+      SELECT * FROM templates WHERE parent_id = ? AND (org_id = ? OR is_starter = 1) AND name LIKE ?
+    `).get(templateId, orgId, `%${langTag}`) as Template | null
 
     if (translation) return translation
 
     // Fallback to the original template
-    return this.get(userId, templateId)
+    return this.get(orgId, templateId)
   }
 }
 

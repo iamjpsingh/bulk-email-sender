@@ -55,3 +55,13 @@ export {
   type Automation,
   type PluginInfo,
 } from './analytics'
+export {
+  adminApi,
+  type Organization,
+  type OrgMember,
+  type Team,
+  type TeamMember,
+  type SystemRole,
+  type AuditLog,
+  type ActivityLog,
+} from './admin'

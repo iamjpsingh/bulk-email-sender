@@ -172,114 +172,20 @@ function handleClose() {
   </Modal>
 </template>
 
-<style scoped lang="scss">
-.date-picker-modal {
-  padding: 10px 0;
-}
-
-.calendar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.nav-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba(99, 102, 241, 0.1);
-    color: var(--color-accent);
-  }
-}
-
-.month-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.calendar-grid {
-  margin-bottom: 16px;
-}
-
-.weekday-header {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.weekday {
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  padding: 8px 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.days-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-}
-
-.day-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-
-  &:hover:not(:disabled):not(.is-empty) {
-    background: rgba(99, 102, 241, 0.1);
-    color: var(--color-accent);
-    transform: scale(1.05);
-  }
-
-  &.is-today {
-    background: rgba(99, 102, 241, 0.15);
-    color: var(--color-accent);
-    font-weight: 600;
-    border: 1px solid rgba(99, 102, 241, 0.3);
-  }
-
-  &.is-selected {
-    background: var(--color-accent);
-    color: var(--color-bg-primary);
-    font-weight: 600;
-
-    &:hover {
-      background: #4f46e5;
-      transform: scale(1.05);
-    }
-  }
-
-  &.is-empty {
-    cursor: default;
-    opacity: 0;
-    pointer-events: none;
-  }
-}
+<style scoped>
+.date-picker-modal { padding: 10px 0; }
+.calendar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.nav-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: transparent; color: var(--color-text-secondary); border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease; }
+.nav-btn:hover { background: rgba(99, 102, 241, 0.1); color: var(--color-accent); }
+.month-title { font-size: 16px; font-weight: 600; color: var(--color-text-primary); margin: 0; }
+.calendar-grid { margin-bottom: 16px; }
+.weekday-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 12px; }
+.weekday { text-align: center; font-size: 12px; font-weight: 600; color: var(--color-text-muted); padding: 8px 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+.days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.day-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: none; background: transparent; color: var(--color-text-secondary); border-radius: var(--radius-md); cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; }
+.day-btn:hover:not(:disabled):not(.is-empty) { background: rgba(99, 102, 241, 0.1); color: var(--color-accent); transform: scale(1.05); }
+.day-btn.is-today { background: rgba(99, 102, 241, 0.15); color: var(--color-accent); font-weight: 600; border: 1px solid rgba(99, 102, 241, 0.3); }
+.day-btn.is-selected { background: var(--color-accent); color: var(--color-bg-primary); font-weight: 600; }
+.day-btn.is-selected:hover { background: #4f46e5; transform: scale(1.05); }
+.day-btn.is-empty { cursor: default; opacity: 0; pointer-events: none; }
 </style>

@@ -11,6 +11,8 @@ import { queueEngine } from '../services/queueEngine'
 import { ProviderDetection } from '../services/providerLimits'
 import { FileService } from '../services/fileService'
 import { requireAuth, type User } from '../middleware/auth'
+import { requirePermission } from '../middleware/rbac'
+import { PERMISSIONS } from '../services/rbacService'
 import { success, error } from '../utils/response'
 import { parseIntSafe } from '../utils/validation'
 import { logger } from '../utils/logger'
@@ -89,7 +91,7 @@ const app = new Hono()
  * Send emails
  * POST /send
  */
-app.post('/send', async (c) => {
+app.post('/send', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
     logger.debug(`Send request from user: ${user.email}`)
@@ -248,7 +250,7 @@ app.post('/send', async (c) => {
  * Test notification
  * POST /test-notification
  */
-app.post('/test-notification', async (c) => {
+app.post('/test-notification', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
     const body = await c.req.json()
@@ -299,7 +301,7 @@ app.post('/provider-info', async (c) => {
  * Parse Excel file
  * POST /parse-excel
  */
-app.post('/parse-excel', async (c) => {
+app.post('/parse-excel', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   try {
     const formData = await c.req.formData()
     const excelFile = formData.get('excelFile') as File
@@ -327,12 +329,12 @@ app.post('/parse-excel', async (c) => {
 // Scheduled Jobs
 // ============================================================================
 
-app.get('/scheduled-jobs', (c) => {
+app.get('/scheduled-jobs', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
   const jobs = schedulerService.getScheduledJobs()
   return success(c, jobs)
 })
 
-app.delete('/scheduled-jobs/:id', async (c) => {
+app.delete('/scheduled-jobs/:id', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const jobId = c.req.param('id')
   const cancelled = await schedulerService.cancelScheduledJob(jobId)
 
@@ -346,7 +348,7 @@ app.delete('/scheduled-jobs/:id', async (c) => {
 // Batch Control (delegates to queue engine, legacy endpoints preserved)
 // ============================================================================
 
-app.get('/batch-status', (c) => {
+app.get('/batch-status', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
   const user = requireAuth(c)
   const activeIds = queueEngine.getActiveJobIds()
   const runningJobs = queueEngine.getJobs(user.id, 'running', 5)
@@ -372,7 +374,7 @@ app.get('/batch-status', (c) => {
   })
 })
 
-app.post('/batch-pause', async (c) => {
+app.post('/batch-pause', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const user = requireAuth(c)
   const runningJobs = queueEngine.getJobs(user.id, 'running', 1)
   if (runningJobs.length > 0) {
@@ -381,7 +383,7 @@ app.post('/batch-pause', async (c) => {
   return success(c, undefined, 'Job paused')
 })
 
-app.post('/batch-resume', async (c) => {
+app.post('/batch-resume', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const user = requireAuth(c)
   const pausedJobs = queueEngine.getJobs(user.id, 'paused', 1)
   if (pausedJobs.length > 0) {
@@ -390,7 +392,7 @@ app.post('/batch-resume', async (c) => {
   return success(c, undefined, 'Job resumed')
 })
 
-app.delete('/batch-cancel', async (c) => {
+app.delete('/batch-cancel', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const user = requireAuth(c)
   const runningJobs = queueEngine.getJobs(user.id, 'running', 1)
   if (runningJobs.length > 0) {

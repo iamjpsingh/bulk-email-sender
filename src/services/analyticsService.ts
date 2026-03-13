@@ -98,6 +98,7 @@ class AnalyticsService {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS campaign_analytics (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         campaign_id TEXT NOT NULL,
         campaign_name TEXT NOT NULL DEFAULT '',
@@ -118,6 +119,7 @@ class AnalyticsService {
 
       CREATE TABLE IF NOT EXISTS link_analytics (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         campaign_id TEXT NOT NULL,
         url TEXT NOT NULL,
@@ -132,6 +134,7 @@ class AnalyticsService {
 
       CREATE TABLE IF NOT EXISTS event_analytics (
         id TEXT PRIMARY KEY,
+        org_id TEXT,
         user_id TEXT NOT NULL,
         campaign_id TEXT,
         event_type TEXT NOT NULL CHECK (event_type IN ('open', 'click', 'bounce', 'unsubscribe')),
@@ -152,6 +155,14 @@ class AnalyticsService {
       CREATE INDEX IF NOT EXISTS idx_event_type ON event_analytics(event_type);
     `)
 
+    // Add org_id to existing tables (idempotent)
+    try { this.db.exec('ALTER TABLE campaign_analytics ADD COLUMN org_id TEXT') } catch {}
+    try { this.db.exec('ALTER TABLE link_analytics ADD COLUMN org_id TEXT') } catch {}
+    try { this.db.exec('ALTER TABLE event_analytics ADD COLUMN org_id TEXT') } catch {}
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_analytics_org ON campaign_analytics(org_id)')
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_link_org ON link_analytics(org_id)')
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_event_org ON event_analytics(org_id)')
+
     logger.info('Analytics service initialized (data/analytics.db)')
   }
 
@@ -159,7 +170,7 @@ class AnalyticsService {
   // Event Recording
   // --------------------------------------------------------------------------
 
-  recordEvent(userId: string, event: {
+  recordEvent(orgId: string, event: {
     campaignId?: string
     eventType: 'open' | 'click' | 'bounce' | 'unsubscribe'
     recipientEmail?: string
@@ -175,10 +186,10 @@ class AnalyticsService {
     const deviceType = event.userAgent ? this.parseDeviceType(event.userAgent) : 'unknown'
 
     this.db.prepare(`
-      INSERT INTO event_analytics (id, user_id, campaign_id, event_type, recipient_email, user_agent, client_name, device_type, geo_country, geo_city, event_hour, event_day, url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO event_analytics (id, org_id, user_id, campaign_id, event_type, recipient_email, user_agent, client_name, device_type, geo_country, geo_city, event_hour, event_day, url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, userId, event.campaignId || null, event.eventType,
+      id, orgId, orgId, event.campaignId || null, event.eventType,
       event.recipientEmail || null, event.userAgent || null,
       clientName, deviceType, event.geoCountry || null, event.geoCity || null,
       now.getHours(), now.getDay(), event.url || null
@@ -186,19 +197,19 @@ class AnalyticsService {
 
     // Update link analytics
     if (event.eventType === 'click' && event.url && event.campaignId) {
-      this.updateLinkStats(userId, event.campaignId, event.url)
+      this.updateLinkStats(orgId, event.campaignId, event.url)
     }
 
     // Update campaign analytics
     if (event.campaignId) {
-      this.updateCampaignStats(userId, event.campaignId, event.eventType)
+      this.updateCampaignStats(orgId, event.campaignId, event.eventType)
     }
   }
 
-  private updateLinkStats(userId: string, campaignId: string, url: string) {
+  private updateLinkStats(orgId: string, campaignId: string, url: string) {
     const existing = this.db.prepare(`
-      SELECT id FROM link_analytics WHERE user_id = ? AND campaign_id = ? AND url = ?
-    `).get(userId, campaignId, url) as any
+      SELECT id FROM link_analytics WHERE org_id = ? AND campaign_id = ? AND url = ?
+    `).get(orgId, campaignId, url) as any
 
     if (existing) {
       this.db.prepare(`
@@ -208,22 +219,22 @@ class AnalyticsService {
     } else {
       const id = `la_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
       this.db.prepare(`
-        INSERT INTO link_analytics (id, user_id, campaign_id, url, click_count, unique_clicks, first_clicked_at, last_clicked_at)
-        VALUES (?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))
-      `).run(id, userId, campaignId, url)
+        INSERT INTO link_analytics (id, org_id, user_id, campaign_id, url, click_count, unique_clicks, first_clicked_at, last_clicked_at)
+        VALUES (?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))
+      `).run(id, orgId, orgId, campaignId, url)
     }
   }
 
-  private updateCampaignStats(userId: string, campaignId: string, eventType: string) {
+  private updateCampaignStats(orgId: string, campaignId: string, eventType: string) {
     const existing = this.db.prepare(`
-      SELECT id FROM campaign_analytics WHERE user_id = ? AND campaign_id = ?
-    `).get(userId, campaignId) as any
+      SELECT id FROM campaign_analytics WHERE org_id = ? AND campaign_id = ?
+    `).get(orgId, campaignId) as any
 
     if (!existing) {
       const id = `ca_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
       this.db.prepare(`
-        INSERT INTO campaign_analytics (id, user_id, campaign_id) VALUES (?, ?, ?)
-      `).run(id, userId, campaignId)
+        INSERT INTO campaign_analytics (id, org_id, user_id, campaign_id) VALUES (?, ?, ?, ?)
+      `).run(id, orgId, orgId, campaignId)
     }
 
     const column = {
@@ -236,8 +247,8 @@ class AnalyticsService {
     if (column) {
       this.db.prepare(`
         UPDATE campaign_analytics SET ${column} = ${column} + 1, computed_at = datetime('now')
-        WHERE user_id = ? AND campaign_id = ?
-      `).run(userId, campaignId)
+        WHERE org_id = ? AND campaign_id = ?
+      `).run(orgId, campaignId)
     }
   }
 
@@ -245,10 +256,10 @@ class AnalyticsService {
   // Campaign Reports
   // --------------------------------------------------------------------------
 
-  getCampaignReport(userId: string, campaignId: string): CampaignReport | null {
+  getCampaignReport(orgId: string, campaignId: string): CampaignReport | null {
     const row = this.db.prepare(`
-      SELECT * FROM campaign_analytics WHERE user_id = ? AND campaign_id = ?
-    `).get(userId, campaignId) as any
+      SELECT * FROM campaign_analytics WHERE org_id = ? AND campaign_id = ?
+    `).get(orgId, campaignId) as any
 
     if (!row) return null
 
@@ -274,10 +285,10 @@ class AnalyticsService {
     }
   }
 
-  listCampaignReports(userId: string, limit: number = 50): CampaignReport[] {
+  listCampaignReports(orgId: string, limit: number = 50): CampaignReport[] {
     const rows = this.db.prepare(`
-      SELECT * FROM campaign_analytics WHERE user_id = ? ORDER BY computed_at DESC LIMIT ?
-    `).all(userId, limit) as any[]
+      SELECT * FROM campaign_analytics WHERE org_id = ? ORDER BY computed_at DESC LIMIT ?
+    `).all(orgId, limit) as any[]
 
     return rows.map(row => this.formatCampaignReport(row))
   }
@@ -308,22 +319,22 @@ class AnalyticsService {
   // Link Click Map
   // --------------------------------------------------------------------------
 
-  getLinkClicks(userId: string, campaignId: string): LinkClickData[] {
+  getLinkClicks(orgId: string, campaignId: string): LinkClickData[] {
     return this.db.prepare(`
       SELECT url, click_count, unique_clicks, first_clicked_at, last_clicked_at
       FROM link_analytics
-      WHERE user_id = ? AND campaign_id = ?
+      WHERE org_id = ? AND campaign_id = ?
       ORDER BY click_count DESC
-    `).all(userId, campaignId) as LinkClickData[]
+    `).all(orgId, campaignId) as LinkClickData[]
   }
 
   // --------------------------------------------------------------------------
   // Device & Client Breakdown
   // --------------------------------------------------------------------------
 
-  getDeviceBreakdown(userId: string, campaignId?: string): DeviceBreakdown[] {
-    const where = campaignId ? 'user_id = ? AND campaign_id = ?' : 'user_id = ?'
-    const params = campaignId ? [userId, campaignId] : [userId]
+  getDeviceBreakdown(orgId: string, campaignId?: string): DeviceBreakdown[] {
+    const where = campaignId ? 'org_id = ? AND campaign_id = ?' : 'org_id = ?'
+    const params = campaignId ? [orgId, campaignId] : [orgId]
 
     const rows = this.db.prepare(`
       SELECT client_name as client, COUNT(*) as count
@@ -341,9 +352,9 @@ class AnalyticsService {
     }))
   }
 
-  getDeviceTypeBreakdown(userId: string, campaignId?: string): DeviceBreakdown[] {
-    const where = campaignId ? 'user_id = ? AND campaign_id = ?' : 'user_id = ?'
-    const params = campaignId ? [userId, campaignId] : [userId]
+  getDeviceTypeBreakdown(orgId: string, campaignId?: string): DeviceBreakdown[] {
+    const where = campaignId ? 'org_id = ? AND campaign_id = ?' : 'org_id = ?'
+    const params = campaignId ? [orgId, campaignId] : [orgId]
 
     const rows = this.db.prepare(`
       SELECT device_type as client, COUNT(*) as count
@@ -365,9 +376,9 @@ class AnalyticsService {
   // Geographic Data
   // --------------------------------------------------------------------------
 
-  getGeoBreakdown(userId: string, campaignId?: string): { country: string; count: number; percentage: number }[] {
-    const where = campaignId ? 'user_id = ? AND campaign_id = ?' : 'user_id = ?'
-    const params = campaignId ? [userId, campaignId] : [userId]
+  getGeoBreakdown(orgId: string, campaignId?: string): { country: string; count: number; percentage: number }[] {
+    const where = campaignId ? 'org_id = ? AND campaign_id = ?' : 'org_id = ?'
+    const params = campaignId ? [orgId, campaignId] : [orgId]
 
     const rows = this.db.prepare(`
       SELECT geo_country as country, COUNT(*) as count
@@ -390,20 +401,20 @@ class AnalyticsService {
   // Time Analysis
   // --------------------------------------------------------------------------
 
-  getTimeAnalysis(userId: string): TimeAnalysis[] {
+  getTimeAnalysis(orgId: string): TimeAnalysis[] {
     return this.db.prepare(`
       SELECT event_hour as hour, event_day as day_of_week,
         SUM(CASE WHEN event_type = 'open' THEN 1 ELSE 0 END) as open_count,
         SUM(CASE WHEN event_type = 'click' THEN 1 ELSE 0 END) as click_count
       FROM event_analytics
-      WHERE user_id = ?
+      WHERE org_id = ?
       GROUP BY event_hour, event_day
       ORDER BY open_count DESC
-    `).all(userId) as TimeAnalysis[]
+    `).all(orgId) as TimeAnalysis[]
   }
 
-  getBestSendTime(userId: string): SendTimeRecommendation | null {
-    const analysis = this.getTimeAnalysis(userId)
+  getBestSendTime(orgId: string): SendTimeRecommendation | null {
+    const analysis = this.getTimeAnalysis(orgId)
     if (analysis.length === 0) return null
 
     const best = analysis[0]
@@ -422,8 +433,8 @@ class AnalyticsService {
   // Summary
   // --------------------------------------------------------------------------
 
-  getSummary(userId: string): AnalyticsSummary {
-    const reports = this.listCampaignReports(userId)
+  getSummary(orgId: string): AnalyticsSummary {
+    const reports = this.listCampaignReports(orgId)
 
     if (reports.length === 0) {
       return {
@@ -454,7 +465,7 @@ class AnalyticsService {
       avg_bounce_rate: Math.round(avgBounce * 100) / 100,
       avg_unsubscribe_rate: Math.round(avgUnsub * 100) / 100,
       top_performing_campaign: topCampaign?.campaign_name || null,
-      best_send_time: this.getBestSendTime(userId),
+      best_send_time: this.getBestSendTime(orgId),
     }
   }
 
@@ -462,12 +473,12 @@ class AnalyticsService {
   // Export
   // --------------------------------------------------------------------------
 
-  exportCampaignReport(userId: string, campaignId: string, format: 'csv' | 'json'): ExportData | null {
-    const report = this.getCampaignReport(userId, campaignId)
+  exportCampaignReport(orgId: string, campaignId: string, format: 'csv' | 'json'): ExportData | null {
+    const report = this.getCampaignReport(orgId, campaignId)
     if (!report) return null
 
-    const links = this.getLinkClicks(userId, campaignId)
-    const devices = this.getDeviceBreakdown(userId, campaignId)
+    const links = this.getLinkClicks(orgId, campaignId)
+    const devices = this.getDeviceBreakdown(orgId, campaignId)
 
     if (format === 'json') {
       return {
@@ -497,9 +508,9 @@ class AnalyticsService {
     }
   }
 
-  exportSummary(userId: string, format: 'csv' | 'json'): ExportData {
-    const summary = this.getSummary(userId)
-    const reports = this.listCampaignReports(userId)
+  exportSummary(orgId: string, format: 'csv' | 'json'): ExportData {
+    const summary = this.getSummary(orgId)
+    const reports = this.listCampaignReports(orgId)
 
     if (format === 'json') {
       return {
@@ -531,7 +542,7 @@ class AnalyticsService {
   // Seed campaign analytics from existing data
   // --------------------------------------------------------------------------
 
-  seedFromCampaign(userId: string, campaignId: string, campaignName: string, stats: {
+  seedFromCampaign(orgId: string, campaignId: string, campaignName: string, stats: {
     total_sent: number
     delivered?: number
     failed?: number
@@ -541,8 +552,8 @@ class AnalyticsService {
     unsubscribed?: number
   }) {
     const existing = this.db.prepare(`
-      SELECT id FROM campaign_analytics WHERE user_id = ? AND campaign_id = ?
-    `).get(userId, campaignId) as any
+      SELECT id FROM campaign_analytics WHERE org_id = ? AND campaign_id = ?
+    `).get(orgId, campaignId) as any
 
     if (existing) {
       this.db.prepare(`
@@ -559,10 +570,10 @@ class AnalyticsService {
     } else {
       const id = `ca_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
       this.db.prepare(`
-        INSERT INTO campaign_analytics (id, user_id, campaign_id, campaign_name, total_sent, delivered, failed, opened, clicked, bounced, unsubscribed)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO campaign_analytics (id, org_id, user_id, campaign_id, campaign_name, total_sent, delivered, failed, opened, clicked, bounced, unsubscribed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        id, userId, campaignId, campaignName,
+        id, orgId, orgId, campaignId, campaignName,
         stats.total_sent, stats.delivered || 0, stats.failed || 0,
         stats.opened || 0, stats.clicked || 0, stats.bounced || 0, stats.unsubscribed || 0
       )

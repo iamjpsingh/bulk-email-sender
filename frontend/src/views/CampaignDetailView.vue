@@ -2,6 +2,11 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '../components/layout/MainLayout.vue'
+import StatCard from '../components/ui/StatCard.vue'
+import StatusBadge from '../components/ui/StatusBadge.vue'
+import ProgressBar from '../components/ui/ProgressBar.vue'
+import Skeleton from '../components/ui/Skeleton.vue'
+import AlertBanner from '../components/ui/AlertBanner.vue'
 import { useToast } from '../composables/useToast'
 import {
   useCampaign,
@@ -102,20 +107,6 @@ function refreshData() {
 // Helpers
 // ============================================================================
 
-function statusBadgeClass(status: string): string {
-  const map: Record<string, string> = {
-    draft: 'badge-muted',
-    testing: 'badge-info',
-    scheduled: 'badge-warning',
-    sending: 'badge-info',
-    paused: 'badge-warning',
-    completed: 'badge-success',
-    cancelled: 'badge-danger',
-    archived: 'badge-muted',
-  }
-  return map[status] || 'badge-muted'
-}
-
 function formatDate(d: string | null | undefined): string {
   if (!d) return '-'
   return new Date(d).toLocaleDateString('en-US', {
@@ -178,24 +169,27 @@ function campaignTypeLabel(type: string | undefined): string {
     <!-- Back Button -->
     <router-link
       to="/campaigns"
-      class="inline-flex items-center gap-2 text-text-muted text-sm mb-6 hover:text-text-primary transition-colors duration-200 no-underline"
+      class="inline-flex items-center gap-2 text-text-muted text-sm mb-6 hover:text-text-primary transition-colors duration-150 no-underline"
     >
       <ArrowLeft :size="16" />
       Back to Campaigns
     </router-link>
 
     <!-- Loading State -->
-    <div v-if="isLoading" class="text-center py-[80px] text-text-muted flex flex-col items-center gap-3">
-      <Loader2 :size="28" class="spin" />
-      <span class="text-sm">Loading campaign...</span>
+    <div v-if="isLoading" class="flex flex-col gap-4">
+      <Skeleton variant="text" width="40%" height="32px" />
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <Skeleton variant="stat-card" :count="6" />
+      </div>
     </div>
 
     <!-- Error State -->
-    <div v-else-if="campaignError" class="text-center py-[80px] flex flex-col items-center gap-3">
-      <AlertTriangle :size="32" class="text-danger" />
-      <p class="text-danger text-sm">{{ (campaignError as Error).message || 'Failed to load campaign' }}</p>
-      <button class="btn-ghost text-sm" @click="refreshData"><RefreshCw :size="14" /> Try again</button>
-    </div>
+    <AlertBanner v-else-if="campaignError" type="error">
+      <div class="flex items-center gap-3">
+        <span>{{ (campaignError as Error).message || 'Failed to load campaign' }}</span>
+        <button class="btn-ghost btn-sm" @click="refreshData"><RefreshCw :size="14" /> Retry</button>
+      </div>
+    </AlertBanner>
 
     <!-- Campaign Content -->
     <template v-else-if="campaign">
@@ -203,13 +197,8 @@ function campaignTypeLabel(type: string | undefined): string {
       <header class="flex justify-between items-start mb-8 flex-wrap gap-4">
         <div>
           <div class="flex items-center gap-3 mb-2">
-            <h1 class="text-[28px] font-bold m-0">{{ campaign.name }}</h1>
-            <span
-              class="inline-flex items-center px-2.5 py-0.5 rounded-xl text-[11px] font-semibold capitalize tracking-[0.3px]"
-              :class="statusBadgeClass(campaign.status)"
-            >
-              {{ campaign.status }}
-            </span>
+            <h1 class="text-2xl font-semibold m-0 text-text-primary">{{ campaign.name }}</h1>
+            <StatusBadge :status="campaign.status" type="campaign" />
           </div>
           <p class="text-text-muted text-sm m-0">
             {{ campaignTypeLabel(campaign.type) }} campaign
@@ -275,112 +264,57 @@ function campaignTypeLabel(type: string | undefined): string {
       </header>
 
       <!-- Progress Bar -->
-      <div class="mb-8">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-text-secondary"> Send Progress </span>
+      <div class="bg-bg-card border border-border rounded-xl p-5 mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm text-text-muted font-medium">Send Progress</span>
           <span class="text-sm font-semibold text-text-primary">
             {{ formatNumber(campaign.sent_count) }} / {{ formatNumber(campaign.total_recipients) }}
             <span class="text-text-muted font-normal ml-1">({{ progressPercent }}%)</span>
           </span>
         </div>
-        <div class="w-full h-2 bg-bg-secondary rounded-[--radius-sm] overflow-hidden">
-          <div
-            class="h-full rounded-[--radius-sm] transition-[width] duration-500 ease-in-out progress-fill"
-            :style="{ width: progressPercent + '%' }"
-          ></div>
-        </div>
+        <ProgressBar :value="progressPercent" variant="accent" size="md" />
       </div>
 
       <!-- Stats Cards -->
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-        <div class="p-4 bg-bg-card border border-border rounded-[--radius-md]">
-          <div class="flex items-center gap-2 mb-2 text-text-muted text-xs font-medium uppercase tracking-wider">
-            <Users :size="14" />
-            Recipients
-          </div>
-          <div class="text-xl font-bold text-text-primary">
-            {{ formatNumber(stats?.total_recipients ?? campaign.total_recipients) }}
-          </div>
-        </div>
-
-        <div class="p-4 bg-bg-card border border-border rounded-[--radius-md]">
-          <div class="flex items-center gap-2 mb-2 text-text-muted text-xs font-medium uppercase tracking-wider">
-            <Send :size="14" />
-            Sent
-          </div>
-          <div class="text-xl font-bold text-text-primary">
-            {{ formatNumber(stats?.sent ?? campaign.sent_count) }}
-          </div>
-          <div v-if="stats?.failed" class="text-xs text-danger mt-1">{{ formatNumber(stats.failed) }} failed</div>
-        </div>
-
-        <div class="p-4 bg-bg-card border border-border rounded-[--radius-md]">
-          <div class="flex items-center gap-2 mb-2 text-text-muted text-xs font-medium uppercase tracking-wider">
-            <Eye :size="14" />
-            Opens
-          </div>
-          <div class="text-xl font-bold text-text-primary">
-            {{ formatNumber(stats?.opened ?? campaign.open_count) }}
-          </div>
-          <div class="text-xs text-text-muted mt-1">{{ formatRate(stats?.open_rate) }}% rate</div>
-        </div>
-
-        <div class="p-4 bg-bg-card border border-border rounded-[--radius-md]">
-          <div class="flex items-center gap-2 mb-2 text-text-muted text-xs font-medium uppercase tracking-wider">
-            <MousePointer :size="14" />
-            Clicks
-          </div>
-          <div class="text-xl font-bold text-text-primary">
-            {{ formatNumber(stats?.clicked ?? campaign.click_count) }}
-          </div>
-          <div class="text-xs text-text-muted mt-1">{{ formatRate(stats?.click_rate) }}% rate</div>
-        </div>
-
-        <div class="p-4 bg-bg-card border border-border rounded-[--radius-md]">
-          <div class="flex items-center gap-2 mb-2 text-text-muted text-xs font-medium uppercase tracking-wider">
-            <AlertTriangle :size="14" />
-            Bounced
-          </div>
-          <div class="text-xl font-bold text-text-primary">
-            {{ formatNumber(stats?.bounced ?? campaign.bounce_count) }}
-          </div>
-        </div>
-
-        <div class="p-4 bg-bg-card border border-border rounded-[--radius-md]">
-          <div class="flex items-center gap-2 mb-2 text-text-muted text-xs font-medium uppercase tracking-wider">
-            <UserMinus :size="14" />
-            Unsubscribed
-          </div>
-          <div class="text-xl font-bold text-text-primary">
-            {{ formatNumber(stats?.unsubscribed ?? campaign.unsubscribe_count) }}
-          </div>
-        </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+        <StatCard :icon="Users" :value="formatNumber(stats?.total_recipients ?? campaign.total_recipients)" label="Recipients" />
+        <StatCard :icon="Send" :value="formatNumber(stats?.sent ?? campaign.sent_count)" label="Sent" color="success" />
+        <StatCard :icon="Eye" :value="formatNumber(stats?.opened ?? campaign.open_count)" :label="`Opens (${formatRate(stats?.open_rate)}%)`" color="info" />
+        <StatCard :icon="MousePointer" :value="formatNumber(stats?.clicked ?? campaign.click_count)" :label="`Clicks (${formatRate(stats?.click_rate)}%)`" color="accent" />
+        <StatCard :icon="AlertTriangle" :value="formatNumber(stats?.bounced ?? campaign.bounce_count)" label="Bounced" color="danger" />
+        <StatCard :icon="UserMinus" :value="formatNumber(stats?.unsubscribed ?? campaign.unsubscribe_count)" label="Unsubscribed" color="warning" />
       </div>
 
       <!-- Campaign Details -->
-      <div class="p-6 bg-bg-card border border-border rounded-[--radius-lg]">
-        <h2 class="text-base font-semibold text-text-primary mb-5">Campaign Details</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+      <div class="bg-bg-card border border-border rounded-xl p-6">
+        <h2 class="text-sm font-semibold text-text-primary mb-5">Campaign Details</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
           <div class="flex items-start gap-3">
-            <Mail :size="16" class="text-text-muted mt-0.5 shrink-0" />
+            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
+              <Mail :size="14" class="text-text-muted" />
+            </div>
             <div>
-              <div class="text-xs text-text-muted font-medium uppercase tracking-wider mb-0.5">Subject</div>
+              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">Subject</div>
               <div class="text-sm text-text-primary">{{ campaign.subject || '-' }}</div>
             </div>
           </div>
 
           <div class="flex items-start gap-3">
-            <Tag :size="16" class="text-text-muted mt-0.5 shrink-0" />
+            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
+              <Tag :size="14" class="text-text-muted" />
+            </div>
             <div>
-              <div class="text-xs text-text-muted font-medium uppercase tracking-wider mb-0.5">Type</div>
+              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">Type</div>
               <div class="text-sm text-text-primary">{{ campaignTypeLabel(campaign.type) }}</div>
             </div>
           </div>
 
           <div class="flex items-start gap-3">
-            <Send :size="16" class="text-text-muted mt-0.5 shrink-0" />
+            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
+              <Send :size="14" class="text-text-muted" />
+            </div>
             <div>
-              <div class="text-xs text-text-muted font-medium uppercase tracking-wider mb-0.5">From</div>
+              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">From</div>
               <div class="text-sm text-text-primary">
                 {{ campaign.from_name || '-' }}
                 <span class="text-text-muted">&lt;{{ campaign.from_email }}&gt;</span>
@@ -389,9 +323,11 @@ function campaignTypeLabel(type: string | undefined): string {
           </div>
 
           <div class="flex items-start gap-3">
-            <Mail :size="16" class="text-text-muted mt-0.5 shrink-0" />
+            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
+              <Mail :size="14" class="text-text-muted" />
+            </div>
             <div>
-              <div class="text-xs text-text-muted font-medium uppercase tracking-wider mb-0.5">Reply-To</div>
+              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">Reply-To</div>
               <div class="text-sm text-text-primary">
                 {{ (campaign as any).reply_to || campaign.from_email || '-' }}
               </div>
@@ -399,17 +335,21 @@ function campaignTypeLabel(type: string | undefined): string {
           </div>
 
           <div class="flex items-start gap-3">
-            <Clock :size="16" class="text-text-muted mt-0.5 shrink-0" />
+            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
+              <Clock :size="14" class="text-text-muted" />
+            </div>
             <div>
-              <div class="text-xs text-text-muted font-medium uppercase tracking-wider mb-0.5">Created</div>
+              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">Created</div>
               <div class="text-sm text-text-primary">{{ formatDate(campaign.created_at) }}</div>
             </div>
           </div>
 
           <div class="flex items-start gap-3">
-            <CalendarDays :size="16" class="text-text-muted mt-0.5 shrink-0" />
+            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
+              <CalendarDays :size="14" class="text-text-muted" />
+            </div>
             <div>
-              <div class="text-xs text-text-muted font-medium uppercase tracking-wider mb-0.5">Scheduled At</div>
+              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">Scheduled At</div>
               <div class="text-sm text-text-primary">{{ formatDate(campaign.scheduled_at) }}</div>
             </div>
           </div>
@@ -418,28 +358,3 @@ function campaignTypeLabel(type: string | undefined): string {
     </template>
   </MainLayout>
 </template>
-
-<style scoped>
-.badge-muted {
-  background: rgba(148, 163, 184, 0.15);
-  color: var(--color-text-muted);
-}
-.badge-info {
-  background: rgba(6, 182, 212, 0.15);
-  color: var(--color-accent);
-}
-.progress-fill {
-  background: linear-gradient(90deg, var(--color-accent), var(--color-success));
-}
-.spin {
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

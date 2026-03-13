@@ -7,6 +7,8 @@ import type { Context } from 'hono'
 import { d1Service } from '../services/d1Service'
 import { logService } from '../services/logService'
 import { requireAuth } from '../middleware/auth'
+import { requirePermission } from '../middleware/rbac'
+import { PERMISSIONS } from '../services/rbacService'
 import { success, error } from '../utils/response'
 import { logger } from '../utils/logger'
 import { parseIntSafe } from '../utils/validation'
@@ -56,7 +58,7 @@ const app = new Hono()
  * Get email logs with filtering
  * GET /report/logs
  */
-app.get('/report/logs', async (c) => {
+app.get('/report/logs', requirePermission(PERMISSIONS.REPORTS_VIEW), async (c) => {
   const user = requireAuth(c)
   const filters = extractFilters(c)
 
@@ -87,7 +89,7 @@ app.get('/report/logs', async (c) => {
  * Get stats
  * GET /report/stats
  */
-app.get('/report/stats', async (c) => {
+app.get('/report/stats', requirePermission(PERMISSIONS.REPORTS_VIEW), async (c) => {
   const user = requireAuth(c)
 
   if (d1Service.isConfigured()) {
@@ -108,7 +110,7 @@ app.get('/report/stats', async (c) => {
  * Legacy report endpoint
  * GET /report
  */
-app.get('/report', async (c) => {
+app.get('/report', requirePermission(PERMISSIONS.REPORTS_VIEW), async (c) => {
   const user = requireAuth(c)
 
   if (d1Service.isConfigured()) {
@@ -136,7 +138,7 @@ app.get('/report', async (c) => {
  * Export logs as CSV
  * GET /report/export/csv
  */
-app.get('/report/export/csv', async (c) => {
+app.get('/report/export/csv', requirePermission(PERMISSIONS.REPORTS_EXPORT), async (c) => {
   const user = requireAuth(c)
   const logs = await fetchLogsForExport(user.id, c)
 
@@ -155,7 +157,7 @@ app.get('/report/export/csv', async (c) => {
  * Export logs as JSON
  * GET /report/export/json
  */
-app.get('/report/export/json', async (c) => {
+app.get('/report/export/json', requirePermission(PERMISSIONS.REPORTS_EXPORT), async (c) => {
   const user = requireAuth(c)
   const logs = await fetchLogsForExport(user.id, c)
 
@@ -177,7 +179,7 @@ app.get('/report/export/json', async (c) => {
  * Delete single log
  * DELETE /report/logs/:id
  */
-app.delete('/report/logs/:id', async (c) => {
+app.delete('/report/logs/:id', requirePermission(PERMISSIONS.REPORTS_VIEW), async (c) => {
   const user = requireAuth(c)
   const logId = c.req.param('id')
 
@@ -203,7 +205,7 @@ app.delete('/report/logs/:id', async (c) => {
  * Delete multiple logs (bulk)
  * POST /report/logs/delete-bulk
  */
-app.post('/report/logs/delete-bulk', async (c) => {
+app.post('/report/logs/delete-bulk', requirePermission(PERMISSIONS.REPORTS_VIEW), async (c) => {
   const user = requireAuth(c)
   const body = await c.req.json()
   const { ids } = body as { ids: string[] }

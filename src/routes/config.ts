@@ -5,6 +5,8 @@
 import { Hono } from 'hono'
 import { d1UserDatabase } from '../services/d1UserDatabase'
 import { requireAuth } from '../middleware/auth'
+import { requirePermission } from '../middleware/rbac'
+import { PERMISSIONS } from '../services/rbacService'
 import { success, error } from '../utils/response'
 import { logger } from '../utils/logger'
 import { validateSMTPConfig } from '../utils/validation'
@@ -19,7 +21,7 @@ const app = new Hono()
  * List all user configurations
  * GET /config/list
  */
-app.get('/config/list', async (c) => {
+app.get('/config/list', requirePermission(PERMISSIONS.SMTP_VIEW), async (c) => {
   const user = requireAuth(c)
   const configs = await d1UserDatabase.getUserSMTPConfigs(user.id)
 
@@ -32,7 +34,7 @@ app.get('/config/list', async (c) => {
  * Get SMTP configurations (legacy endpoint)
  * GET /config/smtp
  */
-app.get('/config/smtp', async (c) => {
+app.get('/config/smtp', requirePermission(PERMISSIONS.SMTP_VIEW), async (c) => {
   const user = requireAuth(c)
   const configs = await d1UserDatabase.getUserSMTPConfigs(user.id)
   const defaultConfig = await d1UserDatabase.getUserDefaultSMTPConfig(user.id)
@@ -49,7 +51,7 @@ app.get('/config/smtp', async (c) => {
  * Get active configuration
  * GET /config/smtp/active
  */
-app.get('/config/smtp/active', async (c) => {
+app.get('/config/smtp/active', requirePermission(PERMISSIONS.SMTP_VIEW), async (c) => {
   const user = requireAuth(c)
   const config = await d1UserDatabase.getUserDefaultSMTPConfig(user.id)
 
@@ -68,7 +70,7 @@ app.get('/config/smtp/active', async (c) => {
  * Create new SMTP configuration
  * POST /config/smtp
  */
-app.post('/config/smtp', async (c) => {
+app.post('/config/smtp', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
     const body = await c.req.json()
@@ -108,7 +110,7 @@ app.post('/config/smtp', async (c) => {
  * Create configuration (frontend-compatible)
  * POST /config/create
  */
-app.post('/config/create', async (c) => {
+app.post('/config/create', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
     const body = await c.req.json()
@@ -148,7 +150,7 @@ app.post('/config/create', async (c) => {
  * Update SMTP configuration
  * PUT /config/smtp/:configId
  */
-app.put('/config/smtp/:configId', async (c) => {
+app.put('/config/smtp/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
     const configId = c.req.param('configId')
@@ -175,7 +177,7 @@ app.put('/config/smtp/:configId', async (c) => {
  * Update configuration (frontend-compatible)
  * POST /config/update/:configId
  */
-app.post('/config/update/:configId', async (c) => {
+app.post('/config/update/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
     const configId = c.req.param('configId')
@@ -199,7 +201,7 @@ app.post('/config/update/:configId', async (c) => {
  * Delete SMTP configuration
  * DELETE /config/smtp/:configId
  */
-app.delete('/config/smtp/:configId', async (c) => {
+app.delete('/config/smtp/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
     const configId = c.req.param('configId')
@@ -220,7 +222,7 @@ app.delete('/config/smtp/:configId', async (c) => {
  * Delete configuration (frontend-compatible)
  * DELETE /config/delete/:configId
  */
-app.delete('/config/delete/:configId', async (c) => {
+app.delete('/config/delete/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
     const configId = c.req.param('configId')
@@ -241,7 +243,7 @@ app.delete('/config/delete/:configId', async (c) => {
  * Set default configuration
  * POST /config/smtp/:configId/default
  */
-app.post('/config/smtp/:configId/default', async (c) => {
+app.post('/config/smtp/:configId/default', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
     const configId = c.req.param('configId')
@@ -262,7 +264,7 @@ app.post('/config/smtp/:configId/default', async (c) => {
  * Test SMTP connection
  * POST /config/smtp/test
  */
-app.post('/config/smtp/test', async (c) => {
+app.post('/config/smtp/test', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const body = await c.req.json()
     const { emailService } = await import('../services/emailService')
@@ -289,7 +291,7 @@ app.post('/config/smtp/test', async (c) => {
  * Test configuration by ID
  * POST /config/test/:configId
  */
-app.post('/config/test/:configId', async (c) => {
+app.post('/config/test/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
     const configId = c.req.param('configId')

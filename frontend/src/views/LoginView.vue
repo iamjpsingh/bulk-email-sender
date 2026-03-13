@@ -64,31 +64,30 @@ function toggleMode() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
-    <!-- Animated background -->
-    <div class="bg-grid absolute inset-0 pointer-events-none"></div>
-    <div
-      class="bg-glow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] pointer-events-none opacity-40"
-    ></div>
+  <div class="login-page min-h-screen flex items-center justify-center p-6 relative overflow-hidden bg-bg-primary">
+    <!-- Subtle radial glow -->
+    <div class="login-glow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] pointer-events-none"></div>
 
-    <div class="w-full max-w-[420px] relative z-1 animate-fade-in">
+    <div class="w-full max-w-[400px] relative z-1 animate-fade-in">
       <!-- Logo -->
-      <div class="text-center mb-8">
-        <div class="flex items-center justify-center gap-3 mb-3">
+      <div class="text-center mb-10">
+        <div class="flex items-center justify-center gap-3 mb-4">
           <div
-            class="w-12 h-12 rounded-2xl bg-linear-to-br from-accent to-accent-secondary flex items-center justify-center shadow-[0_4px_20px_rgba(99,102,241,0.4)]"
+            class="w-10 h-10 rounded-xl bg-accent flex items-center justify-center"
           >
-            <Send class="text-white" :size="24" />
+            <Send class="text-white" :size="20" />
           </div>
         </div>
-        <h1 class="logo-text font-mono text-[32px] font-bold mb-1">Dispatch</h1>
-        <p class="text-text-muted text-[15px]">Bulk email campaigns, simplified</p>
+        <h1 class="text-[26px] font-bold tracking-tight text-text-primary mb-1">Dispatch</h1>
+        <p class="text-text-muted text-sm">Bulk email campaigns, simplified</p>
       </div>
 
       <!-- Form card -->
-      <div class="glass-card p-8">
-        <div class="text-center mb-7">
-          <h2 class="text-2xl mb-2">{{ mode === 'login' ? 'Welcome back' : 'Create account' }}</h2>
+      <div class="bg-bg-card border border-border rounded-xl p-8">
+        <div class="mb-6">
+          <h2 class="text-lg font-semibold text-text-primary mb-1">
+            {{ mode === 'login' ? 'Welcome back' : 'Create account' }}
+          </h2>
           <p class="text-text-muted text-sm">
             {{ mode === 'login' ? 'Sign in to your account' : 'Get started with Dispatch' }}
           </p>
@@ -104,11 +103,11 @@ function toggleMode() {
           >
             <div
               v-if="error"
-              class="flex items-start gap-2.5 py-3 px-4 bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] rounded-xl text-danger text-sm mb-4"
+              class="flex items-start gap-2.5 py-3 px-3.5 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm mb-4"
               :class="{ 'animate-shake': shakeError }"
               role="alert"
             >
-              <AlertCircle :size="18" class="shrink-0 mt-0.5" />
+              <AlertCircle :size="16" class="shrink-0 mt-0.5" />
               <span>{{ error }}</span>
             </div>
           </Transition>
@@ -164,34 +163,38 @@ function toggleMode() {
               />
               <button
                 type="button"
-                class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors duration-150 rounded"
+                class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-secondary transition-colors duration-150 rounded-md"
                 @click="showPassword = !showPassword"
                 :aria-label="showPassword ? 'Hide password' : 'Show password'"
                 tabindex="-1"
               >
-                <EyeOff v-if="showPassword" :size="18" />
-                <Eye v-else :size="18" />
+                <EyeOff v-if="showPassword" :size="16" />
+                <Eye v-else :size="16" />
               </button>
             </div>
           </div>
 
           <!-- Submit button -->
-          <button type="submit" class="btn btn-primary btn-lg w-full mt-2 group" :disabled="loading || !isFormValid">
+          <button
+            type="submit"
+            class="login-submit flex items-center justify-center gap-2 w-full h-11 mt-2 bg-accent text-white text-sm font-semibold rounded-lg transition-all duration-150 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed group"
+            :disabled="loading || !isFormValid"
+          >
             <Loader2 v-if="loading" :size="18" class="spin" />
             <template v-else>
               <span>{{ mode === 'login' ? 'Sign In' : 'Create Account' }}</span>
-              <ArrowRight :size="18" class="transition-transform duration-200 group-hover:translate-x-0.5" />
+              <ArrowRight :size="16" class="transition-transform duration-200 group-hover:translate-x-0.5" />
             </template>
           </button>
         </form>
 
         <!-- Toggle mode -->
-        <div class="flex items-center justify-center gap-2 mt-6 pt-6 border-t border-border">
+        <div class="flex items-center justify-center gap-1.5 mt-6 pt-6 border-t border-border">
           <span class="text-text-muted text-sm">
             {{ mode === 'login' ? "Don't have an account?" : 'Already have an account?' }}
           </span>
           <button
-            class="text-accent text-sm font-semibold hover:underline cursor-pointer bg-transparent border-none font-sans"
+            class="text-accent text-sm font-medium hover:underline cursor-pointer bg-transparent border-none font-sans"
             @click="toggleMode"
           >
             {{ mode === 'login' ? 'Sign Up' : 'Sign In' }}
@@ -200,17 +203,17 @@ function toggleMode() {
       </div>
 
       <!-- Features -->
-      <div class="flex justify-center gap-8 mt-10 max-[480px]:flex-col max-[480px]:items-center max-[480px]:gap-3">
-        <div class="flex items-center gap-2 text-[13px] text-text-muted">
-          <Zap :size="16" class="text-accent" />
+      <div class="flex justify-center gap-6 mt-8 max-[480px]:flex-col max-[480px]:items-center max-[480px]:gap-2.5">
+        <div class="flex items-center gap-1.5 text-xs text-text-muted">
+          <Zap :size="14" class="text-text-muted opacity-60" />
           <span>Batch Processing</span>
         </div>
-        <div class="flex items-center gap-2 text-[13px] text-text-muted">
-          <BarChart3 :size="16" class="text-accent" />
+        <div class="flex items-center gap-1.5 text-xs text-text-muted">
+          <BarChart3 :size="14" class="text-text-muted opacity-60" />
           <span>Real-time Tracking</span>
         </div>
-        <div class="flex items-center gap-2 text-[13px] text-text-muted">
-          <Clock :size="16" class="text-accent" />
+        <div class="flex items-center gap-1.5 text-xs text-text-muted">
+          <Clock :size="14" class="text-text-muted opacity-60" />
           <span>Scheduled Sends</span>
         </div>
       </div>
@@ -219,22 +222,12 @@ function toggleMode() {
 </template>
 
 <style scoped>
-.bg-grid {
-  background-image:
-    linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
-  background-size: 60px 60px;
+.login-glow {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.04) 0%, transparent 70%);
 }
 
-.bg-glow {
-  background: radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%);
-}
-
-.logo-text {
-  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.login-submit:not(:disabled):active {
+  transform: scale(0.98);
 }
 
 @keyframes shake {

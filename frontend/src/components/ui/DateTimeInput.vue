@@ -23,7 +23,7 @@ const showModal = ref(false)
 
 const displayValue = computed(() => {
   if (!props.modelValue) return ''
-  
+
   try {
     const date = new Date(props.modelValue)
     return date.toLocaleString('en-US', {
@@ -54,19 +54,19 @@ function handleModalClose() {
 </script>
 
 <template>
-  <div class="datetime-input-wrapper">
+  <div class="date-input-wrapper">
     <input
       :value="displayValue"
       :placeholder="placeholder"
       :disabled="disabled"
-      class="datetime-input"
+      class="date-input"
       readonly
       @click="handleInputClick"
     />
-    <div class="datetime-icon">
+    <div class="date-icon">
       <Calendar :size="16" />
     </div>
-    
+
     <DateTimePickerModal
       :show="showModal"
       :model-value="modelValue"
@@ -75,53 +75,3 @@ function handleModalClose() {
     />
   </div>
 </template>
-
-<style scoped lang="scss">
-.datetime-input-wrapper {
-  position: relative;
-}
-
-.datetime-input {
-  width: 100%;
-  padding: 14px 48px 14px 16px;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  color: var(--color-text-primary);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  transition: all 0.2s ease;
-  cursor: pointer;
-
-  &::placeholder {
-    color: var(--color-text-muted);
-  }
-
-  &:focus {
-    outline: none;
-    border-color: var(--color-accent);
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
-    background: var(--color-bg-primary);
-  }
-
-  &:hover:not(:focus) {
-    border-color: rgba(99, 102, 241, 0.3);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    background: var(--color-bg-card);
-  }
-}
-
-.datetime-icon {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--color-accent);
-  pointer-events: none;
-  transition: color 0.2s ease;
-}
-</style>

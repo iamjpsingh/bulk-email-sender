@@ -8,6 +8,11 @@ import ValidateModal from '../components/contacts/ValidateModal.vue'
 import ListFormModal from '../components/contacts/ListFormModal.vue'
 import BulkActionsModal from '../components/contacts/BulkActionsModal.vue'
 import ContactsTable from '../components/contacts/ContactsTable.vue'
+import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
+import Skeleton from '../components/ui/Skeleton.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import AppPagination from '../components/ui/AppPagination.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 import { useToast } from '../composables/useToast'
 import {
   useContactLists,
@@ -28,10 +33,7 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Loader2,
   Users,
-  ChevronLeft,
-  ChevronRight,
   Tag,
   FolderInput,
   Shield,
@@ -51,6 +53,8 @@ const showImportModal = ref(false)
 const showBulkTagModal = ref(false)
 const showBulkMoveModal = ref(false)
 const showValidateModal = ref(false)
+const deleteConfirm = ref<{ show: boolean; type: 'list' | 'bulk'; listName: string }>({ show: false, type: 'list', listName: '' })
+const deleteListRef = ref<ContactList | null>(null)
 
 // Forms
 const editListData = ref({ id: '', name: '', description: '' })
@@ -125,8 +129,15 @@ async function handleUpdateList(data: { id?: string; name: string; description: 
   }
 }
 
-async function handleDeleteList(list: ContactList) {
-  if (!confirm(`Delete "${list.name}" and all its contacts?`)) return
+function handleDeleteList(list: ContactList) {
+  deleteListRef.value = list
+  deleteConfirm.value = { show: true, type: 'list', listName: list.name }
+}
+
+async function confirmDeleteList() {
+  const list = deleteListRef.value
+  deleteConfirm.value.show = false
+  if (!list) return
   try {
     await deleteListMutation.mutateAsync(list.id)
     toast.success('List deleted')
@@ -134,6 +145,7 @@ async function handleDeleteList(list: ContactList) {
   } catch (e: any) {
     toast.error(e.message)
   }
+  deleteListRef.value = null
 }
 
 function openEditList(list: ContactList) {
@@ -186,8 +198,13 @@ async function handleUpdateContact(data: { id?: string } & Partial<ContactInput>
   }
 }
 
-async function handleBulkDelete() {
-  if (!selectedIds.value.length || !confirm(`Delete ${selectedIds.value.length} contact(s)?`)) return
+function handleBulkDelete() {
+  if (!selectedIds.value.length) return
+  deleteConfirm.value = { show: true, type: 'bulk', listName: '' }
+}
+
+async function confirmBulkDelete() {
+  deleteConfirm.value.show = false
   try {
     const deleted = await bulkDeleteMutation.mutateAsync(selectedIds.value)
     toast.success(`${deleted} contact(s) deleted`)
@@ -256,73 +273,64 @@ function toggleSelectAll() {
 <template>
   <MainLayout>
     <div class="relative">
-      <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-bold text-text-primary">Contacts</h1>
-        <div class="flex gap-2">
-          <button
-            class="btn-ghost inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
-            @click="showValidateModal = true"
-          >
+      <PageHeader title="Contacts">
+        <template #actions>
+          <button class="btn-ghost" @click="showValidateModal = true">
             <Shield :size="16" /> Validate
           </button>
-          <button
-            class="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
-            @click="showNewListModal = true"
-          >
+          <button class="btn-primary" @click="showNewListModal = true">
             <Plus :size="16" /> New List
           </button>
-        </div>
-      </div>
+        </template>
+      </PageHeader>
 
       <div class="flex max-md:flex-col gap-6 min-h-[calc(100vh-160px)]">
         <!-- Sidebar: Lists -->
-        <div class="w-[260px] max-md:w-full shrink-0 bg-bg-secondary border border-border rounded-xl overflow-hidden">
-          <div class="p-4 border-b border-border">
-            <h3 class="text-xs font-semibold text-text-secondary uppercase tracking-wider">Lists</h3>
+        <div class="w-[260px] max-md:w-full shrink-0 bg-bg-card border border-border rounded-xl overflow-hidden">
+          <div class="px-4 py-3.5 border-b border-border">
+            <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Lists</h3>
           </div>
-          <div
-            v-if="listsLoading"
-            class="flex flex-col items-center justify-center gap-3 py-12 px-4 text-text-muted text-center"
-          >
-            <Loader2 :size="20" class="animate-spin" />
+          <div v-if="listsLoading" class="p-3 flex flex-col gap-2">
+            <Skeleton variant="text" :count="4" height="40px" />
           </div>
-          <div
-            v-else-if="!lists?.length"
-            class="flex flex-col items-center justify-center gap-3 py-12 px-4 text-text-muted text-center"
-          >
-            <Users :size="32" />
-            <p class="m-0">No lists yet</p>
-          </div>
-          <div v-else class="p-2">
+          <EmptyState v-else-if="!lists?.length" :icon="Users" title="No lists yet" />
+          <div v-else class="p-1.5">
             <div
               v-for="list in lists"
               :key="list.id"
-              class="group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors duration-150"
+              class="group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-150"
               :class="
-                activeListId === list.id ? 'bg-accent/[0.12] border border-border-glow' : 'hover:bg-accent/[0.05]'
+                activeListId === list.id
+                  ? 'bg-accent/10 text-accent'
+                  : 'text-text-primary hover:bg-bg-tertiary'
               "
               @click="activeListId = list.id"
             >
-              <div class="flex items-center gap-2 flex-1 min-w-0">
-                <span class="text-sm font-medium text-text-primary truncate">{{ list.name }}</span>
-                <span class="text-xs text-text-muted bg-bg-tertiary px-2 py-0.5 rounded-[10px] shrink-0">{{
-                  list.contact_count
-                }}</span>
+              <div class="flex items-center gap-2.5 flex-1 min-w-0">
+                <span class="text-sm font-medium truncate">{{ list.name }}</span>
+                <span
+                  class="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                  :class="
+                    activeListId === list.id
+                      ? 'bg-accent/20 text-accent'
+                      : 'bg-bg-tertiary text-text-muted'
+                  "
+                >{{ list.contact_count }}</span>
               </div>
-              <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              <div class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                 <button
-                  class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
+                  class="bg-transparent border-none cursor-pointer p-1.5 text-text-muted rounded-md hover:bg-bg-tertiary hover:text-text-primary transition-all duration-150"
                   @click.stop="openEditList(list)"
                   title="Edit"
                 >
-                  <Pencil :size="14" />
+                  <Pencil :size="13" />
                 </button>
                 <button
-                  class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-red-500/10 hover:text-red-500 transition-all duration-150"
+                  class="bg-transparent border-none cursor-pointer p-1.5 text-text-muted rounded-md hover:bg-red-500/10 hover:text-red-500 transition-all duration-150"
                   @click.stop="handleDeleteList(list)"
                   title="Delete"
                 >
-                  <Trash2 :size="14" />
+                  <Trash2 :size="13" />
                 </button>
               </div>
             </div>
@@ -342,9 +350,9 @@ function toggleSelectAll() {
             <!-- Bulk actions bar -->
             <div
               v-if="selectedIds.length > 0"
-              class="flex items-center justify-between bg-accent/[0.08] border border-border-glow rounded-lg px-4 py-2 mb-3 text-sm text-accent"
+              class="flex items-center justify-between bg-accent/[0.06] border border-accent/20 rounded-xl px-5 py-3 mb-4 text-sm"
             >
-              <span>{{ selectedIds.length }} selected</span>
+              <span class="font-semibold text-accent">{{ selectedIds.length }} selected</span>
               <div class="flex gap-1.5">
                 <button
                   class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium"
@@ -359,7 +367,7 @@ function toggleSelectAll() {
                   <FolderInput :size="14" /> Move
                 </button>
                 <button
-                  class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-red-500 hover:bg-red-500/[0.08] hover:border-red-500/30"
+                  class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-red-500 hover:bg-red-500/[0.08]"
                   @click="handleBulkDelete"
                 >
                   <Trash2 :size="14" /> Delete
@@ -378,35 +386,23 @@ function toggleSelectAll() {
             />
 
             <!-- Pagination -->
-            <div v-if="pagination.totalPages > 1" class="flex items-center justify-center gap-3 mt-4">
-              <button
-                class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium"
-                :disabled="currentPage <= 1"
-                @click="currentPage--"
-              >
-                <ChevronLeft :size="14" />
-              </button>
-              <span class="text-[13px] text-text-muted"
-                >Page {{ currentPage }} of {{ pagination.totalPages }} ({{ pagination.total }} total)</span
-              >
-              <button
-                class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium"
-                :disabled="currentPage >= pagination.totalPages"
-                @click="currentPage++"
-              >
-                <ChevronRight :size="14" />
-              </button>
-            </div>
+            <AppPagination
+              v-if="pagination.totalPages > 1"
+              :page="currentPage"
+              :total-pages="pagination.totalPages"
+              :total="pagination.total"
+              :showing="contacts.length"
+              @update:page="currentPage = $event"
+              class="mt-4"
+            />
           </template>
 
-          <div
+          <EmptyState
             v-else
-            class="flex flex-col items-center justify-center gap-3 py-12 px-4 text-text-muted text-center min-h-[400px]"
-          >
-            <Users :size="48" />
-            <h3 class="text-text-primary m-0">Select a list</h3>
-            <p class="text-text-muted text-[13px] m-0">Choose a contact list from the sidebar, or create a new one</p>
-          </div>
+            :icon="Users"
+            title="Select a list"
+            description="Choose a contact list from the sidebar, or create a new one"
+          />
         </div>
       </div>
 
@@ -473,17 +469,15 @@ function toggleSelectAll() {
         @close="showValidateModal = false"
         @validate="handleValidate"
       />
+      <ConfirmDialog
+        :show="deleteConfirm.show"
+        :title="deleteConfirm.type === 'list' ? 'Delete List' : 'Delete Contacts'"
+        :message="deleteConfirm.type === 'list' ? `Delete &quot;${deleteConfirm.listName}&quot; and all its contacts? This cannot be undone.` : `Delete ${selectedIds.length} contact(s)? This cannot be undone.`"
+        confirmText="Delete"
+        variant="danger"
+        @confirm="deleteConfirm.type === 'list' ? confirmDeleteList() : confirmBulkDelete()"
+        @cancel="deleteConfirm.show = false"
+      />
     </div>
   </MainLayout>
 </template>
-
-<style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: all 0.2s ease;
-}
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-</style>
