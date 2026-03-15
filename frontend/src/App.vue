@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView } from 'vue-router'
 import { useAuth } from './stores/auth'
 import ToastContainer from './components/ui/ToastContainer.vue'
 
-const route = useRoute()
 const { initializeAuth } = useAuth()
 
 onMounted(async () => {
@@ -14,8 +13,8 @@ onMounted(async () => {
 
 <template>
   <div id="app">
-    <RouterView v-slot="{ Component }" :key="route.fullPath">
-      <Transition name="page" mode="out-in">
+    <RouterView v-slot="{ Component }">
+      <Transition name="fade" mode="out-in">
         <component :is="Component" />
       </Transition>
     </RouterView>
@@ -26,6 +25,17 @@ onMounted(async () => {
 <style>
 #app {
   min-height: 100vh;
+}
+
+.fade-enter-active {
+  transition: opacity 0.2s ease;
+}
+.fade-leave-active {
+  transition: opacity 0.12s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .page-enter-active {

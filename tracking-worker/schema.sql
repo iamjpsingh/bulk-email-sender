@@ -165,6 +165,72 @@ CREATE INDEX IF NOT EXISTS idx_prefs_user ON email_preferences(user_id);
 CREATE INDEX IF NOT EXISTS idx_prefs_email ON email_preferences(email);
 
 -- ============================================================================
+-- FORM ENDPOINTS
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS form_endpoints (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  list_id TEXT NOT NULL,
+  field_mapping TEXT DEFAULT '{}',
+  required_fields TEXT DEFAULT '["email"]',
+  allowed_domains TEXT DEFAULT '[]',
+  redirect_url TEXT,
+  actions TEXT DEFAULT '[]',
+  double_optin INTEGER DEFAULT 0,
+  success_message TEXT DEFAULT 'Thank you for subscribing!',
+  submission_count INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'active',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_fe_org ON form_endpoints(org_id);
+CREATE INDEX IF NOT EXISTS idx_fe_status ON form_endpoints(status);
+
+CREATE TABLE IF NOT EXISTS form_submissions (
+  id TEXT PRIMARY KEY,
+  form_id TEXT NOT NULL,
+  data TEXT NOT NULL,
+  ip_address TEXT,
+  user_agent TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (form_id) REFERENCES form_endpoints(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_fs_form ON form_submissions(form_id);
+
+-- ============================================================================
+-- LANDING PAGES
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS landing_pages (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  title TEXT NOT NULL,
+  template TEXT NOT NULL DEFAULT 'lead_capture',
+  html_content TEXT NOT NULL DEFAULT '',
+  css_content TEXT NOT NULL DEFAULT '',
+  meta_description TEXT,
+  meta_image TEXT,
+  form_id TEXT,
+  tracking_enabled INTEGER DEFAULT 1,
+  published INTEGER DEFAULT 0,
+  visit_count INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(org_id, slug)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lp_org ON landing_pages(org_id);
+CREATE INDEX IF NOT EXISTS idx_lp_slug ON landing_pages(slug);
+CREATE INDEX IF NOT EXISTS idx_lp_published ON landing_pages(published);
+
+-- ============================================================================
 -- INDEXES
 -- ============================================================================
 

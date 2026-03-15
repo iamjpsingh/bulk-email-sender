@@ -128,10 +128,12 @@ class OrgService {
   // ------- Members -------
 
   getMembers(orgId: string): OrgMember[] {
+    // Exclude platform admins from org member lists (they're invisible to orgs)
     return db.prepare(`
       SELECT om.*, u.email, u.name FROM org_members om
       JOIN users u ON om.user_id = u.id
       WHERE om.org_id = ? AND om.status IN ('active', 'invited')
+        AND u.is_platform_admin = 0
       ORDER BY om.role, u.name
     `).all(orgId) as OrgMember[]
   }
@@ -206,7 +208,11 @@ class OrgService {
   }
 
   getMemberCount(orgId: string): number {
-    return (db.prepare("SELECT COUNT(*) as count FROM org_members WHERE org_id = ? AND status = 'active'").get(orgId) as any).count
+    return (db.prepare(`
+      SELECT COUNT(*) as count FROM org_members om
+      JOIN users u ON om.user_id = u.id
+      WHERE om.org_id = ? AND om.status = 'active' AND u.is_platform_admin = 0
+    `).get(orgId) as any).count
   }
 
   private generateSlug(name: string): string {

@@ -3,7 +3,6 @@ import { ref, computed } from 'vue'
 import { useLogs, useClearLogs, useDeleteLog } from '../lib/query'
 import { useToast } from '../composables/useToast'
 import DateInput from '../components/ui/DateInput.vue'
-import MainLayout from '../components/layout/MainLayout.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import StatCard from '../components/ui/StatCard.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
@@ -192,7 +191,7 @@ function exportLogs(format: 'csv' | 'json') {
 </script>
 
 <template>
-  <MainLayout>
+  <div>
     <div class="reports-page">
       <!-- Header -->
       <PageHeader title="Reports" subtitle="Email delivery logs and analytics">
@@ -379,7 +378,7 @@ function exportLogs(format: 'csv' | 'json') {
         @cancel="deleteConfirm.show = false"
       />
     </div>
-  </MainLayout>
+  </div>
 </template>
 
 <style scoped>

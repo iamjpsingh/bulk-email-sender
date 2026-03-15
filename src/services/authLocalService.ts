@@ -176,6 +176,107 @@ class AuthLocalService {
   }
 
   /**
+   * Create a password reset token (valid for 1 hour)
+   */
+  createPasswordResetToken(email: string): { token: string; userId: string } | null {
+    const user = this.getUserByEmail(email)
+    if (!user) return null
+
+    // Invalidate previous tokens
+    db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').run(user.id)
+
+    const token = this.generateToken()
+    const id = generateId('prt')
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hour
+
+    db.prepare(`
+      INSERT INTO password_reset_tokens (id, user_id, token, expires_at)
+      VALUES (?, ?, ?, ?)
+    `).run(id, user.id, token, expiresAt)
+
+    return { token, userId: user.id }
+  }
+
+  /**
+   * Validate a password reset token
+   */
+  validateResetToken(token: string): { userId: string } | null {
+    const row = db.prepare(`
+      SELECT user_id FROM password_reset_tokens
+      WHERE token = ? AND expires_at > datetime('now') AND used_at IS NULL
+    `).get(token) as { user_id: string } | null
+
+    return row ? { userId: row.user_id } : null
+  }
+
+  /**
+   * Reset password using a valid token
+   */
+  async resetPassword(token: string, newPassword: string): Promise<boolean> {
+    const valid = this.validateResetToken(token)
+    if (!valid) return false
+
+    const passwordHash = await Bun.password.hash(newPassword, { algorithm: 'argon2id' })
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, valid.userId)
+    db.prepare("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE token = ?").run(token)
+
+    // Invalidate all sessions for security
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(valid.userId)
+
+    auditService.log({
+      actorId: valid.userId,
+      action: 'user.password_reset',
+      entityType: 'user',
+      entityId: valid.userId,
+    })
+
+    return true
+  }
+
+  /**
+   * Update user's password (when they know their current one)
+   */
+  async updatePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
+    const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as { password_hash: string } | null
+    if (!row) return false
+
+    const valid = await Bun.password.verify(currentPassword, row.password_hash)
+    if (!valid) return false
+
+    const passwordHash = await Bun.password.hash(newPassword, { algorithm: 'argon2id' })
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, userId)
+
+    auditService.log({
+      actorId: userId,
+      action: 'user.password_change',
+      entityType: 'user',
+      entityId: userId,
+    })
+
+    return true
+  }
+
+  /**
+   * Update user's profile
+   */
+  updateProfile(userId: string, data: { name?: string; email?: string }): AuthUser | null {
+    const user = this.getUser(userId)
+    if (!user) return null
+
+    if (data.email && data.email !== user.email) {
+      const existing = this.getUserByEmail(data.email)
+      if (existing) return null // email taken
+      db.prepare('UPDATE users SET email = ? WHERE id = ?').run(data.email.toLowerCase().trim(), userId)
+    }
+
+    if (data.name) {
+      db.prepare('UPDATE users SET name = ? WHERE id = ?').run(data.name.trim(), userId)
+    }
+
+    return this.getUser(userId)
+  }
+
+  /**
    * Clean up expired sessions
    */
   cleanupSessions(): number {

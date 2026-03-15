@@ -1,11 +1,33 @@
 // src/routes/analytics.ts - Advanced Analytics Endpoints
 
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { success, error } from '../utils/response'
 import { analyticsService } from '../services/analyticsService'
+import { validateBody } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const RecordEventSchema = z.object({
+  eventType: z.enum(['open', 'click', 'bounce', 'unsubscribe']),
+  campaignId: z.string().optional(),
+  recipientEmail: z.string().optional(),
+  userAgent: z.string().optional(),
+  url: z.string().optional(),
+  geoCountry: z.string().optional(),
+  geoCity: z.string().optional(),
+})
+
+const SeedSchema = z.object({
+  campaignId: z.string().min(1, 'campaignId is required'),
+  campaignName: z.string().optional(),
+  stats: z.record(z.unknown()),
+})
 
 const app = new Hono()
 
@@ -97,11 +119,7 @@ app.get('/analytics/export/summary', requirePermission(PERMISSIONS.ANALYTICS_EXP
 // Record analytics event (internal/webhook use)
 app.post('/analytics/events', requirePermission(PERMISSIONS.ANALYTICS_VIEW), async (c) => {
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-
-  if (!body.eventType || !['open', 'click', 'bounce', 'unsubscribe'].includes(body.eventType)) {
-    return error(c, 'Valid eventType required: open, click, bounce, unsubscribe')
-  }
+  const body = await validateBody(c, RecordEventSchema)
 
   analyticsService.recordEvent(orgId, {
     campaignId: body.campaignId,
@@ -119,11 +137,7 @@ app.post('/analytics/events', requirePermission(PERMISSIONS.ANALYTICS_VIEW), asy
 // Seed campaign analytics from existing data
 app.post('/analytics/seed', requirePermission(PERMISSIONS.ANALYTICS_VIEW), async (c) => {
   const orgId = getOrgId(c)
-  const { campaignId, campaignName, stats } = await c.req.json()
-
-  if (!campaignId || !stats) {
-    return error(c, 'campaignId and stats required')
-  }
+  const { campaignId, campaignName, stats } = await validateBody(c, SeedSchema)
 
   analyticsService.seedFromCampaign(orgId, campaignId, campaignName || '', stats)
   return success(c, null, 'Campaign analytics seeded')

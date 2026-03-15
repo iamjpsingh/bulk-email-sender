@@ -11,7 +11,6 @@ export interface Organization {
   id: string
   name: string
   slug: string
-  plan: string
   status: string
   settings: string
   memberCount?: number
@@ -69,6 +68,32 @@ export interface AuditLog {
   entity_id: string | null
   changes: string | null
   metadata: string
+  created_at: string
+}
+
+export interface Invitation {
+  id: string
+  org_id: string
+  email: string
+  role: string
+  token: string
+  invited_by: string
+  status: string
+  expires_at: string
+  accepted_at: string | null
+  created_at: string
+  org_name?: string
+  inviter_name?: string
+  inviter_email?: string
+}
+
+export interface PlatformUser {
+  id: string
+  email: string
+  name: string
+  status: string
+  is_platform_admin: number
+  last_login_at: string | null
   created_at: string
 }
 
@@ -206,4 +231,115 @@ export const adminApi = {
     const res = await api.get<{ activity: ActivityLog[] }>(`/admin/activity/recent?limit=${limit}`)
     return res.data?.activity || []
   },
+
+  // --- Invitations ---
+  getInvitations: async (): Promise<Invitation[]> => {
+    const res = await api.get<{ invitations: Invitation[] }>('/admin/invitations')
+    return res.data?.invitations || []
+  },
+
+  sendInvitation: async (email: string, role: string): Promise<Invitation> => {
+    const res = await api.post<Invitation>('/admin/invitations', { email, role })
+    if (!res.success) throw new Error(res.message || 'Failed to send invitation')
+    return res.data!
+  },
+
+  cancelInvitation: async (id: string) => {
+    const res = await api.delete(`/admin/invitations/${id}`)
+    if (!res.success) throw new Error(res.message || 'Failed to cancel invitation')
+  },
+
+  resendInvitation: async (id: string) => {
+    const res = await api.post(`/admin/invitations/${id}/resend`)
+    if (!res.success) throw new Error(res.message || 'Failed to resend invitation')
+  },
+
+  getInvitationByToken: async (token: string): Promise<{ orgName: string; inviterName: string; role: string; email: string }> => {
+    const res = await api.get<{ orgName: string; inviterName: string; role: string; email: string }>(`/admin/invitations/accept/${token}`)
+    if (!res.success) throw new Error(res.message || 'Invalid invitation')
+    return res.data!
+  },
+
+  acceptInvitation: async (token: string): Promise<{ orgId: string; role: string }> => {
+    const res = await api.post<{ orgId: string; role: string }>(`/admin/invitations/accept/${token}`)
+    if (!res.success) throw new Error(res.message || 'Failed to accept invitation')
+    return res.data!
+  },
+
+  getMyInvitations: async (): Promise<Invitation[]> => {
+    const res = await api.get<{ invitations: Invitation[] }>('/admin/invitations/mine')
+    return res.data?.invitations || []
+  },
+
+  // --- Platform Admin ---
+  platformListUsers: async (page = 1, limit = 50): Promise<{ users: PlatformUser[]; total: number }> => {
+    const res = await api.get<PlatformUser[]>(`/admin/platform/users?page=${page}&limit=${limit}`)
+    return { users: res.data || [], total: res.meta?.pagination?.total || 0 }
+  },
+
+  platformListOrgs: async (page = 1, limit = 50): Promise<{ orgs: Organization[]; total: number }> => {
+    const res = await api.get<Organization[]>(`/admin/platform/orgs?page=${page}&limit=${limit}`)
+    return { orgs: res.data || [], total: res.meta?.pagination?.total || 0 }
+  },
+
+  platformCleanupSessions: async () => {
+    const res = await api.post('/admin/platform/cleanup')
+    if (!res.success) throw new Error(res.message || 'Cleanup failed')
+    return res.data
+  },
+
+  // --- Platform Settings (System Mailer) ---
+  getSystemMailer: async (): Promise<{ configured: boolean; config: SystemMailerConfig | null }> => {
+    const res = await api.get<{ configured: boolean; config: SystemMailerConfig | null }>('/admin/platform/settings/mailer')
+    return res.data!
+  },
+
+  saveSystemMailer: async (config: SystemMailerConfig) => {
+    const res = await api.put('/admin/platform/settings/mailer', config)
+    if (!res.success) throw new Error(res.message || 'Failed to save mailer config')
+  },
+
+  testSystemMailer: async (): Promise<void> => {
+    const res = await api.post('/admin/platform/settings/mailer/test')
+    if (!res.success) throw new Error(res.message || 'Connection test failed')
+  },
+
+  sendTestEmail: async (): Promise<void> => {
+    const res = await api.post('/admin/platform/settings/mailer/send-test')
+    if (!res.success) throw new Error(res.message || 'Failed to send test email')
+  },
+
+  removeSystemMailer: async () => {
+    const res = await api.delete('/admin/platform/settings/mailer')
+    if (!res.success) throw new Error(res.message || 'Failed to remove config')
+  },
+
+  // --- OAuth Credentials (Google/Microsoft client ID + secret) ---
+  getOAuthCredentials: async (): Promise<{ google: { clientId: string; clientSecret: string } | null; microsoft: { clientId: string; clientSecret: string } | null }> => {
+    const res = await api.get<any>('/admin/platform/settings/oauth')
+    return res.data!
+  },
+
+  saveOAuthCredentials: async (provider: 'google' | 'microsoft', clientId: string, clientSecret: string) => {
+    const res = await api.put('/admin/platform/settings/oauth', { provider, clientId, clientSecret })
+    if (!res.success) throw new Error(res.message || 'Failed to save OAuth credentials')
+  },
+
+  // --- OAuth Connect (Gmail/Outlook for system mailer) ---
+  getOAuthConnectUrl: async (provider: 'gmail' | 'outlook'): Promise<string> => {
+    const res = await api.get<{ authUrl: string }>(`/admin/platform/settings/mailer/oauth/${provider}/connect`)
+    if (!res.success) throw new Error(res.message || 'Failed to get auth URL')
+    return res.data!.authUrl
+  },
+}
+
+export type ProviderType = 'smtp' | 'ses' | 'sendgrid' | 'mailgun' | 'postmark' | 'sparkpost' | 'gmail' | 'outlook'
+
+export interface SystemMailerConfig {
+  fromName: string
+  fromEmail: string
+  providerConfig: {
+    provider: ProviderType
+    [key: string]: any
+  }
 }

@@ -1,11 +1,52 @@
 // src/routes/campaigns.ts - Campaign Management API
 
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { campaignService, type CampaignLifecycleStatus, type CampaignType } from '../services/campaignService'
 import { success, error } from '../utils/response'
+import { validateBody } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const CreateCampaignSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(200),
+  subject: z.string().min(1, 'Subject is required').max(500),
+  from_email: z.string().email('Valid from_email is required'),
+  from_name: z.string().min(1, 'from_name is required').max(200),
+  type: z.enum(['regular', 'ab_test', 'automated', 'rss']).optional(),
+  template_id: z.string().optional(),
+  html_content: z.string().optional(),
+  text_content: z.string().optional(),
+  list_ids: z.array(z.string()).optional(),
+  segment_ids: z.array(z.string()).optional(),
+  config_id: z.string().optional(),
+  folder: z.string().max(100).optional(),
+  tags: z.array(z.string()).optional(),
+})
+
+const UpdateCampaignSchema = CreateCampaignSchema.partial()
+
+const ScheduleSchema = z.object({
+  scheduled_at: z.string().min(1, 'scheduled_at is required'),
+})
+
+const ABVariantSchema = z.object({
+  label: z.string().max(50).optional(),
+  percentage: z.number().min(1).max(100).optional(),
+  subject: z.string().max(500).optional(),
+  template_id: z.string().optional(),
+  sender_name: z.string().max(200).optional(),
+  sender_email: z.string().email().optional(),
+})
+
+const ABWinnerSchema = z.object({
+  variant_id: z.string().min(1, 'variant_id is required'),
+})
 
 const app = new Hono()
 
@@ -45,11 +86,7 @@ app.get('/campaigns', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
 app.post('/campaigns', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const user = requireAuth(c)
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-
-  if (!body.name?.trim() || !body.subject?.trim() || !body.from_email?.trim() || !body.from_name?.trim()) {
-    return error(c, 'Name, subject, from_email, and from_name are required', 400)
-  }
+  const body = await validateBody(c, CreateCampaignSchema)
 
   const campaign = campaignService.create(orgId, user.id, body)
   return success(c, campaign, 'Campaign created', 201)
@@ -76,7 +113,7 @@ app.get('/campaigns/:id', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => 
 app.put('/campaigns/:id', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
-  const body = await c.req.json()
+  const body = await validateBody(c, UpdateCampaignSchema)
 
   const updated = campaignService.update(orgId, campaignId, body)
   if (!updated) return error(c, 'Campaign not found or cannot be edited', 404)
@@ -101,7 +138,7 @@ app.delete('/campaigns/:id', requirePermission(PERMISSIONS.CAMPAIGNS_DELETE), (c
 app.post('/campaigns/:id/draft', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
-  const body = await c.req.json()
+  const body = await validateBody(c, UpdateCampaignSchema)
 
   const saved = campaignService.saveDraft(orgId, campaignId, body)
   if (!saved) return error(c, 'Campaign not found', 404)
@@ -112,13 +149,9 @@ app.post('/campaigns/:id/draft', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE)
 app.post('/campaigns/:id/schedule', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
-  const body = await c.req.json()
+  const { scheduled_at } = await validateBody(c, ScheduleSchema)
 
-  if (!body.scheduled_at) {
-    return error(c, 'scheduled_at is required', 400)
-  }
-
-  const scheduled = campaignService.schedule(orgId, campaignId, body.scheduled_at)
+  const scheduled = campaignService.schedule(orgId, campaignId, scheduled_at)
   if (!scheduled) return error(c, 'Campaign not found or not in draft/testing status', 404)
 
   return success(c, undefined, 'Campaign scheduled')
@@ -206,7 +239,7 @@ app.get('/campaigns/:id/stats', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (
 app.post('/campaigns/:id/ab/variant', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const campaignId = c.req.param('id')
-  const body = await c.req.json()
+  const body = await validateBody(c, ABVariantSchema)
 
   const campaign = campaignService.get(orgId, campaignId)
   if (!campaign) return error(c, 'Campaign not found', 404)
@@ -233,13 +266,10 @@ app.get('/campaigns/:id/ab/variants', requirePermission(PERMISSIONS.CAMPAIGNS_VI
 })
 
 app.post('/campaigns/:id/ab/winner', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
-  const user = requireAuth(c)
   const campaignId = c.req.param('id')
-  const body = await c.req.json()
+  const { variant_id } = await validateBody(c, ABWinnerSchema)
 
-  if (!body.variant_id) return error(c, 'variant_id is required', 400)
-
-  const declared = campaignService.declareWinner(campaignId, body.variant_id)
+  const declared = campaignService.declareWinner(campaignId, variant_id)
   if (!declared) return error(c, 'Variant not found', 404)
 
   return success(c, undefined, 'Winner declared')

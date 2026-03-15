@@ -188,6 +188,16 @@ function toggleMode() {
           </button>
         </form>
 
+        <!-- Forgot password link -->
+        <div v-if="mode === 'login'" class="flex justify-end mt-2">
+          <router-link
+            to="/forgot-password"
+            class="text-accent text-sm font-medium hover:underline"
+          >
+            Forgot password?
+          </router-link>
+        </div>
+
         <!-- Toggle mode -->
         <div class="flex items-center justify-center gap-1.5 mt-6 pt-6 border-t border-border">
           <span class="text-text-muted text-sm">

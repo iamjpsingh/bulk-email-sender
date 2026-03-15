@@ -123,6 +123,30 @@ export default {
         return handleShowPreferences(env.DB, trackingId, corsHeaders)
       }
 
+      // ========== FORM SUBMISSION ENDPOINTS (public) ==========
+      if (path.startsWith('/f/')) {
+        const formPath = path.slice(3)
+        // GET /f/:formId.js — embeddable JavaScript widget
+        if (formPath.endsWith('.js') && request.method === 'GET') {
+          const formId = formPath.slice(0, -3)
+          return handleFormWidget(env.DB, formId, url.origin, corsHeaders)
+        }
+        // POST /f/:formId — receive form submission
+        if (request.method === 'POST') {
+          return handleFormSubmission(env.DB, formPath, request, corsHeaders)
+        }
+        // GET /f/:formId — show hosted form page
+        return handleFormPage(env.DB, formPath, corsHeaders)
+      }
+
+      // ========== LANDING PAGES (public) ==========
+      if (path.startsWith('/p/')) {
+        const slug = path.slice(3)
+        if (slug) {
+          return handleLandingPage(env.DB, slug, url.origin, corsHeaders)
+        }
+      }
+
       // ========== BOUNCE WEBHOOK ==========
       if (path === '/api/bounce' && request.method === 'POST') {
         return handleBounceWebhook(env.DB, request, corsHeaders)
@@ -1634,4 +1658,268 @@ h1{font-size:24px;margin:0 0 16px}p{color:#52525b;line-height:1.6}</style>
 </head><body><div class="card"><h1>Preferences Updated</h1>
 <p>${messages[preference] || 'Your preferences have been saved.'}</p>
 </div></body></html>`
+}
+
+// =============================================================================
+// FORM SUBMISSION HANDLERS
+// =============================================================================
+
+async function handleFormSubmission(
+  db: D1Database,
+  formId: string,
+  request: Request,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  try {
+    const form = await db
+      .prepare('SELECT * FROM form_endpoints WHERE id = ? AND status = ?')
+      .bind(formId, 'active')
+      .first() as any
+
+    if (!form) {
+      return json({ success: false, error: 'Form not found or inactive' }, 404, corsHeaders)
+    }
+
+    // Check allowed domains
+    const allowedDomains: string[] = JSON.parse(form.allowed_domains || '[]')
+    if (allowedDomains.length > 0) {
+      const origin = request.headers.get('Origin') || request.headers.get('Referer') || ''
+      const allowed = allowedDomains.some((d: string) => origin.startsWith(d))
+      if (!allowed) {
+        return json({ success: false, error: 'Origin not allowed' }, 403, corsHeaders)
+      }
+    }
+
+    // Parse body
+    let data: Record<string, string>
+    const contentType = request.headers.get('Content-Type') || ''
+    if (contentType.includes('application/json')) {
+      data = await request.json() as Record<string, string>
+    } else {
+      const formData = await request.formData()
+      data = {} as Record<string, string>
+      formData.forEach((value, key) => { data[key] = String(value) })
+    }
+
+    // Validate required fields
+    const requiredFields: string[] = JSON.parse(form.required_fields || '["email"]')
+    for (const field of requiredFields) {
+      if (!data[field] || String(data[field]).trim() === '') {
+        if (contentType.includes('json')) {
+          return json({ success: false, error: `Missing required field: ${field}` }, 400, corsHeaders)
+        }
+        return new Response(`Missing required field: ${field}`, { status: 400, headers: corsHeaders })
+      }
+    }
+
+    // Record submission
+    const subId = generateId()
+    const ip = request.headers.get('CF-Connecting-IP') || ''
+    const ua = request.headers.get('User-Agent') || ''
+
+    await db.prepare(
+      `INSERT INTO form_submissions (id, form_id, data, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)`
+    ).bind(subId, formId, JSON.stringify(data), ip, ua).run()
+
+    // Increment submission count
+    await db.prepare(
+      'UPDATE form_endpoints SET submission_count = submission_count + 1 WHERE id = ?'
+    ).bind(formId).run()
+
+    // Redirect or return JSON
+    if (form.redirect_url && !contentType.includes('json')) {
+      return Response.redirect(form.redirect_url, 302)
+    }
+
+    return json({
+      success: true,
+      message: form.success_message || 'Thank you for subscribing!',
+    }, 200, { ...corsHeaders, 'Access-Control-Allow-Origin': '*' })
+  } catch (err) {
+    return json({ success: false, error: String(err) }, 500, corsHeaders)
+  }
+}
+
+async function handleFormPage(
+  db: D1Database,
+  formId: string,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const form = await db
+    .prepare('SELECT * FROM form_endpoints WHERE id = ? AND status = ?')
+    .bind(formId, 'active')
+    .first() as any
+
+  if (!form) {
+    return new Response('Form not found', { status: 404, headers: corsHeaders })
+  }
+
+  const fieldMapping: Record<string, string> = JSON.parse(form.field_mapping || '{}')
+  const requiredFields: string[] = JSON.parse(form.required_fields || '["email"]')
+
+  const inputFields = Object.keys(fieldMapping).map(f => {
+    const required = requiredFields.includes(f) ? ' required' : ''
+    const type = f === 'email' ? 'email' : 'text'
+    return `<div class="field"><label for="${f}">${f.charAt(0).toUpperCase() + f.slice(1)}</label>
+<input type="${type}" id="${f}" name="${f}" placeholder="Enter your ${f}"${required}></div>`
+  }).join('\n')
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(form.name)}</title>
+<style>body{margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f4f5;color:#18181b}
+.card{max-width:480px;margin:40px auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+h1{font-size:22px;margin:0 0 24px}.field{margin-bottom:16px}label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:#52525b}
+input{width:100%;padding:10px 12px;border:1px solid #e4e4e7;border-radius:8px;font-size:14px;box-sizing:border-box}input:focus{outline:none;border-color:#18181b}
+button{margin-top:8px;width:100%;padding:12px;background:#18181b;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer}
+button:hover{background:#27272a}.msg{display:none;padding:12px;border-radius:8px;margin-top:16px;font-size:14px}
+.msg.ok{display:block;background:#dcfce7;color:#166534}.msg.err{display:block;background:#fee2e2;color:#991b1b}</style>
+</head><body><div class="card">
+<h1>${escapeHtml(form.name)}</h1>
+<form id="dispatch-form" action="/f/${formId}" method="POST">
+${inputFields}
+<button type="submit">Subscribe</button>
+</form>
+<div id="msg" class="msg"></div>
+<script>
+document.getElementById('dispatch-form').addEventListener('submit',function(e){
+e.preventDefault();var f=this;var d=new FormData(f);
+fetch(f.action,{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify(Object.fromEntries(d))}).then(function(r){return r.json()}).then(function(r){
+var m=document.getElementById('msg');
+if(r.success){m.className='msg ok';m.textContent=r.message;f.reset()}
+else{m.className='msg err';m.textContent=r.error||'Something went wrong'}
+}).catch(function(){document.getElementById('msg').className='msg err';
+document.getElementById('msg').textContent='Network error'})})
+</script></div></body></html>`
+
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html', ...corsHeaders },
+  })
+}
+
+async function handleFormWidget(
+  db: D1Database,
+  formId: string,
+  origin: string,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const form = await db
+    .prepare('SELECT * FROM form_endpoints WHERE id = ? AND status = ?')
+    .bind(formId, 'active')
+    .first() as any
+
+  if (!form) {
+    return new Response('// Form not found', {
+      status: 404,
+      headers: { 'Content-Type': 'application/javascript', ...corsHeaders },
+    })
+  }
+
+  const fieldMapping: Record<string, string> = JSON.parse(form.field_mapping || '{}')
+  const requiredFields: string[] = JSON.parse(form.required_fields || '["email"]')
+
+  const fields = Object.keys(fieldMapping).map(f => {
+    const req = requiredFields.includes(f) ? 'required' : ''
+    const type = f === 'email' ? 'email' : 'text'
+    return `{name:"${f}",type:"${type}",label:"${f.charAt(0).toUpperCase() + f.slice(1)}",required:${!!req}}`
+  }).join(',')
+
+  const js = `(function(){
+var cid="dispatch-form-${formId}";
+var el=document.getElementById(cid);if(!el)return;
+var fields=[${fields}];
+var form=document.createElement('form');
+form.style.cssText='font-family:-apple-system,BlinkMacSystemFont,sans-serif';
+fields.forEach(function(f){
+var d=document.createElement('div');d.style.marginBottom='12px';
+var l=document.createElement('label');l.textContent=f.label;l.style.cssText='display:block;font-size:13px;margin-bottom:4px';
+var i=document.createElement('input');i.type=f.type;i.name=f.name;i.placeholder='Enter your '+f.name;
+i.style.cssText='width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;font-size:14px';
+if(f.required)i.required=true;d.appendChild(l);d.appendChild(i);form.appendChild(d)});
+var btn=document.createElement('button');btn.type='submit';btn.textContent='Subscribe';
+btn.style.cssText='width:100%;padding:10px;background:#18181b;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px';
+form.appendChild(btn);
+var msg=document.createElement('div');msg.style.cssText='display:none;padding:10px;border-radius:6px;margin-top:12px;font-size:13px';
+form.appendChild(msg);
+form.addEventListener('submit',function(e){e.preventDefault();
+var d=new FormData(form);
+fetch('${origin}/f/${formId}',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify(Object.fromEntries(d))}).then(function(r){return r.json()}).then(function(r){
+if(r.success){msg.style.display='block';msg.style.background='#dcfce7';msg.style.color='#166534';msg.textContent=r.message;form.reset()}
+else{msg.style.display='block';msg.style.background='#fee2e2';msg.style.color='#991b1b';msg.textContent=r.error||'Error'}
+}).catch(function(){msg.style.display='block';msg.style.background='#fee2e2';msg.style.color='#991b1b';msg.textContent='Network error'})});
+el.appendChild(form)})();`
+
+  return new Response(js, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/javascript',
+      'Cache-Control': 'public, max-age=300',
+      ...corsHeaders,
+      'Access-Control-Allow-Origin': '*',
+    },
+  })
+}
+
+// =============================================================================
+// LANDING PAGE HANDLER
+// =============================================================================
+
+async function handleLandingPage(
+  db: D1Database,
+  slug: string,
+  origin: string,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const page = await db
+    .prepare('SELECT * FROM landing_pages WHERE slug = ? AND published = 1')
+    .bind(slug)
+    .first() as any
+
+  if (!page) {
+    return new Response('Page not found', { status: 404, headers: corsHeaders })
+  }
+
+  // Increment visit count
+  await db.prepare('UPDATE landing_pages SET visit_count = visit_count + 1 WHERE id = ?').bind(page.id).run()
+
+  // Build form embed if configured
+  let formEmbed = ''
+  if (page.form_id) {
+    formEmbed = `<script src="${origin}/f/${page.form_id}.js"></script>`
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(page.title)}</title>
+  ${page.meta_description ? `<meta name="description" content="${escapeHtml(page.meta_description)}">` : ''}
+  ${page.meta_image ? `<meta property="og:image" content="${escapeHtml(page.meta_image)}">` : ''}
+  <meta property="og:title" content="${escapeHtml(page.title)}">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#18181b;background:#fff;line-height:1.6}
+    a{color:#3b82f6}
+    ${page.css_content || ''}
+  </style>
+</head>
+<body>
+  ${page.html_content || ''}
+  ${formEmbed}
+  ${page.tracking_enabled ? `<img src="${origin}/o/${page.id}" width="1" height="1" style="display:none" alt="">` : ''}
+</body>
+</html>`
+
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html', 'Cache-Control': 'public, max-age=60', ...corsHeaders },
+  })
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }

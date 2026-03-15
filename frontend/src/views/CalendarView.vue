@@ -2,7 +2,6 @@
 import { ref, computed } from 'vue'
 import { ChevronLeft, ChevronRight, X as XIcon, Calendar } from 'lucide-vue-next'
 import { useCampaigns } from '../lib/query'
-import MainLayout from '../components/layout/MainLayout.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 
 type ViewMode = 'month' | 'week' | 'day'
@@ -137,7 +136,7 @@ function isToday(date: Date): boolean {
 </script>
 
 <template>
-  <MainLayout>
+  <div>
     <PageHeader title="Campaign Calendar" subtitle="Schedule and track your email campaigns">
       <template #actions>
         <button class="btn-ghost" @click="goToToday">Today</button>
@@ -307,7 +306,7 @@ function isToday(date: Date): boolean {
         </div>
       </transition>
     </div>
-  </MainLayout>
+  </div>
 </template>
 
 <style scoped>

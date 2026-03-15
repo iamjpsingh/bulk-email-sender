@@ -1,6 +1,7 @@
 // src/routes/webhooks.ts - Webhook Management API
 
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
@@ -8,6 +9,24 @@ import { webhookService } from '../services/webhookService'
 import { parseSES, parseMailgun, parseSendGrid, processBounce } from '../services/bounceProcessor'
 import { success, error } from '../utils/response'
 import { logger } from '../utils/logger'
+import { validateBody } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const CreateWebhookSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(200),
+  url: z.string().url('Invalid URL format'),
+  events: z.array(z.string()).min(1, 'At least one event type is required'),
+  headers: z.record(z.string()).optional(),
+})
+
+const UpdateWebhookSchema = CreateWebhookSchema.partial()
+
+const ToggleWebhookSchema = z.object({
+  enabled: z.boolean(),
+})
 
 const app = new Hono()
 
@@ -27,22 +46,7 @@ app.get('/webhooks', requirePermission(PERMISSIONS.WEBHOOKS_VIEW), (c) => {
 app.post('/webhooks', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), async (c) => {
   const user = requireAuth(c)
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-
-  if (!body.name?.trim() || !body.url?.trim()) {
-    return error(c, 'Name and URL are required', 400)
-  }
-
-  if (!body.events?.length) {
-    return error(c, 'At least one event type is required', 400)
-  }
-
-  // Validate URL format
-  try {
-    new URL(body.url)
-  } catch {
-    return error(c, 'Invalid URL format', 400)
-  }
+  const body = await validateBody(c, CreateWebhookSchema)
 
   const webhook = webhookService.create(orgId, user.id, body)
   return success(c, webhook, 'Webhook created', 201)
@@ -61,7 +65,7 @@ app.get('/webhooks/:id', requirePermission(PERMISSIONS.WEBHOOKS_VIEW), (c) => {
 app.put('/webhooks/:id', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const webhookId = c.req.param('id')
-  const body = await c.req.json()
+  const body = await validateBody(c, UpdateWebhookSchema)
 
   const updated = webhookService.update(orgId, webhookId, body)
   if (!updated) return error(c, 'Webhook not found', 404)
@@ -86,9 +90,9 @@ app.delete('/webhooks/:id', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), (c) 
 app.post('/webhooks/:id/toggle', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const webhookId = c.req.param('id')
-  const body = await c.req.json()
+  const { enabled } = await validateBody(c, ToggleWebhookSchema)
 
-  const toggled = webhookService.toggleEnabled(orgId, webhookId, !!body.enabled)
+  const toggled = webhookService.toggleEnabled(orgId, webhookId, enabled)
   if (!toggled) return error(c, 'Webhook not found', 404)
 
   return success(c, undefined, body.enabled ? 'Webhook enabled' : 'Webhook disabled')

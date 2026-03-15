@@ -4,6 +4,7 @@
  */
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { secureHeaders } from 'hono/secure-headers'
 import { logger as honoLogger } from 'hono/logger'
 import { serveStatic } from 'hono/bun'
 import { getCookie } from 'hono/cookie'
@@ -47,8 +48,11 @@ import apikeysRoutes from './routes/apikeys'
 import routingRoutes from './routes/routing'
 import warmupRoutes from './routes/warmup'
 import analyticsRoutes from './routes/analytics'
+import formsRoutes from './routes/forms'
+import pagesRoutes from './routes/pages'
 import pluginsRoutes from './routes/plugins'
 import adminRoutes from './routes/admin'
+import whatsappRoutes from './routes/whatsapp'
 
 // Queue Engine
 import { queueEngine } from './services/queueEngine'
@@ -80,6 +84,9 @@ app.use(
   })
 )
 
+// Security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, etc.)
+app.use('*', secureHeaders())
+
 // Request logging
 app.use('*', honoLogger())
 
@@ -99,6 +106,11 @@ app.use('/api/parse-excel', uploadRateLimit)
 app.use('*', async (c, next) => {
   const path = c.req.path
   const isPublic = AUTH.PUBLIC_PATHS.some((p) => path.startsWith(p)) || path === '/'
+
+  // Public form submission endpoints (POST /api/forms/:id/submit)
+  if (path.match(/^\/api\/forms\/[^/]+\/submit$/) && c.req.method === 'POST') {
+    return next()
+  }
 
   if (isPublic) {
     return next()
@@ -138,8 +150,11 @@ const routes = [
   routingRoutes,
   warmupRoutes,
   analyticsRoutes,
+  formsRoutes,
+  pagesRoutes,
   pluginsRoutes,
   adminRoutes,
+  whatsappRoutes,
 ]
 
 // Mount all API routes under /api prefix to avoid conflicts with frontend SPA routes
@@ -184,6 +199,13 @@ app.notFound((c) => {
 })
 
 app.onError((err, c) => {
+  // AppError: expected errors thrown from routes/services
+  if (err.name === 'AppError' && 'status' in err) {
+    const status = (err as any).status as number
+    return c.json({ success: false, message: err.message }, status)
+  }
+
+  // Unexpected errors
   logger.error('Unhandled error:', err)
   return c.json(
     {

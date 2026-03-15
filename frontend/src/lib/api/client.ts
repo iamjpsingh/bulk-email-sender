@@ -27,6 +27,21 @@ export interface User {
   id: string
   email: string
   name: string
+  is_platform_admin?: boolean
+}
+
+export interface OrgInfo {
+  id: string
+  name: string
+  slug: string
+  role: string
+}
+
+export interface AuthContext {
+  user: User
+  orgId: string | null
+  role: string | null
+  orgs: OrgInfo[]
 }
 
 export interface SMTPConfig {

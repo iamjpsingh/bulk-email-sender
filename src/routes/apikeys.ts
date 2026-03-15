@@ -1,12 +1,14 @@
 // src/routes/apikeys.ts - API Key Management
 
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { success, error } from '../utils/response'
 import { logger } from '../utils/logger'
 import { generateId } from '../utils/id'
+import { validateBody } from '../utils/validate'
 import Database from 'bun:sqlite'
 import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
@@ -68,6 +70,26 @@ try { db.exec('CREATE INDEX IF NOT EXISTS idx_ak_org ON api_keys(org_id)') } cat
 logger.info('API Keys database initialized (data/apikeys.db)')
 
 // ============================================================================
+// Schemas
+// ============================================================================
+
+const VALID_SCOPES = ['read', 'send', 'contacts', 'campaigns', 'templates', 'admin'] as const
+
+const CreateKeySchema = z.object({
+  name: z.string().min(1, 'Key name is required').max(200),
+  scopes: z.array(z.enum(VALID_SCOPES)).optional(),
+  expires_at: z.string().optional(),
+})
+
+const ToggleSchema = z.object({
+  enabled: z.boolean(),
+})
+
+const UpdateScopesSchema = z.object({
+  scopes: z.array(z.enum(VALID_SCOPES)).min(1, 'At least one valid scope is required'),
+})
+
+// ============================================================================
 // Routes
 // ============================================================================
 
@@ -93,14 +115,9 @@ app.get('/api-keys', requirePermission(PERMISSIONS.APIKEYS_VIEW), (c) => {
 app.post('/api-keys', requirePermission(PERMISSIONS.APIKEYS_MANAGE), async (c) => {
   const user = requireAuth(c)
   const orgId = getOrgId(c)
-  const body = await c.req.json()
+  const body = await validateBody(c, CreateKeySchema)
 
-  if (!body.name?.trim()) {
-    return error(c, 'Key name is required', 400)
-  }
-
-  const validScopes = ['read', 'send', 'contacts', 'campaigns', 'templates', 'admin']
-  const scopes: string[] = (body.scopes || ['read']).filter((s: string) => validScopes.includes(s))
+  const scopes = body.scopes || ['read']
 
   // Generate API key
   const id = generateId('ak')
@@ -147,14 +164,14 @@ app.delete('/api-keys/:id', requirePermission(PERMISSIONS.APIKEYS_MANAGE), (c) =
 app.post('/api-keys/:id/toggle', requirePermission(PERMISSIONS.APIKEYS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const keyId = c.req.param('id')
-  const body = await c.req.json()
+  const { enabled } = await validateBody(c, ToggleSchema)
 
   const result = db.prepare(`
     UPDATE api_keys SET enabled = ? WHERE id = ? AND org_id = ?
-  `).run(body.enabled ? 1 : 0, keyId, orgId)
+  `).run(enabled ? 1 : 0, keyId, orgId)
 
   if (result.changes === 0) return error(c, 'API key not found', 404)
-  return success(c, undefined, body.enabled ? 'Key enabled' : 'Key disabled')
+  return success(c, undefined, enabled ? 'Key enabled' : 'Key disabled')
 })
 
 /**
@@ -163,14 +180,7 @@ app.post('/api-keys/:id/toggle', requirePermission(PERMISSIONS.APIKEYS_MANAGE), 
 app.put('/api-keys/:id/scopes', requirePermission(PERMISSIONS.APIKEYS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const keyId = c.req.param('id')
-  const body = await c.req.json()
-
-  const validScopes = ['read', 'send', 'contacts', 'campaigns', 'templates', 'admin']
-  const scopes: string[] = (body.scopes || []).filter((s: string) => validScopes.includes(s))
-
-  if (scopes.length === 0) {
-    return error(c, 'At least one valid scope is required', 400)
-  }
+  const { scopes } = await validateBody(c, UpdateScopesSchema)
 
   const result = db.prepare(`
     UPDATE api_keys SET scopes = ? WHERE id = ? AND org_id = ?

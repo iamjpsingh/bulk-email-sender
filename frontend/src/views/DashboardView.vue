@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { useDashboardStats, usePauseJob, useResumeJob, useCancelJob } from '../lib/query'
 import { useAuth } from '../stores/auth'
-import MainLayout from '../components/layout/MainLayout.vue'
 import StatCard from '../components/ui/StatCard.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import AlertBanner from '../components/ui/AlertBanner.vue'
@@ -126,7 +125,7 @@ const currentDate = computed(() => {
 </script>
 
 <template>
-  <MainLayout>
+  <div>
     <!-- Header -->
     <PageHeader :title="`${greeting}${firstName ? `, ${firstName}` : ''}`" :subtitle="currentDate">
       <template #actions>
@@ -237,7 +236,7 @@ const currentDate = computed(() => {
         description="Set up your SMTP configuration, upload your contacts, and compose your first email. It only takes a few minutes."
       >
         <template #actions>
-          <router-link to="/configs" class="btn-secondary">
+          <router-link to="/settings" class="btn-secondary">
             <Settings :size="16" />
             Setup SMTP
           </router-link>
@@ -275,5 +274,5 @@ const currentDate = computed(() => {
         </router-link>
       </div>
     </div>
-  </MainLayout>
+  </div>
 </template>

@@ -3,10 +3,11 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { authApi } from '../api'
+import type { AuthContext } from '../api'
 import { queryKeys } from './keys'
 
 export function useCurrentUser() {
-  return useQuery({
+  return useQuery<AuthContext | null>({
     queryKey: queryKeys.auth.me,
     queryFn: authApi.getMe,
     retry: false,
@@ -19,8 +20,8 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) => authApi.login(email, password),
-    onSuccess: (user) => {
-      queryClient.setQueryData(queryKeys.auth.me, user)
+    onSuccess: (ctx: AuthContext) => {
+      queryClient.setQueryData(queryKeys.auth.me, ctx)
     },
   })
 }
@@ -31,8 +32,8 @@ export function useRegister() {
   return useMutation({
     mutationFn: ({ name, email, password }: { name: string; email: string; password: string }) =>
       authApi.register(name, email, password),
-    onSuccess: (user) => {
-      queryClient.setQueryData(queryKeys.auth.me, user)
+    onSuccess: (ctx: AuthContext) => {
+      queryClient.setQueryData(queryKeys.auth.me, ctx)
     },
   })
 }

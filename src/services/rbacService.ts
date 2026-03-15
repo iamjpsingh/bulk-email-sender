@@ -26,6 +26,7 @@ export const PERMISSIONS = {
   APIKEYS_VIEW: 'apikeys.view', APIKEYS_MANAGE: 'apikeys.manage',
   AUDIT_VIEW: 'audit.view', LOGS_VIEW: 'logs.view',
   BILLING_VIEW: 'billing.view', BILLING_MANAGE: 'billing.manage',
+  WHATSAPP_VIEW: 'whatsapp.view', WHATSAPP_MANAGE: 'whatsapp.manage',
 } as const
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]

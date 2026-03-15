@@ -467,6 +467,80 @@ class ContactService {
       Company: c.company || undefined,
     }));
   }
+
+  // --------------------------------------------------------------------------
+  // Deduplication
+  // --------------------------------------------------------------------------
+
+  findDuplicates(orgId: string): { email: string; count: number; ids: string[]; lists: string[] }[] {
+    const rows = this.db.prepare(`
+      SELECT email, COUNT(*) as count, GROUP_CONCAT(id) as ids, GROUP_CONCAT(DISTINCT list_id) as lists
+      FROM contacts WHERE org_id = ?
+      GROUP BY LOWER(email) HAVING count > 1
+      ORDER BY count DESC LIMIT 100
+    `).all(orgId) as { email: string; count: number; ids: string; lists: string }[];
+
+    return rows.map(r => ({
+      email: r.email,
+      count: r.count,
+      ids: r.ids.split(','),
+      lists: r.lists.split(','),
+    }));
+  }
+
+  mergeContacts(orgId: string, primaryId: string, mergeIds: string[]): boolean {
+    const primary = this.getContact(orgId, primaryId);
+    if (!primary) return false;
+
+    const allIds = [primaryId, ...mergeIds];
+    const contacts = allIds
+      .map(id => this.getContact(orgId, id))
+      .filter(Boolean) as Contact[];
+
+    if (contacts.length < 2) return false;
+
+    // Merge strategy: keep newest non-empty value, combine tags, sum scores
+    let mergedTags: string[] = [];
+    let mergedScore = 0;
+    let mergedCustom: Record<string, string> = {};
+
+    for (const c of contacts) {
+      const tags: string[] = JSON.parse(c.tags || '[]');
+      mergedTags = [...new Set([...mergedTags, ...tags])];
+      mergedScore += c.engagement_score;
+
+      const custom: Record<string, string> = JSON.parse(c.custom_fields || '{}');
+      for (const [k, v] of Object.entries(custom)) {
+        if (v && !mergedCustom[k]) mergedCustom[k] = v;
+      }
+    }
+
+    // Update primary with merged data
+    const newest = contacts.sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+    this.db.prepare(`
+      UPDATE contacts SET
+        first_name = COALESCE(NULLIF(?, ''), first_name),
+        last_name = COALESCE(NULLIF(?, ''), last_name),
+        company = COALESCE(NULLIF(?, ''), company),
+        phone = COALESCE(NULLIF(?, ''), phone),
+        tags = ?,
+        custom_fields = ?,
+        engagement_score = ?,
+        updated_at = datetime('now')
+      WHERE id = ? AND org_id = ?
+    `).run(
+      newest.first_name, newest.last_name, newest.company, newest.phone,
+      JSON.stringify(mergedTags), JSON.stringify(mergedCustom), mergedScore,
+      primaryId, orgId
+    );
+
+    // Delete merged contacts (keep primary)
+    for (const id of mergeIds) {
+      this.db.prepare('DELETE FROM contacts WHERE id = ? AND org_id = ?').run(id, orgId);
+    }
+
+    return true;
+  }
 }
 
 export const contactService = new ContactService();

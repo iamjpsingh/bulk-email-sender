@@ -1,9 +1,34 @@
 // src/routes/plugins.ts - Plugin System Endpoints
 
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { requireAuth } from '../middleware/auth'
 import { success, error } from '../utils/response'
 import { pluginManager } from '../services/pluginManager'
+import { validateBody } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const InstallPluginSchema = z.object({
+  manifest: z.object({
+    name: z.string().min(1, 'Plugin name is required'),
+    type: z.string().min(1, 'Plugin type is required'),
+    version: z.string().optional(),
+    description: z.string().optional(),
+  }).passthrough(),
+  settings: z.record(z.unknown()).optional(),
+})
+
+const InstallProviderSchema = z.object({
+  providerName: z.string().min(1, 'providerName is required'),
+  settings: z.record(z.unknown()).optional(),
+})
+
+const PluginSettingsSchema = z.object({
+  settings: z.record(z.unknown()),
+})
 
 const app = new Hono()
 
@@ -50,11 +75,7 @@ app.get('/plugins/:id', async (c) => {
 // Install plugin from manifest
 app.post('/plugins', async (c) => {
   const user = requireAuth(c)
-  const body = await c.req.json()
-
-  if (!body.manifest || !body.manifest.name || !body.manifest.type) {
-    return error(c, 'Valid plugin manifest required (name, type)')
-  }
+  const body = await validateBody(c, InstallPluginSchema)
 
   try {
     const plugin = pluginManager.install(user.id, {
@@ -73,11 +94,7 @@ app.post('/plugins', async (c) => {
 // Install built-in provider plugin
 app.post('/plugins/providers/install', async (c) => {
   const user = requireAuth(c)
-  const { providerName, settings } = await c.req.json()
-
-  if (!providerName) {
-    return error(c, 'providerName required')
-  }
+  const { providerName, settings } = await validateBody(c, InstallProviderSchema)
 
   const plugin = pluginManager.installBuiltinProvider(user.id, providerName, settings || {})
 
@@ -116,11 +133,7 @@ app.post('/plugins/:id/disable', async (c) => {
 app.put('/plugins/:id/settings', async (c) => {
   const user = requireAuth(c)
   const pluginId = c.req.param('id')
-  const { settings } = await c.req.json()
-
-  if (!settings) {
-    return error(c, 'settings object required')
-  }
+  const { settings } = await validateBody(c, PluginSettingsSchema)
 
   if (!pluginManager.updateSettings(user.id, pluginId, settings)) {
     return error(c, 'Plugin not found', 404)

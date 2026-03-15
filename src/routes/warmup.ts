@@ -1,9 +1,29 @@
 // src/routes/warmup.ts - Email Warmup Endpoints
 
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { requireAuth } from '../middleware/auth'
 import { success, error } from '../utils/response'
 import { warmupService } from '../services/warmupService'
+import { validateBody } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const CreateWarmupSchema = z.object({
+  config_id: z.string().min(1, 'config_id is required'),
+  config_name: z.string().optional(),
+  schedule_type: z.enum(['conservative', 'moderate', 'aggressive', 'custom'], {
+    errorMap: () => ({ message: 'Valid schedule_type required: conservative, moderate, aggressive, or custom' }),
+  }),
+  starting_volume: z.number().optional(),
+  target_volume: z.number().optional(),
+  custom_schedule: z.array(z.object({
+    day: z.number(),
+    volume: z.number(),
+  })).optional(),
+})
 
 const app = new Hono()
 
@@ -38,15 +58,7 @@ app.get('/warmup/:id/progress', async (c) => {
 // Create warmup plan
 app.post('/warmup', async (c) => {
   const user = requireAuth(c)
-  const body = await c.req.json()
-
-  if (!body.config_id) {
-    return error(c, 'config_id is required')
-  }
-
-  if (!body.schedule_type || !['conservative', 'moderate', 'aggressive', 'custom'].includes(body.schedule_type)) {
-    return error(c, 'Valid schedule_type required: conservative, moderate, aggressive, or custom')
-  }
+  const body = await validateBody(c, CreateWarmupSchema)
 
   const plan = warmupService.create(user.id, {
     config_id: body.config_id,

@@ -1,11 +1,42 @@
 // src/routes/templates.ts - Template Management API
 
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { templateService, type TemplateCategory } from '../services/templateService'
+import { d1UserDatabase } from '../services/d1UserDatabase'
+import { createTransport, configFromRecord } from '../services/transports'
+import { htmlToText } from '../utils/htmlToText'
 import { success, error } from '../utils/response'
+import { validateBody } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const CreateTemplateSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(200),
+  html_content: z.string().min(1, 'HTML content is required'),
+  subject: z.string().max(500).optional(),
+  category: z.string().max(50).optional(),
+  description: z.string().max(1000).optional(),
+  variables: z.array(z.string()).optional(),
+})
+
+const UpdateTemplateSchema = CreateTemplateSchema.partial()
+
+const PreviewSchema = z.object({
+  data: z.record(z.string()).optional(),
+  html: z.string().optional(),
+})
+
+const TestSendSchema = z.object({
+  to: z.string().email().optional(),
+  subject: z.string().max(500).optional(),
+  data: z.record(z.string()).optional(),
+})
 
 const app = new Hono()
 
@@ -43,11 +74,7 @@ app.get('/templates', requirePermission(PERMISSIONS.TEMPLATES_VIEW), (c) => {
 app.post('/templates', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), async (c) => {
   const user = requireAuth(c)
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-
-  if (!body.name?.trim() || !body.html_content?.trim()) {
-    return error(c, 'Name and HTML content are required', 400)
-  }
+  const body = await validateBody(c, CreateTemplateSchema)
 
   const template = templateService.create(orgId, user.id, body)
   return success(c, template, 'Template created', 201)
@@ -73,7 +100,7 @@ app.get('/templates/:id', requirePermission(PERMISSIONS.TEMPLATES_VIEW), (c) => 
 app.put('/templates/:id', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const templateId = c.req.param('id')
-  const body = await c.req.json()
+  const body = await validateBody(c, UpdateTemplateSchema)
 
   const updated = templateService.update(orgId, templateId, body)
   if (!updated) return error(c, 'Template not found or is a starter template', 404)
@@ -111,7 +138,7 @@ app.post('/templates/:id/duplicate', requirePermission(PERMISSIONS.TEMPLATES_MAN
 app.post('/templates/:id/preview', requirePermission(PERMISSIONS.TEMPLATES_VIEW), async (c) => {
   const orgId = getOrgId(c)
   const templateId = c.req.param('id')
-  const body = await c.req.json()
+  const body = await validateBody(c, PreviewSchema)
 
   const template = templateService.get(orgId, templateId)
   if (!template) return error(c, 'Template not found', 404)
@@ -121,12 +148,69 @@ app.post('/templates/:id/preview', requirePermission(PERMISSIONS.TEMPLATES_VIEW)
 })
 
 app.post('/templates/preview', requirePermission(PERMISSIONS.TEMPLATES_VIEW), async (c) => {
-  const body = await c.req.json()
-  if (!body.html) return error(c, 'HTML content is required', 400)
+  const body = await validateBody(c, PreviewSchema.extend({ html: z.string().min(1, 'HTML content is required') }))
 
   const rendered = templateService.renderPreview(body.html, body.data || {})
   const variables = templateService.extractVariables(body.html)
   return success(c, { html: rendered, variables })
+})
+
+// ============================================================================
+// Test Send
+// ============================================================================
+
+app.post('/templates/:id/test-send', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), async (c) => {
+  const user = requireAuth(c)
+  const orgId = getOrgId(c)
+  const templateId = c.req.param('id')
+  const { to, subject, data } = await validateBody(c, TestSendSchema)
+
+  const recipientEmail = to || user.email
+  if (!recipientEmail) return error(c, 'Recipient email is required', 400)
+
+  const template = templateService.get(orgId, templateId)
+  if (!template) return error(c, 'Template not found', 404)
+
+  // Render template with test data
+  const html = templateService.renderPreview(template.html_content, data || {})
+  const text = htmlToText(html)
+
+  // Get first available SMTP config
+  const configs = await d1UserDatabase.getUserSMTPConfigs(user.id)
+  if (!configs || configs.length === 0) {
+    return error(c, 'No email configuration found. Add one in Settings.', 400)
+  }
+
+  const config = configs[0]
+  try {
+    const transportConfig = configFromRecord({
+      provider_type: config.provider_type || 'smtp',
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      username: config.username,
+      password: config.password,
+      from_email: config.from_email,
+      from_name: config.from_name,
+      api_key: config.api_key,
+      api_secret: config.api_secret,
+      api_region: config.api_region,
+      api_domain: config.api_domain,
+    })
+
+    const transport = createTransport(transportConfig)
+    const result = await transport.send({
+      from: { name: config.from_name || 'Test', email: config.from_email || user.email },
+      to: recipientEmail,
+      subject: subject || `[TEST] ${template.name}`,
+      html,
+      text,
+    })
+
+    return success(c, { messageId: result.messageId }, `Test email sent to ${recipientEmail}`)
+  } catch (err: any) {
+    return error(c, `Failed to send test: ${err.message}`, 500)
+  }
 })
 
 export default app

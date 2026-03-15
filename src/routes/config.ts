@@ -3,14 +3,76 @@
  * SMTP and OAuth configuration management
  */
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { d1UserDatabase } from '../services/d1UserDatabase'
 import { requireAuth } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { success, error } from '../utils/response'
 import { logger } from '../utils/logger'
-import { validateSMTPConfig } from '../utils/validation'
 import { createTransport, configFromRecord } from '../services/transports'
+import { validateBody } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const CreateSMTPSchema = z.object({
+  name: z.string().max(200).optional(),
+  host: z.string().min(1, 'Host is required'),
+  port: z.number().int().min(1).max(65535).optional().default(587),
+  secure: z.boolean().optional().default(false),
+  user: z.string().min(1, 'Username is required'),
+  pass: z.string().min(1, 'Password is required'),
+  fromEmail: z.string().email().optional(),
+  from_email: z.string().email().optional(),
+  fromName: z.string().max(200).optional(),
+  from_name: z.string().max(200).optional(),
+  isDefault: z.boolean().optional(),
+  is_default: z.boolean().optional(),
+})
+
+const UpdateSMTPSchema = z.object({
+  name: z.string().max(200).optional(),
+  host: z.string().optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+  secure: z.boolean().optional(),
+  user: z.string().optional(),
+  pass: z.string().optional(),
+  fromEmail: z.string().email().optional(),
+  from_email: z.string().email().optional(),
+  fromName: z.string().max(200).optional(),
+  from_name: z.string().max(200).optional(),
+  isDefault: z.boolean().optional(),
+  is_default: z.boolean().optional(),
+  api_key: z.string().optional(),
+  api_secret: z.string().optional(),
+  api_region: z.string().optional(),
+  api_domain: z.string().optional(),
+})
+
+const TestSMTPSchema = z.object({
+  host: z.string().min(1, 'Host is required'),
+  port: z.number().int().optional().default(587),
+  secure: z.boolean().optional().default(false),
+  user: z.string().min(1, 'Username is required'),
+  pass: z.string().min(1, 'Password is required'),
+})
+
+const CreateProviderSchema = z.object({
+  provider_type: z.enum(['ses', 'mailgun', 'sendgrid']),
+  name: z.string().max(200).optional(),
+  from_email: z.string().email('from_email is required'),
+  from_name: z.string().max(200).optional(),
+  is_default: z.boolean().optional(),
+  api_key: z.string().optional(),
+  access_key_id: z.string().optional(),
+  secret_access_key: z.string().optional(),
+  region: z.string().optional(),
+  api_region: z.string().optional(),
+  domain: z.string().optional(),
+  api_domain: z.string().optional(),
+})
 
 const app = new Hono()
 
@@ -74,13 +136,7 @@ app.get('/config/smtp/active', requirePermission(PERMISSIONS.SMTP_VIEW), async (
 app.post('/config/smtp', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
-    const body = await c.req.json()
-
-    // Validate
-    const validation = validateSMTPConfig(body)
-    if (!validation.valid) {
-      return error(c, validation.errors.join(', '), 400)
-    }
+    const body = await validateBody(c, CreateSMTPSchema)
 
     const configId = await d1UserDatabase.createSMTPConfig({
       user_id: user.id,
@@ -114,13 +170,7 @@ app.post('/config/smtp', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) =
 app.post('/config/create', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
-    const body = await c.req.json()
-
-    // Validate
-    const validation = validateSMTPConfig(body)
-    if (!validation.valid) {
-      return error(c, validation.errors.join(', '), 400)
-    }
+    const body = await validateBody(c, CreateSMTPSchema)
 
     const configId = await d1UserDatabase.createSMTPConfig({
       user_id: user.id,
@@ -155,7 +205,7 @@ app.put('/config/smtp/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE), as
   try {
     const user = requireAuth(c)
     const configId = c.req.param('configId')
-    const body = await c.req.json()
+    const body = await validateBody(c, UpdateSMTPSchema)
 
     const updates = buildUpdates(body)
     if (Object.keys(updates).length === 0) {
@@ -182,7 +232,7 @@ app.post('/config/update/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE),
   try {
     const user = requireAuth(c)
     const configId = c.req.param('configId')
-    const body = await c.req.json()
+    const body = await validateBody(c, UpdateSMTPSchema)
 
     const updates = buildUpdates(body)
     const updated = await d1UserDatabase.updateSMTPConfig(configId, user.id, updates)
@@ -267,13 +317,13 @@ app.post('/config/smtp/:configId/default', requirePermission(PERMISSIONS.SMTP_MA
  */
 app.post('/config/smtp/test', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
-    const body = await c.req.json()
+    const body = await validateBody(c, TestSMTPSchema)
     const { emailService } = await import('../services/emailService')
 
     const isValid = await emailService.testConnection({
       host: body.host,
-      port: body.port || 587,
-      secure: !!body.secure,
+      port: body.port,
+      secure: body.secure,
       auth: { user: body.user, pass: body.pass },
     })
 
@@ -338,26 +388,9 @@ app.post('/config/test/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE), a
 app.post('/config/provider', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
   try {
     const user = requireAuth(c)
-    const body = await c.req.json()
+    const body = await validateBody(c, CreateProviderSchema)
 
     const providerType = body.provider_type
-    if (!['ses', 'mailgun', 'sendgrid'].includes(providerType)) {
-      return error(c, 'Invalid provider_type. Must be ses, mailgun, or sendgrid', 400)
-    }
-
-    // Validate required fields per provider
-    if (providerType === 'ses' && (!body.access_key_id || !body.secret_access_key || !body.region)) {
-      return error(c, 'SES requires access_key_id, secret_access_key, and region', 400)
-    }
-    if (providerType === 'mailgun' && (!body.api_key || !body.domain)) {
-      return error(c, 'Mailgun requires api_key and domain', 400)
-    }
-    if (providerType === 'sendgrid' && !body.api_key) {
-      return error(c, 'SendGrid requires api_key', 400)
-    }
-    if (!body.from_email) {
-      return error(c, 'from_email is required', 400)
-    }
 
     const configId = await d1UserDatabase.createSMTPConfig({
       user_id: user.id,

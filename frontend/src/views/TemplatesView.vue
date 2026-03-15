@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import MainLayout from '../components/layout/MainLayout.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
@@ -11,7 +10,8 @@ import { templatesApi } from '../lib/api'
 import type { Template as TemplateType } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import HtmlCodeEditor from '../components/compose/HtmlCodeEditor.vue'
-import { FileText, Plus, Pencil, Trash2, Copy, Loader2, Inbox } from 'lucide-vue-next'
+import Modal from '../components/ui/Modal.vue'
+import { FileText, Plus, Pencil, Trash2, Copy, Loader2, Inbox, Send } from 'lucide-vue-next'
 
 const toast = useToast()
 
@@ -30,6 +30,11 @@ const editingId = ref<string | null>(null)
 const saving = ref(false)
 const previewHtml = ref('')
 const deleteConfirm = ref<{ show: boolean; id: string }>({ show: false, id: '' })
+
+const showTestSendModal = ref(false)
+const testSendTemplateId = ref('')
+const testSendForm = ref({ to: '', subject: '' })
+const testSending = ref(false)
 
 const categories = ['all', 'newsletter', 'promotional', 'welcome', 'follow-up', 'announcement', 'general']
 
@@ -133,6 +138,28 @@ async function duplicateTemplate(template: TemplateType) {
   }
 }
 
+function openTestSend(tpl: TemplateType) {
+  testSendTemplateId.value = tpl.id
+  testSendForm.value = { to: '', subject: `[TEST] ${tpl.name}` }
+  showTestSendModal.value = true
+}
+
+async function sendTestEmail() {
+  testSending.value = true
+  try {
+    await templatesApi.testSend(testSendTemplateId.value, {
+      to: testSendForm.value.to || undefined,
+      subject: testSendForm.value.subject || undefined,
+    })
+    toast.success('Test email sent')
+    showTestSendModal.value = false
+  } catch (err: any) {
+    toast.error(err.message || 'Failed to send test')
+  } finally {
+    testSending.value = false
+  }
+}
+
 async function cloneStarter(starter: TemplateType) {
   try {
     await templatesApi.create({
@@ -219,7 +246,7 @@ fetchStarters()
 </script>
 
 <template>
-  <MainLayout>
+  <div>
     <PageHeader title="Templates" subtitle="Create and manage reusable email templates">
       <template #actions>
         <button class="btn-primary" @click="openNewTemplate"><Plus :size="16" /> New Template</button>
@@ -288,6 +315,9 @@ fetchStarters()
             <button class="btn-ghost text-sm px-2 py-1" title="Duplicate" @click="duplicateTemplate(tpl)">
               <Copy :size="14" />
             </button>
+            <button class="btn-ghost text-sm px-2 py-1" title="Send Test" @click="openTestSend(tpl)">
+              <Send :size="14" />
+            </button>
             <button class="btn-ghost text-sm px-2 py-1 text-danger" title="Delete" @click="promptDelete(tpl.id)">
               <Trash2 :size="14" />
             </button>
@@ -324,9 +354,30 @@ fetchStarters()
       @confirm="confirmDelete"
       @cancel="deleteConfirm.show = false"
     />
-  </MainLayout>
 
-  <!-- Editor Slide-out (full width) -->
+    <!-- Test Send Modal -->
+    <Modal :show="showTestSendModal" title="Send Test Email" @close="showTestSendModal = false">
+      <div class="flex flex-col gap-4">
+        <div>
+          <label class="form-label">Recipient Email</label>
+          <input v-model="testSendForm.to" type="email" class="form-input" placeholder="Leave blank to send to yourself" />
+        </div>
+        <div>
+          <label class="form-label">Subject Line</label>
+          <input v-model="testSendForm.subject" type="text" class="form-input" />
+        </div>
+        <div class="flex justify-end gap-3 pt-2">
+          <button class="btn-ghost" @click="showTestSendModal = false">Cancel</button>
+          <button class="btn-primary" @click="sendTestEmail" :disabled="testSending">
+            <Loader2 v-if="testSending" :size="16" class="spin" />
+            <Send v-else :size="16" />
+            Send Test
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- Editor Slide-out (full width) -->
   <SlidePanel :show="showEditor" :title="editingId ? 'Edit Template' : 'New Template'" size="xl" @close="closeEditor">
     <div class="flex flex-1 overflow-hidden max-md:flex-col -m-6 h-[calc(100%+48px)]">
       <!-- Left: Form + Monaco Editor -->
@@ -397,4 +448,5 @@ fetchStarters()
       </div>
     </div>
   </SlidePanel>
+  </div>
 </template>

@@ -1,49 +1,63 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, provide, ref } from 'vue'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../../stores/auth'
 import { useSidebar } from '../../composables/useSidebar'
 import { cn } from '../../lib/utils'
 import AppSidebar from './AppSidebar.vue'
+import CommandPalette from '../command/CommandPalette.vue'
 import {
   Search,
   ChevronRight,
 } from 'lucide-vue-next'
 
 const route = useRoute()
+const router = useRouter()
 const { user } = useAuth()
 const { collapsed } = useSidebar()
 
+const showCommandPalette = ref(false)
+provide('commandPalette', { open: () => { showCommandPalette.value = true } })
+
 const userInitial = computed(() => user.value?.name?.charAt(0).toUpperCase() || '?')
 
-// Build breadcrumb from route
+// Build breadcrumbs from route.matched meta
 const breadcrumbs = computed(() => {
   const crumbs: Array<{ label: string; path?: string }> = []
 
-  // Always start with Dispatch as root
-  if (route.name === 'Dashboard') {
-    crumbs.push({ label: 'Dashboard' })
-  } else if (route.name === 'CampaignDetail') {
-    crumbs.push({ label: 'Campaigns', path: '/campaigns' })
-    crumbs.push({ label: 'Campaign Detail' })
-  } else if (route.name && typeof route.name === 'string') {
-    // Map route names to readable labels
-    const labelMap: Record<string, string> = {
-      Compose: 'Compose',
-      Campaigns: 'Campaigns',
-      Templates: 'Templates',
-      Contacts: 'Contacts',
-      Automations: 'Automations',
-      Calendar: 'Calendar',
-      Analytics: 'Analytics',
-      Reports: 'Reports',
-      Configs: 'Settings',
-    }
-    crumbs.push({ label: labelMap[route.name] || route.name })
+  // Check for explicit parent breadcrumb
+  const parentMeta = route.meta?.parent as { name: string; path: string } | undefined
+  if (parentMeta) {
+    crumbs.push({ label: parentMeta.name, path: parentMeta.path })
   }
+
+  // Add breadcrumbs from matched routes (skip root layout)
+  const matched = route.matched.filter(r => r.meta?.breadcrumb && r.components?.default)
+  matched.forEach((r, idx) => {
+    const isLast = idx === matched.length - 1
+    const label = r.meta.breadcrumb as string
+
+    // Don't duplicate parent
+    if (parentMeta && label === parentMeta.name) return
+
+    crumbs.push({
+      label,
+      path: isLast ? undefined : r.path || undefined,
+    })
+  })
 
   return crumbs
 })
+
+// Keyboard shortcut for command palette
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault()
+      showCommandPalette.value = !showCommandPalette.value
+    }
+  })
+}
 </script>
 
 <template>
@@ -108,7 +122,7 @@ const breadcrumbs = computed(() => {
 
         <!-- Right: Search + User -->
         <div class="flex items-center gap-3">
-          <!-- Search trigger (Cmd+K style) -->
+          <!-- Search trigger (Cmd+K) -->
           <button
             :class="cn(
               'hidden sm:flex items-center gap-2',
@@ -118,6 +132,7 @@ const breadcrumbs = computed(() => {
               'hover:border-border-hover hover:text-text-secondary',
               'transition-all duration-fast cursor-pointer'
             )"
+            @click="showCommandPalette = true"
           >
             <Search :size="14" class="shrink-0" />
             <span class="hidden lg:inline">Search...</span>
@@ -142,6 +157,7 @@ const breadcrumbs = computed(() => {
               'hover:bg-surface-1',
               'transition-colors duration-fast cursor-pointer'
             )"
+            @click="showCommandPalette = true"
           >
             <Search :size="16" />
           </button>
@@ -176,15 +192,22 @@ const breadcrumbs = computed(() => {
         </div>
       </header>
 
-      <!-- Page content -->
+      <!-- Page content — RouterView replaces <slot> -->
       <main
         id="main-content"
         class="flex-1 px-6 py-6"
       >
         <div class="max-w-[1400px] mx-auto">
-          <slot />
+          <RouterView v-slot="{ Component }">
+            <Transition name="page" mode="out-in">
+              <component :is="Component" />
+            </Transition>
+          </RouterView>
         </div>
       </main>
     </div>
+
+    <!-- Command Palette -->
+    <CommandPalette v-model:open="showCommandPalette" />
   </div>
 </template>

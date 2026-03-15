@@ -6,8 +6,8 @@ import { Hono } from 'hono'
 import { oauthService } from '../services/oauthService'
 import { d1UserDatabase } from '../services/d1UserDatabase'
 import { requireAuth } from '../middleware/auth'
-import { OAUTH } from '../config'
 import { success, error } from '../utils/response'
+import { systemSettingsService } from '../services/systemSettingsService'
 import { logger } from '../utils/logger'
 import { handleOAuthCallback, getValidOAuthToken, type OAuthProvider } from '../utils/oauth'
 
@@ -18,15 +18,17 @@ const app = new Hono()
  * GET /oauth/status
  */
 app.get('/oauth/status', (c) => {
+  const googleStored = systemSettingsService.getJson<{ clientId: string }>('oauth_google')
+  const msStored = systemSettingsService.getJson<{ clientId: string }>('oauth_microsoft')
   return success(c, {
     providers: {
       google: {
-        configured: OAUTH.GOOGLE.isConfigured(),
+        configured: !!(googleStored?.clientId || process.env.GOOGLE_CLIENT_ID),
         name: 'Google Gmail',
         description: 'Send emails via Gmail API',
       },
       microsoft: {
-        configured: OAUTH.MICROSOFT.isConfigured(),
+        configured: !!(msStored?.clientId || process.env.MICROSOFT_CLIENT_ID),
         name: 'Microsoft Outlook/365',
         description: 'Send emails via Microsoft Graph API',
       },

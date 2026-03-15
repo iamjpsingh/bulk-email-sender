@@ -1,9 +1,32 @@
 // src/routes/routing.ts - Smart Provider Routing Endpoints
 
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { requireAuth } from '../middleware/auth'
 import { success, error } from '../utils/response'
 import { routingEngine } from '../services/routingEngine'
+import { validateBody } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const InitProviderSchema = z.object({
+  configId: z.string().min(1, 'configId is required'),
+  providerType: z.string().min(1, 'providerType is required'),
+  configName: z.string().optional(),
+  dailyLimit: z.number().optional(),
+})
+
+const ProviderHealthSchema = z.object({
+  healthy: z.boolean(),
+  error: z.string().optional(),
+})
+
+const FailoverSchema = z.object({
+  failedConfigId: z.string().min(1, 'failedConfigId is required'),
+  reason: z.string().optional(),
+})
 
 const app = new Hono()
 
@@ -53,7 +76,7 @@ app.get('/routing/config', async (c) => {
 // Update routing config
 app.put('/routing/config', async (c) => {
   const user = requireAuth(c)
-  const body = await c.req.json()
+  const body = await validateBody(c, z.record(z.unknown()))
 
   routingEngine.updateRoutingConfig(user.id, body)
   return success(c, null, 'Routing config updated')
@@ -62,11 +85,7 @@ app.put('/routing/config', async (c) => {
 // Initialize a provider for routing
 app.post('/routing/providers/init', async (c) => {
   const user = requireAuth(c)
-  const { configId, providerType, configName, dailyLimit } = await c.req.json()
-
-  if (!configId || !providerType) {
-    return error(c, 'configId and providerType required')
-  }
+  const { configId, providerType, configName, dailyLimit } = await validateBody(c, InitProviderSchema)
 
   routingEngine.initializeProvider(user.id, configId, providerType, configName || '', dailyLimit)
   return success(c, null, 'Provider initialized for routing')
@@ -76,7 +95,7 @@ app.post('/routing/providers/init', async (c) => {
 app.post('/routing/providers/:configId/health', async (c) => {
   const user = requireAuth(c)
   const configId = c.req.param('configId')
-  const { healthy, error: errorMsg } = await c.req.json()
+  const { healthy, error: errorMsg } = await validateBody(c, ProviderHealthSchema)
 
   if (healthy) {
     routingEngine.markProviderHealthy(user.id, configId)
@@ -90,11 +109,7 @@ app.post('/routing/providers/:configId/health', async (c) => {
 // Trigger manual failover
 app.post('/routing/failover', async (c) => {
   const user = requireAuth(c)
-  const { failedConfigId, reason } = await c.req.json()
-
-  if (!failedConfigId) {
-    return error(c, 'failedConfigId required')
-  }
+  const { failedConfigId, reason } = await validateBody(c, FailoverSchema)
 
   const decision = routingEngine.failover(user.id, failedConfigId, reason || 'Manual failover')
 

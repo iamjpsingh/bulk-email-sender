@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import MainLayout from '../components/layout/MainLayout.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import AppTabs from '../components/ui/AppTabs.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
@@ -250,7 +249,7 @@ watch(searchQuery, () => {
 })
 </script>
 <template>
-  <MainLayout>
+  <div>
     <PageHeader title="Campaigns" subtitle="Create and manage email campaigns">
       <template #actions>
         <button class="btn btn-primary" @click="openCreateModal"><Plus :size="16" /> New Campaign</button>
@@ -525,5 +524,5 @@ watch(searchQuery, () => {
         </button>
       </template>
     </Modal>
-  </MainLayout>
+  </div>
 </template>

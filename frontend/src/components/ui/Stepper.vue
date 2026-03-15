@@ -1,10 +1,25 @@
 <script setup lang="ts">
 import { Check } from 'lucide-vue-next'
 
-defineProps<{
+const props = defineProps<{
   steps: Array<{ label: string; completed?: boolean; active?: boolean }>
   currentStep: number
 }>()
+
+const emit = defineEmits<{
+  (e: 'step-click', index: number): void
+}>()
+
+function handleClick(idx: number) {
+  // Allow clicking on completed steps or the current step
+  if (idx < props.currentStep || props.steps[idx]?.completed) {
+    emit('step-click', idx)
+  }
+}
+
+function isClickable(idx: number): boolean {
+  return idx < props.currentStep || !!props.steps[idx]?.completed
+}
 </script>
 
 <template>
@@ -16,7 +31,9 @@ defineProps<{
       :class="{
         'stepper__step--completed': step.completed || idx < currentStep,
         'stepper__step--active': idx === currentStep,
+        'stepper__step--clickable': isClickable(idx),
       }"
+      @click="handleClick(idx)"
     >
       <div class="stepper__indicator">
         <Check v-if="step.completed || idx < currentStep" :size="14" />
@@ -40,6 +57,13 @@ defineProps<{
   gap: 8px;
   flex: 1;
   position: relative;
+}
+.stepper__step--clickable {
+  cursor: pointer;
+}
+.stepper__step--clickable:hover .stepper__indicator {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 .stepper__indicator {
   width: 28px;

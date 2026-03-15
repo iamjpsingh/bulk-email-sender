@@ -14,7 +14,11 @@ export function requirePermission(...permissions: Permission[]) {
       return c.json({ success: false, message: 'Authentication required' }, 401)
     }
 
+    // Platform admins bypass org context requirement
     if (!orgId) {
+      if (rbacService.isPlatformAdmin(user.id)) {
+        return next()
+      }
       return c.json({ success: false, message: 'No organization context. Select an organization first.' }, 403)
     }
 
@@ -46,7 +50,11 @@ export function requireAnyPermission(...permissions: Permission[]) {
       return c.json({ success: false, message: 'Authentication required' }, 401)
     }
 
+    // Platform admins bypass org context requirement
     if (!orgId) {
+      if (rbacService.isPlatformAdmin(user.id)) {
+        return next()
+      }
       return c.json({ success: false, message: 'No organization context' }, 403)
     }
 
@@ -93,6 +101,9 @@ export function requireOrgMember() {
     }
 
     if (!orgId) {
+      if (rbacService.isPlatformAdmin(user.id)) {
+        return next()
+      }
       return c.json({ success: false, message: 'No organization context' }, 403)
     }
 

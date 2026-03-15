@@ -4,13 +4,53 @@
  */
 import { Hono } from 'hono'
 import { setCookie, deleteCookie, getCookie } from 'hono/cookie'
+import { z } from 'zod'
 import { authLocalService } from '../services/authLocalService'
 import { orgService } from '../services/orgService'
 import { rbacService } from '../services/rbacService'
 import { COOKIE, isHttps } from '../config'
 import { error, success, ErrorMessages } from '../utils/response'
+import { systemMailerService } from '../services/systemMailerService'
 import { logger } from '../utils/logger'
-import { isValidEmail, validatePassword } from '../utils/validation'
+import { validateBody, AppError } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const RegisterSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  name: z.string().min(1, 'Name is required').max(200),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+})
+
+const LoginSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(1, 'Password is required'),
+})
+
+const SwitchOrgSchema = z.object({
+  orgId: z.string().min(1, 'orgId is required'),
+})
+
+const ForgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email format'),
+})
+
+const ResetPasswordSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+})
+
+const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters'),
+})
+
+const UpdateProfileSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  email: z.string().email('Invalid email format').optional(),
+})
 
 const app = new Hono()
 
@@ -20,21 +60,7 @@ const app = new Hono()
  */
 app.post('/auth/register', async (c) => {
   try {
-    const body = await c.req.json()
-    const { email, name, password } = body
-
-    if (!email || !name || !password) {
-      return error(c, 'Email, name, and password are required', 400)
-    }
-
-    if (!isValidEmail(email)) {
-      return error(c, 'Invalid email format', 400)
-    }
-
-    const passwordValidation = validatePassword(password)
-    if (!passwordValidation.valid) {
-      return error(c, passwordValidation.message, 400)
-    }
+    const { email, name, password } = await validateBody(c, RegisterSchema)
 
     const session = await authLocalService.register(email, password, name)
     if (!session) {
@@ -47,7 +73,20 @@ app.post('/auth/register', async (c) => {
       secure,
     })
 
-    return success(c, { user: session.user }, 'Account created successfully')
+    const orgs = orgService.listForUser(session.user.id)
+    const role = session.orgId ? rbacService.getUserRole(session.user.id, session.orgId) : null
+
+    return success(c, {
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        is_platform_admin: !!session.user.is_platform_admin,
+      },
+      orgId: session.orgId,
+      role,
+      orgs: orgs.map(o => ({ id: o.id, name: o.name, slug: o.slug, role: o.role })),
+    }, 'Account created successfully')
   } catch (err) {
     logger.error('Registration error:', err)
     return error(c, 'Registration failed', 500)
@@ -60,12 +99,7 @@ app.post('/auth/register', async (c) => {
  */
 app.post('/auth/login', async (c) => {
   try {
-    const body = await c.req.json()
-    const { email, password } = body
-
-    if (!email || !password) {
-      return error(c, 'Email and password are required', 400)
-    }
+    const { email, password } = await validateBody(c, LoginSchema)
 
     const ipAddress = c.req.header('x-forwarded-for') || c.req.header('x-real-ip')
     const userAgent = c.req.header('user-agent')
@@ -80,7 +114,20 @@ app.post('/auth/login', async (c) => {
       secure,
     })
 
-    return success(c, { user: session.user }, 'Login successful')
+    const orgs = orgService.listForUser(session.user.id)
+    const role = session.orgId ? rbacService.getUserRole(session.user.id, session.orgId) : null
+
+    return success(c, {
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        is_platform_admin: !!session.user.is_platform_admin,
+      },
+      orgId: session.orgId,
+      role,
+      orgs: orgs.map(o => ({ id: o.id, name: o.name, slug: o.slug, role: o.role })),
+    }, 'Login successful')
   } catch (err) {
     logger.error('Login error:', err)
     return error(c, 'Login failed', 500)
@@ -152,9 +199,7 @@ app.post('/auth/switch-org', async (c) => {
     const token = getCookie(c, COOKIE.SESSION_NAME)
     if (!token) return error(c, ErrorMessages.UNAUTHORIZED, 401)
 
-    const body = await c.req.json()
-    const { orgId } = body
-    if (!orgId) return error(c, 'orgId is required', 400)
+    const { orgId } = await validateBody(c, SwitchOrgSchema)
 
     const session = authLocalService.validateSession(token)
     if (!session) return error(c, ErrorMessages.SESSION_EXPIRED, 401)
@@ -169,6 +214,128 @@ app.post('/auth/switch-org', async (c) => {
   } catch (err) {
     logger.error('Switch org error:', err)
     return error(c, 'Failed to switch organization', 500)
+  }
+})
+
+/**
+ * Forgot password — create reset token
+ * POST /auth/forgot-password
+ */
+app.post('/auth/forgot-password', async (c) => {
+  try {
+    const { email } = await validateBody(c, ForgotPasswordSchema)
+
+    // Always return success to prevent email enumeration
+    const result = authLocalService.createPasswordResetToken(email)
+    if (result) {
+      if (systemMailerService.isConfigured()) {
+        try {
+          await systemMailerService.sendPasswordReset(email, result.token)
+          logger.info(`Password reset email sent to ${email}`)
+        } catch (mailErr: any) {
+          logger.error(`Failed to send password reset email to ${email}: ${mailErr.message}`)
+        }
+      } else {
+        logger.warn(`Password reset token created for ${email} but system mailer is not configured`)
+      }
+    }
+
+    return success(c, undefined, 'If an account exists with that email, a reset link has been sent.')
+  } catch (err) {
+    logger.error('Forgot password error:', err)
+    return error(c, 'Failed to process request', 500)
+  }
+})
+
+/**
+ * Validate reset token
+ * GET /auth/reset-password/:token
+ */
+app.get('/auth/reset-password/:token', (c) => {
+  const token = c.req.param('token')
+  const valid = authLocalService.validateResetToken(token)
+  if (!valid) {
+    return error(c, 'Invalid or expired reset token', 400)
+  }
+  return success(c, { valid: true })
+})
+
+/**
+ * Reset password with token
+ * POST /auth/reset-password
+ */
+app.post('/auth/reset-password', async (c) => {
+  try {
+    const { token, password } = await validateBody(c, ResetPasswordSchema)
+
+    const result = await authLocalService.resetPassword(token, password)
+    if (!result) {
+      return error(c, 'Invalid or expired reset token', 400)
+    }
+
+    return success(c, undefined, 'Password reset successfully. Please log in.')
+  } catch (err) {
+    logger.error('Reset password error:', err)
+    return error(c, 'Failed to reset password', 500)
+  }
+})
+
+/**
+ * Change password (authenticated)
+ * POST /auth/change-password
+ */
+app.post('/auth/change-password', async (c) => {
+  try {
+    const token = getCookie(c, COOKIE.SESSION_NAME)
+    if (!token) return error(c, ErrorMessages.UNAUTHORIZED, 401)
+
+    const session = authLocalService.validateSession(token)
+    if (!session) return error(c, ErrorMessages.SESSION_EXPIRED, 401)
+
+    const { currentPassword, newPassword } = await validateBody(c, ChangePasswordSchema)
+
+    const result = await authLocalService.updatePassword(session.user.id, currentPassword, newPassword)
+    if (!result) {
+      return error(c, 'Current password is incorrect', 400)
+    }
+
+    return success(c, undefined, 'Password changed successfully')
+  } catch (err) {
+    logger.error('Change password error:', err)
+    return error(c, 'Failed to change password', 500)
+  }
+})
+
+/**
+ * Update profile
+ * PUT /auth/profile
+ */
+app.put('/auth/profile', async (c) => {
+  try {
+    const token = getCookie(c, COOKIE.SESSION_NAME)
+    if (!token) return error(c, ErrorMessages.UNAUTHORIZED, 401)
+
+    const session = authLocalService.validateSession(token)
+    if (!session) return error(c, ErrorMessages.SESSION_EXPIRED, 401)
+
+    const data = await validateBody(c, UpdateProfileSchema)
+
+    const updated = authLocalService.updateProfile(session.user.id, data)
+    if (!updated) {
+      return error(c, 'Failed to update profile. Email may already be in use.', 400)
+    }
+
+    return success(c, {
+      user: {
+        id: updated.id,
+        email: updated.email,
+        name: updated.name,
+        is_platform_admin: !!updated.is_platform_admin,
+      },
+    }, 'Profile updated')
+  } catch (err) {
+    logger.error('Update profile error:', err)
+    return error(c, 'Failed to update profile', 500)
   }
 })
 

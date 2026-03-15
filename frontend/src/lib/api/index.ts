@@ -6,6 +6,8 @@ export {
   api,
   type ApiResponse,
   type User,
+  type OrgInfo,
+  type AuthContext,
   type SMTPConfig,
   type EmailLog,
   type EmailStats,
@@ -29,6 +31,8 @@ export {
   type ImportHistory,
   type ValidationResult,
   type BulkValidationResult,
+  type DuplicateGroup,
+  type TimelineEvent,
 } from './contacts'
 export { campaignsApi, type Campaign, type CampaignInput, type CampaignType, type CampaignStatus } from './campaigns'
 export { configApi, oauthApi, reportApi, dashboardApi } from './config'
@@ -64,4 +68,27 @@ export {
   type SystemRole,
   type AuditLog,
   type ActivityLog,
+  type Invitation,
 } from './admin'
+export {
+  formsApi,
+  type FormEndpoint,
+  type FormSubmission,
+  type FormInput,
+  type FormAction,
+  type EmbedCode,
+} from './forms'
+export {
+  pagesApi,
+  type LandingPage,
+  type LandingPageInput,
+  type PageTemplate,
+} from './pages'
+export {
+  whatsappApi,
+  type WhatsAppConfig,
+  type WhatsAppConfigInput,
+  type WhatsAppTemplate,
+  type WhatsAppMessage,
+  type WhatsAppStats,
+} from './whatsapp'

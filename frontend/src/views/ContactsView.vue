@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import MainLayout from '../components/layout/MainLayout.vue'
 import ContactFormModal from '../components/contacts/ContactFormModal.vue'
 import ImportModal from '../components/contacts/ImportModal.vue'
 import ContactFilters from '../components/contacts/ContactFilters.vue'
@@ -28,7 +27,9 @@ import {
   useImportContacts,
   useValidateEmails,
 } from '../lib/query'
-import type { Contact, ContactInput, ContactList } from '../lib/api'
+import type { Contact, ContactInput, ContactList, DuplicateGroup } from '../lib/api'
+import { contactsApi } from '../lib/api'
+import Modal from '../components/ui/Modal.vue'
 import {
   Plus,
   Pencil,
@@ -37,6 +38,8 @@ import {
   Tag,
   FolderInput,
   Shield,
+  GitMerge,
+  Loader2,
 } from 'lucide-vue-next'
 
 const activeListId = ref('')
@@ -53,6 +56,10 @@ const showImportModal = ref(false)
 const showBulkTagModal = ref(false)
 const showBulkMoveModal = ref(false)
 const showValidateModal = ref(false)
+const showDuplicatesModal = ref(false)
+const duplicates = ref<DuplicateGroup[]>([])
+const duplicatesLoading = ref(false)
+const mergingId = ref<string | null>(null)
 const deleteConfirm = ref<{ show: boolean; type: 'list' | 'bulk'; listName: string }>({ show: false, type: 'list', listName: '' })
 const deleteListRef = ref<ContactList | null>(null)
 
@@ -257,6 +264,34 @@ async function handleValidate(emails: string[]) {
   }
 }
 
+// Duplicates
+async function findDuplicates() {
+  duplicatesLoading.value = true
+  showDuplicatesModal.value = true
+  try {
+    duplicates.value = await contactsApi.findDuplicates()
+  } catch (e: any) {
+    toast.error(e.message || 'Failed to find duplicates')
+  } finally {
+    duplicatesLoading.value = false
+  }
+}
+
+async function mergeDuplicate(group: DuplicateGroup) {
+  if (group.ids.length < 2) return
+  mergingId.value = group.email
+  try {
+    const [primaryId, ...mergeIds] = group.ids
+    await contactsApi.mergeContacts(primaryId, mergeIds)
+    toast.success(`Merged ${mergeIds.length} duplicate(s) for ${group.email}`)
+    duplicates.value = duplicates.value.filter(d => d.email !== group.email)
+  } catch (e: any) {
+    toast.error(e.message || 'Merge failed')
+  } finally {
+    mergingId.value = null
+  }
+}
+
 // Selection
 function toggleSelect(id: string) {
   const idx = selectedIds.value.indexOf(id)
@@ -271,10 +306,13 @@ function toggleSelectAll() {
 </script>
 
 <template>
-  <MainLayout>
+  <div>
     <div class="relative">
       <PageHeader title="Contacts">
         <template #actions>
+          <button class="btn-ghost" @click="findDuplicates">
+            <GitMerge :size="16" /> Duplicates
+          </button>
           <button class="btn-ghost" @click="showValidateModal = true">
             <Shield :size="16" /> Validate
           </button>
@@ -478,6 +516,41 @@ function toggleSelectAll() {
         @confirm="deleteConfirm.type === 'list' ? confirmDeleteList() : confirmBulkDelete()"
         @cancel="deleteConfirm.show = false"
       />
+      <!-- Duplicates Modal -->
+      <Modal :show="showDuplicatesModal" title="Duplicate Contacts" size="lg" @close="showDuplicatesModal = false">
+        <div v-if="duplicatesLoading" class="flex justify-center py-12">
+          <Loader2 :size="24" class="spin text-accent" />
+        </div>
+        <div v-else-if="duplicates.length === 0" class="py-12 text-center text-text-muted text-sm">
+          No duplicates found
+        </div>
+        <div v-else class="flex flex-col gap-3 max-h-[60vh] overflow-y-auto">
+          <div
+            v-for="group in duplicates"
+            :key="group.email"
+            class="bg-surface-2 rounded-lg p-4"
+          >
+            <div class="flex justify-between items-center mb-2">
+              <div>
+                <span class="text-sm font-semibold text-text-primary">{{ group.email }}</span>
+                <span class="text-xs text-text-muted ml-2">{{ group.count }} copies</span>
+              </div>
+              <button
+                class="btn-secondary text-xs px-3 py-1.5"
+                :disabled="mergingId === group.email"
+                @click="mergeDuplicate(group)"
+              >
+                <Loader2 v-if="mergingId === group.email" :size="12" class="spin" />
+                <GitMerge v-else :size="12" />
+                Merge
+              </button>
+            </div>
+          </div>
+          <p class="text-xs text-text-muted mt-2 m-0">
+            Merging keeps the newest data and combines tags. The primary contact is preserved.
+          </p>
+        </div>
+      </Modal>
     </div>
-  </MainLayout>
+  </div>
 </template>

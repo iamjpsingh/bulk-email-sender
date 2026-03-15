@@ -50,6 +50,8 @@ export const AUTH = {
     '/public/',
     '/api/events/stream',
     '/api/webhooks/bounce/',
+    '/api/whatsapp/webhook',
+    '/api/admin/platform/settings/mailer/oauth/callback',
   ],
 } as const
 
@@ -113,6 +115,7 @@ export const COOKIE = {
   SESSION_NAME: 'session_token',
   OPTIONS: {
     httpOnly: true,
+    secure: ENV.isProd,
     sameSite: 'Lax' as const,
     maxAge: AUTH.COOKIE_MAX_AGE,
     path: '/',

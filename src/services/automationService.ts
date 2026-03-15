@@ -16,7 +16,7 @@ import { contactService } from './contactService'
 export type TriggerType = 'list_join' | 'tag_added' | 'score_change' | 'date_field' | 'form_submit' | 'manual' | 'api'
 export type AutomationStatus = 'draft' | 'active' | 'paused' | 'completed'
 export type StepType =
-  | 'send_email' | 'wait' | 'condition' | 'filter' | 'split_test'
+  | 'send_email' | 'send_whatsapp' | 'wait' | 'condition' | 'filter' | 'split_test'
   | 'delay_until' | 'http_request' | 'score_change'
   | 'update_contact' | 'add_tag' | 'remove_tag' | 'move_to_list'
   | 'webhook' | 'end'

@@ -330,8 +330,6 @@ async function onTabChange(key: string) {
             </div>
 
             <div class="flex items-center gap-3 p-3 bg-bg-tertiary rounded-lg text-sm text-text-muted mb-4">
-              <span>Plan: <strong class="text-text-primary">{{ org?.plan || 'free' }}</strong></span>
-              <span class="mx-2 text-border">|</span>
               <span>Status: <strong class="text-text-primary">{{ org?.status || 'active' }}</strong></span>
               <span class="mx-2 text-border">|</span>
               <span>Created: <strong class="text-text-primary">{{ org ? formatDate(org.created_at) : '-' }}</strong></span>

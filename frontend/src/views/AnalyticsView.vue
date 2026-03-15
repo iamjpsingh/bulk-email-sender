@@ -7,7 +7,6 @@ import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import { useAnalyticsSummary, useAnalyticsReports, useDeviceAnalytics, useTimeAnalysis } from '../lib/query'
 import { analyticsApi } from '../lib/api'
-import MainLayout from '../components/layout/MainLayout.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import StatCard from '../components/ui/StatCard.vue'
 import { BarChart3, Mail, TrendingUp, MousePointer, AlertTriangle, Clock } from 'lucide-vue-next'
@@ -195,7 +194,7 @@ async function exportData(format: 'csv' | 'json') {
 </script>
 
 <template>
-  <MainLayout>
+  <div>
     <PageHeader title="Advanced Analytics" subtitle="Insights across all campaigns">
       <template #actions>
         <button class="btn-secondary" @click="exportData('csv')">Export CSV</button>
@@ -338,5 +337,5 @@ async function exportData(format: 'csv' | 'json') {
         </section>
       </div>
     </template>
-  </MainLayout>
+  </div>
 </template>

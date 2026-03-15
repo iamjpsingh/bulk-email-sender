@@ -141,6 +141,9 @@ export class FileService {
 
     let result = template
 
+    // Process dynamic content blocks first: {{#smart}} ... {{/smart}}
+    result = FileService.processDynamicBlocks(result, contact)
+
     // Replace placeholders with exact key match
     // Match {{anything}} pattern
     result = result.replace(/\{\{(\w+)\}\}/g, (match, key) => {
@@ -151,5 +154,57 @@ export class FileService {
     })
 
     return result
+  }
+
+  /**
+   * Process dynamic content blocks.
+   * Syntax:
+   *   {{#smart}}
+   *     {{#when field "country" equals "US"}} ... {{/when}}
+   *     {{#when field "tags" contains "VIP"}} ... {{/when}}
+   *     {{#default}} ... {{/default}}
+   *   {{/smart}}
+   */
+  static processDynamicBlocks(template: string, contact: Contact): string {
+    return template.replace(
+      /\{\{#smart\}\}([\s\S]*?)\{\{\/smart\}\}/g,
+      (_match, blockContent: string) => {
+        // Extract {{#when ...}} ... {{/when}} blocks
+        const whenRegex = /\{\{#when\s+field\s+"(\w+)"\s+(\w+)\s+"([^"]+)"\}\}([\s\S]*?)\{\{\/when\}\}/g
+        let whenMatch: RegExpExecArray | null
+        while ((whenMatch = whenRegex.exec(blockContent)) !== null) {
+          const [, field, operator, value, content] = whenMatch
+          if (FileService.evaluateFieldCondition(contact, field, operator, value)) {
+            return content.trim()
+          }
+        }
+
+        // Fall back to {{#default}} ... {{/default}}
+        const defaultMatch = blockContent.match(/\{\{#default\}\}([\s\S]*?)\{\{\/default\}\}/)
+        if (defaultMatch) {
+          return defaultMatch[1].trim()
+        }
+
+        return '' // No match, remove block
+      }
+    )
+  }
+
+  private static evaluateFieldCondition(contact: Contact, field: string, operator: string, value: string): boolean {
+    const contactValue = String(contact[field] || '')
+
+    switch (operator) {
+      case 'equals': return contactValue.toLowerCase() === value.toLowerCase()
+      case 'not_equals': return contactValue.toLowerCase() !== value.toLowerCase()
+      case 'contains': return contactValue.toLowerCase().includes(value.toLowerCase())
+      case 'not_contains': return !contactValue.toLowerCase().includes(value.toLowerCase())
+      case 'starts_with': return contactValue.toLowerCase().startsWith(value.toLowerCase())
+      case 'ends_with': return contactValue.toLowerCase().endsWith(value.toLowerCase())
+      case 'greater_than': return Number(contactValue) > Number(value)
+      case 'less_than': return Number(contactValue) < Number(value)
+      case 'exists': return contactValue !== '' && contactValue !== 'undefined'
+      case 'not_exists': return contactValue === '' || contactValue === 'undefined'
+      default: return false
+    }
   }
 }

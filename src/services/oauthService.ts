@@ -5,6 +5,30 @@
 import { randomBytes } from 'crypto'
 import { logger } from '../utils/logger'
 import { OAUTH } from '../config'
+import { systemSettingsService } from './systemSettingsService'
+
+/** Get OAuth credentials — system_settings first, then .env fallback */
+function getGoogleOAuth() {
+  const stored = systemSettingsService.getJson<{ clientId: string; clientSecret: string }>('oauth_google')
+  return {
+    CLIENT_ID: stored?.clientId || OAUTH.GOOGLE.CLIENT_ID || '',
+    CLIENT_SECRET: stored?.clientSecret || OAUTH.GOOGLE.CLIENT_SECRET || '',
+    REDIRECT_URI: OAUTH.GOOGLE.REDIRECT_URI,
+    SCOPES: OAUTH.GOOGLE.SCOPES,
+    isConfigured: () => !!(stored?.clientId || OAUTH.GOOGLE.CLIENT_ID),
+  }
+}
+
+function getMicrosoftOAuth() {
+  const stored = systemSettingsService.getJson<{ clientId: string; clientSecret: string }>('oauth_microsoft')
+  return {
+    CLIENT_ID: stored?.clientId || OAUTH.MICROSOFT.CLIENT_ID || '',
+    CLIENT_SECRET: stored?.clientSecret || OAUTH.MICROSOFT.CLIENT_SECRET || '',
+    REDIRECT_URI: OAUTH.MICROSOFT.REDIRECT_URI,
+    SCOPES: OAUTH.MICROSOFT.SCOPES,
+    isConfigured: () => !!(stored?.clientId || OAUTH.MICROSOFT.CLIENT_ID),
+  }
+}
 
 export type EmailProvider = 'google' | 'microsoft' | 'smtp'
 
@@ -80,10 +104,10 @@ class OAuthService {
    * Get Google OAuth authorization URL
    */
   getGoogleAuthUrl(userId: string): string {
-    const { CLIENT_ID, REDIRECT_URI, SCOPES } = OAUTH.GOOGLE
+    const { CLIENT_ID, REDIRECT_URI, SCOPES } = getGoogleOAuth()
 
     if (!CLIENT_ID) {
-      throw new Error('GOOGLE_CLIENT_ID not configured')
+      throw new Error('Google OAuth not configured — set it up in Platform Settings')
     }
 
     const state = this.generateState(userId, 'google')
@@ -104,10 +128,10 @@ class OAuthService {
    * Get Microsoft OAuth authorization URL
    */
   getMicrosoftAuthUrl(userId: string): string {
-    const { CLIENT_ID, REDIRECT_URI, SCOPES } = OAUTH.MICROSOFT
+    const { CLIENT_ID, REDIRECT_URI, SCOPES } = getMicrosoftOAuth()
 
     if (!CLIENT_ID) {
-      throw new Error('MICROSOFT_CLIENT_ID not configured')
+      throw new Error('Microsoft OAuth not configured — set it up in Platform Settings')
     }
 
     const state = this.generateState(userId, 'microsoft')
@@ -130,7 +154,7 @@ class OAuthService {
    * Exchange Google authorization code for tokens
    */
   async exchangeGoogleCode(code: string): Promise<OAuthTokens & { email: string; name: string }> {
-    const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI } = OAUTH.GOOGLE
+    const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI } = getGoogleOAuth()
 
     if (!CLIENT_ID || !CLIENT_SECRET) {
       throw new Error('Google OAuth credentials not configured')
@@ -182,7 +206,7 @@ class OAuthService {
    * Exchange Microsoft authorization code for tokens
    */
   async exchangeMicrosoftCode(code: string): Promise<OAuthTokens & { email: string; name: string }> {
-    const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SCOPES } = OAUTH.MICROSOFT
+    const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SCOPES } = getMicrosoftOAuth()
 
     if (!CLIENT_ID || !CLIENT_SECRET) {
       throw new Error('Microsoft OAuth credentials not configured')
@@ -239,7 +263,7 @@ class OAuthService {
    * Refresh Google access token
    */
   async refreshGoogleToken(refreshToken: string): Promise<{ access_token: string; expires_at: number }> {
-    const { CLIENT_ID, CLIENT_SECRET } = OAUTH.GOOGLE
+    const { CLIENT_ID, CLIENT_SECRET } = getGoogleOAuth()
 
     if (!CLIENT_ID || !CLIENT_SECRET) {
       throw new Error('Google OAuth credentials not configured')
@@ -271,7 +295,7 @@ class OAuthService {
    * Refresh Microsoft access token
    */
   async refreshMicrosoftToken(refreshToken: string): Promise<{ access_token: string; expires_at: number }> {
-    const { CLIENT_ID, CLIENT_SECRET, SCOPES } = OAUTH.MICROSOFT
+    const { CLIENT_ID, CLIENT_SECRET, SCOPES } = getMicrosoftOAuth()
 
     if (!CLIENT_ID || !CLIENT_SECRET) {
       throw new Error('Microsoft OAuth credentials not configured')

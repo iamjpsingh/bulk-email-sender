@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import MainLayout from '../components/layout/MainLayout.vue'
 import StatCard from '../components/ui/StatCard.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ProgressBar from '../components/ui/ProgressBar.vue'
@@ -165,7 +164,7 @@ function campaignTypeLabel(type: string | undefined): string {
 </script>
 
 <template>
-  <MainLayout>
+  <div>
     <!-- Back Button -->
     <router-link
       to="/campaigns"
@@ -356,5 +355,5 @@ function campaignTypeLabel(type: string | undefined): string {
         </div>
       </div>
     </template>
-  </MainLayout>
+  </div>
 </template>

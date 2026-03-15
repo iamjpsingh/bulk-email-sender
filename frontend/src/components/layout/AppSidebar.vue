@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../../stores/auth'
 import { useSidebar } from '../../composables/useSidebar'
+import { usePermissions } from '../../composables/usePermissions'
 import { cn } from '../../lib/utils'
 import {
   LayoutDashboard,
@@ -20,14 +21,31 @@ import {
   Menu,
   X,
   ChevronsLeft,
+  FormInput,
+  Globe,
+  MessageCircle,
+  ChevronsUpDown,
+  Building2,
+  Check,
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
-const { user, logout } = useAuth()
+const { user, logout, orgs, orgId, isPlatformAdmin, switchOrg } = useAuth()
 const mobileOpen = ref(false)
 const { collapsed, toggle: toggleCollapse } = useSidebar()
 const headerHovered = ref(false)
+const { isAdmin, can } = usePermissions()
+const orgSwitcherOpen = ref(false)
+
+const currentOrg = computed(() => orgs.value.find(o => o.id === orgId.value))
+
+async function handleSwitchOrg(id: string) {
+  orgSwitcherOpen.value = false
+  if (id === orgId.value) return
+  await switchOrg(id)
+  router.replace('/')
+}
 
 const mainNav = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -39,15 +57,24 @@ const mainNav = [
 
 const toolsNav = [
   { path: '/automations', label: 'Automations', icon: Zap },
+  { path: '/whatsapp', label: 'WhatsApp', icon: MessageCircle },
+  { path: '/forms', label: 'Forms', icon: FormInput },
+  { path: '/pages', label: 'Pages', icon: Globe },
   { path: '/calendar', label: 'Calendar', icon: Calendar },
   { path: '/analytics', label: 'Analytics', icon: BarChart2 },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
 ]
 
-const settingsNav = [
-  { path: '/configs', label: 'Settings', icon: Settings },
-  { path: '/admin', label: 'Admin', icon: Shield },
-]
+const settingsNav = computed(() => {
+  const items: Array<{ path: string; label: string; icon: any }> = []
+  if (can('settings.view') || can('smtp.view')) {
+    items.push({ path: '/settings', label: 'Settings', icon: Settings })
+  }
+  if (isAdmin.value) {
+    items.push({ path: '/admin', label: 'Admin', icon: Shield })
+  }
+  return items
+})
 
 const userInitial = computed(() => user.value?.name?.charAt(0).toUpperCase() || '?')
 
@@ -63,7 +90,21 @@ async function handleLogout() {
 
 function handleNavClick() {
   mobileOpen.value = false
+  orgSwitcherOpen.value = false
 }
+
+// Close org switcher on outside click
+function handleDocClick(e: MouseEvent) {
+  if (orgSwitcherOpen.value) {
+    const target = e.target as HTMLElement
+    if (!target.closest('[data-org-switcher]')) {
+      orgSwitcherOpen.value = false
+    }
+  }
+}
+
+onMounted(() => document.addEventListener('click', handleDocClick))
+onUnmounted(() => document.removeEventListener('click', handleDocClick))
 </script>
 
 <template>
@@ -184,6 +225,90 @@ function handleNavClick() {
       >
         <ChevronsLeft :size="12" class="rotate-180" />
       </button>
+    </div>
+
+    <!-- Org Switcher -->
+    <div v-if="orgs.length > 0" class="px-2 pt-2 shrink-0" data-org-switcher>
+      <div class="relative">
+        <button
+          :class="cn(
+            'flex items-center w-full rounded-lg',
+            'transition-all duration-fast cursor-pointer',
+            collapsed ? 'justify-center px-2 py-2' : 'gap-2.5 px-2.5 py-2',
+            'hover:bg-white/[0.06]',
+            orgSwitcherOpen && 'bg-white/[0.06]'
+          )"
+          @click="orgSwitcherOpen = !orgSwitcherOpen"
+          :title="collapsed ? (currentOrg?.name || 'Select org') : undefined"
+        >
+          <div
+            :class="cn(
+              'flex items-center justify-center shrink-0',
+              'w-7 h-7 rounded-md',
+              'bg-accent/15 text-accent'
+            )"
+          >
+            <Building2 :size="14" />
+          </div>
+          <template v-if="!collapsed">
+            <span class="flex-1 text-left text-[13px] font-medium text-text-primary truncate">
+              {{ currentOrg?.name || 'Select org' }}
+            </span>
+            <ChevronsUpDown :size="14" class="shrink-0 text-sidebar-muted" />
+          </template>
+        </button>
+
+        <!-- Dropdown -->
+        <Transition
+          enter-active-class="transition-all duration-150"
+          leave-active-class="transition-all duration-100"
+          enter-from-class="opacity-0 scale-95"
+          leave-to-class="opacity-0 scale-95"
+        >
+          <div
+            v-if="orgSwitcherOpen"
+            :class="cn(
+              'absolute z-200 mt-1 rounded-lg overflow-hidden',
+              'bg-surface-2 border border-border shadow-dropdown',
+              collapsed ? 'left-full ml-2 top-0 w-52' : 'left-0 right-0'
+            )"
+          >
+            <div class="py-1 max-h-48 overflow-y-auto">
+              <button
+                v-for="org in orgs"
+                :key="org.id"
+                :class="cn(
+                  'flex items-center gap-2.5 w-full px-3 py-2',
+                  'text-[13px] text-left transition-colors cursor-pointer',
+                  org.id === orgId
+                    ? 'bg-accent/10 text-accent font-medium'
+                    : 'text-text-secondary hover:bg-white/[0.04] hover:text-text-primary'
+                )"
+                @click="handleSwitchOrg(org.id)"
+              >
+                <Building2 :size="14" class="shrink-0" />
+                <span class="flex-1 truncate">{{ org.name }}</span>
+                <Check v-if="org.id === orgId" :size="14" class="shrink-0 text-accent" />
+              </button>
+            </div>
+          </div>
+        </Transition>
+      </div>
+    </div>
+
+    <!-- Platform admin indicator -->
+    <div v-if="isPlatformAdmin" :class="cn('px-2 pt-2 shrink-0', collapsed && 'flex justify-center')">
+      <div
+        :class="cn(
+          'flex items-center rounded-lg',
+          collapsed ? 'justify-center px-2 py-2' : 'gap-2.5 px-2.5 py-2',
+          'bg-warning/10'
+        )"
+        :title="collapsed ? 'Platform Admin' : undefined"
+      >
+        <Shield :size="14" class="shrink-0 text-warning" />
+        <span v-if="!collapsed" class="text-[12px] font-semibold text-warning">Platform Admin</span>
+      </div>
     </div>
 
     <!-- Navigation -->

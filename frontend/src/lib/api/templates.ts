@@ -101,4 +101,10 @@ export const templatesApi = {
     const res = await api.get<{ templates: Template[] }>('/templates/starters')
     return res.data?.templates || []
   },
+
+  testSend: async (id: string, opts: { to?: string; subject?: string; data?: Record<string, string> }): Promise<string> => {
+    const res = await api.post<{ messageId: string }>(`/templates/${id}/test-send`, opts)
+    if (!res.success) throw new Error(res.message || 'Failed to send test email')
+    return res.data?.messageId || ''
+  },
 }

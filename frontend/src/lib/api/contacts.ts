@@ -84,6 +84,21 @@ export interface BulkValidationResult {
   results: ValidationResult[]
 }
 
+export interface DuplicateGroup {
+  email: string
+  count: number
+  ids: string[]
+  lists: string[]
+}
+
+export interface TimelineEvent {
+  id: string
+  type: string
+  description: string
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
 // ============================================================================
 // Contacts API
 // ============================================================================
@@ -208,5 +223,22 @@ export const contactsApi = {
     const res = await api.post<ValidationResult>('/contacts/validate-single', { email })
     if (!res.success) throw new Error(res.message || 'Validation failed')
     return res.data!
+  },
+
+  // Duplicates
+  findDuplicates: async (): Promise<DuplicateGroup[]> => {
+    const res = await api.get<{ duplicates: DuplicateGroup[]; total: number }>('/contacts/duplicates')
+    return res.data?.duplicates || []
+  },
+
+  mergeContacts: async (primaryId: string, mergeIds: string[]) => {
+    const res = await api.post('/contacts/merge', { primary_id: primaryId, merge_ids: mergeIds })
+    if (!res.success) throw new Error(res.message || 'Merge failed')
+  },
+
+  // Timeline
+  getTimeline: async (contactId: string, limit = 50): Promise<TimelineEvent[]> => {
+    const res = await api.get<{ timeline: TimelineEvent[] }>(`/contacts/timeline/${contactId}?limit=${limit}`)
+    return res.data?.timeline || []
   },
 }

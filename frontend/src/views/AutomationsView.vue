@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import MainLayout from '../components/layout/MainLayout.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
@@ -217,7 +216,7 @@ fetchAutomations()
 </script>
 
 <template>
-  <MainLayout>
+  <div>
     <PageHeader title="Automations" subtitle="Build automated email workflows">
       <template #actions>
         <button class="btn-primary" @click="showCreateModal = true"><Plus :size="16" /> New Automation</button>
@@ -428,9 +427,8 @@ fetchAutomations()
         class="flex-1 min-w-0 min-h-[400px]"
       />
     </div>
-  </MainLayout>
 
-  <!-- Create Modal -->
+    <!-- Create Modal -->
   <Modal :show="showCreateModal" title="New Automation" size="md" @close="showCreateModal = false">
     <div class="form-group">
       <label class="form-label">Name</label>
@@ -472,4 +470,5 @@ fetchAutomations()
     @confirm="confirmDelete"
     @cancel="deleteConfirm.show = false"
   />
+  </div>
 </template>

@@ -1,13 +1,67 @@
 // src/routes/contacts.ts - Contact Management API
 
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { contactService } from '../services/contactService'
 import { validationService } from '../services/validationService'
+import { scoringEngine } from '../services/scoringEngine'
 import { FileService } from '../services/fileService'
 import { success, error } from '../utils/response'
+import { validateBody } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const CreateListSchema = z.object({
+  name: z.string().min(1, 'List name is required').max(200),
+  description: z.string().max(1000).optional(),
+})
+
+const UpdateListSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(1000).optional(),
+})
+
+const AddContactSchema = z.object({
+  email: z.string().email('Valid email is required'),
+  first_name: z.string().max(200).optional(),
+  last_name: z.string().max(200).optional(),
+  company: z.string().max(200).optional(),
+  phone: z.string().max(50).optional(),
+  tags: z.array(z.string()).optional(),
+  custom_fields: z.record(z.string()).optional(),
+})
+
+const MergeSchema = z.object({
+  primary_id: z.string().min(1, 'primary_id is required'),
+  merge_ids: z.array(z.string()).min(1, 'merge_ids must have at least one entry'),
+})
+
+const ValidateBulkSchema = z.object({
+  emails: z.array(z.string()).min(1, 'Emails array is required').max(100),
+})
+
+const ValidateSingleSchema = z.object({
+  email: z.string().email('Valid email is required'),
+})
+
+const BulkDeleteSchema = z.object({
+  ids: z.array(z.string()).min(1, 'Contact IDs array is required'),
+})
+
+const BulkTagSchema = z.object({
+  ids: z.array(z.string()).min(1, 'Contact IDs are required'),
+  tags: z.array(z.string()).min(1, 'Tags are required'),
+})
+
+const BulkMoveSchema = z.object({
+  ids: z.array(z.string()).min(1, 'Contact IDs are required'),
+  target_list_id: z.string().min(1, 'Target list ID is required'),
+})
 
 const app = new Hono()
 
@@ -18,12 +72,7 @@ const app = new Hono()
 app.post('/contacts/lists', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
   const user = requireAuth(c)
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-  const { name, description } = body
-
-  if (!name || !name.trim()) {
-    return error(c, 'List name is required', 400)
-  }
+  const { name, description } = await validateBody(c, CreateListSchema)
 
   const list = contactService.createList(orgId, user.id, name.trim(), description)
   return success(c, list, 'Contact list created')
@@ -38,7 +87,7 @@ app.get('/contacts/lists', requirePermission(PERMISSIONS.CONTACTS_VIEW), (c) => 
 app.put('/contacts/lists/:id', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const listId = c.req.param('id')
-  const body = await c.req.json()
+  const body = await validateBody(c, UpdateListSchema)
 
   const updated = contactService.updateList(orgId, listId, body.name, body.description)
   if (!updated) return error(c, 'List not found', 404)
@@ -81,30 +130,39 @@ app.get('/contacts/import-history', requirePermission(PERMISSIONS.CONTACTS_VIEW)
 })
 
 // ============================================================================
+// Deduplication (must be before :listId param route)
+// ============================================================================
+
+app.get('/contacts/duplicates', requirePermission(PERMISSIONS.CONTACTS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const duplicates = contactService.findDuplicates(orgId)
+  return success(c, { duplicates, total: duplicates.length })
+})
+
+app.post('/contacts/merge', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const { primary_id, merge_ids } = await validateBody(c, MergeSchema)
+
+  const merged = contactService.mergeContacts(orgId, primary_id, merge_ids)
+  if (!merged) return error(c, 'Merge failed — contact not found', 404)
+  return success(c, undefined, `Merged ${merge_ids.length} contact(s) into primary`)
+})
+
+// ============================================================================
 // Validation (must be before :listId param route)
 // ============================================================================
 
 app.post('/contacts/validate', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-  const { emails } = body
+  const { emails } = await validateBody(c, ValidateBulkSchema)
 
-  if (!emails || !Array.isArray(emails) || emails.length === 0) {
-    return error(c, 'Emails array is required', 400)
-  }
-
-  // Limit to 100 at a time
-  const batch = emails.slice(0, 100)
-  const result = await validationService.validateBulk(batch, orgId)
+  const result = await validationService.validateBulk(emails, orgId)
   return success(c, result)
 })
 
 app.post('/contacts/validate-single', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-  const { email } = body
-
-  if (!email) return error(c, 'Email is required', 400)
+  const { email } = await validateBody(c, ValidateSingleSchema)
 
   const result = await validationService.validateEmail(email, orgId)
   return success(c, result)
@@ -152,11 +210,7 @@ app.post('/contacts/:listId', requirePermission(PERMISSIONS.CONTACTS_MANAGE), as
   const orgId = getOrgId(c)
   const listId = c.req.param('listId')
 
-  const body = await c.req.json()
-
-  if (!body.email) {
-    return error(c, 'Email is required', 400)
-  }
+  const body = await validateBody(c, AddContactSchema)
 
   try {
     const contact = contactService.addContact(orgId, user.id, listId, body)
@@ -172,7 +226,7 @@ app.post('/contacts/:listId', requirePermission(PERMISSIONS.CONTACTS_MANAGE), as
 app.put('/contacts/item/:id', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const contactId = c.req.param('id')
-  const body = await c.req.json()
+  const body = await validateBody(c, AddContactSchema.partial())
 
   const updated = contactService.updateContact(orgId, contactId, body)
   if (!updated) return error(c, 'Contact not found', 404)
@@ -185,12 +239,7 @@ app.put('/contacts/item/:id', requirePermission(PERMISSIONS.CONTACTS_MANAGE), as
 
 app.post('/contacts/bulk/delete', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-  const { ids } = body
-
-  if (!ids || !Array.isArray(ids) || ids.length === 0) {
-    return error(c, 'Contact IDs array is required', 400)
-  }
+  const { ids } = await validateBody(c, BulkDeleteSchema)
 
   const deleted = contactService.deleteContacts(orgId, ids)
   return success(c, { deleted }, `${deleted} contact(s) deleted`)
@@ -198,12 +247,7 @@ app.post('/contacts/bulk/delete', requirePermission(PERMISSIONS.CONTACTS_MANAGE)
 
 app.post('/contacts/bulk/tag', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-  const { ids, tags } = body
-
-  if (!ids?.length || !tags?.length) {
-    return error(c, 'Contact IDs and tags are required', 400)
-  }
+  const { ids, tags } = await validateBody(c, BulkTagSchema)
 
   const updated = contactService.tagContacts(orgId, ids, tags)
   return success(c, { updated }, `${updated} contact(s) tagged`)
@@ -211,12 +255,7 @@ app.post('/contacts/bulk/tag', requirePermission(PERMISSIONS.CONTACTS_MANAGE), a
 
 app.post('/contacts/bulk/move', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-  const { ids, target_list_id } = body
-
-  if (!ids?.length || !target_list_id) {
-    return error(c, 'Contact IDs and target list ID are required', 400)
-  }
+  const { ids, target_list_id } = await validateBody(c, BulkMoveSchema)
 
   const moved = contactService.moveContacts(orgId, ids, target_list_id)
   return success(c, { moved }, `${moved} contact(s) moved`)
@@ -291,6 +330,52 @@ app.post('/contacts/:listId/import', requirePermission(PERMISSIONS.CONTACTS_IMPO
     `Imported ${result.imported} contacts (${result.duplicates} duplicates, ${result.invalid} invalid)`
   )
 })
+
+// ============================================================================
+// Contact Activity Timeline
+// ============================================================================
+
+app.get('/contacts/timeline/:contactId', requirePermission(PERMISSIONS.CONTACTS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const contactId = c.req.param('contactId')
+  const limit = parseInt(c.req.query('limit') || '50')
+
+  // Get contact first to verify access
+  const contact = contactService.getContact(orgId, contactId)
+  if (!contact) return error(c, 'Contact not found', 404)
+
+  // Aggregate events from scoring engine
+  const events = scoringEngine.getContactEvents(contactId, limit)
+
+  // Map to timeline format
+  const timeline = events.map((e: any) => ({
+    id: e.id,
+    type: e.event_type,
+    description: formatTimelineEvent(e.event_type, e.metadata),
+    metadata: e.metadata ? JSON.parse(e.metadata) : null,
+    created_at: e.created_at,
+  }))
+
+  return success(c, { timeline, contact: { id: contact.id, email: contact.email, first_name: contact.first_name } })
+})
+
+function formatTimelineEvent(type: string, metadataJson: string | null): string {
+  const meta = metadataJson ? JSON.parse(metadataJson) : {}
+  switch (type) {
+    case 'email_sent': return `Email sent: ${meta.subject || 'Unknown'}`
+    case 'email_opened': return `Opened email: ${meta.subject || 'Unknown'}`
+    case 'link_clicked': return `Clicked link: ${meta.url || 'Unknown'}`
+    case 'form_submitted': return `Submitted form: ${meta.form_name || 'Unknown'}`
+    case 'tag_added': return `Tag added: ${meta.tag || 'Unknown'}`
+    case 'tag_removed': return `Tag removed: ${meta.tag || 'Unknown'}`
+    case 'score_changed': return `Score changed by ${meta.amount > 0 ? '+' : ''}${meta.amount || 0}`
+    case 'automation_enrolled': return `Enrolled in automation: ${meta.automation_name || 'Unknown'}`
+    case 'automation_completed': return `Completed automation: ${meta.automation_name || 'Unknown'}`
+    case 'unsubscribed': return 'Unsubscribed from emails'
+    case 'bounced': return `Email bounced: ${meta.reason || 'Unknown'}`
+    default: return type.replace(/_/g, ' ')
+  }
+}
 
 // ============================================================================
 // Helpers

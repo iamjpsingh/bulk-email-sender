@@ -1,11 +1,32 @@
 // src/routes/automations.ts - Automation Management API
 
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { automationService } from '../services/automationService'
 import { success, error } from '../utils/response'
+import { validateBody } from '../utils/validate'
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const CreateAutomationSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(200),
+  trigger_type: z.string().min(1, 'trigger_type is required'),
+  trigger_config: z.record(z.unknown()).optional(),
+  steps: z.array(z.object({
+    type: z.string(),
+    config: z.record(z.unknown()).optional(),
+    delay_minutes: z.number().optional(),
+  })).optional(),
+})
+
+const EnrollSchema = z.object({
+  contact_id: z.string().min(1, 'contact_id is required'),
+})
 
 const app = new Hono()
 
@@ -22,11 +43,7 @@ app.get('/automations', requirePermission(PERMISSIONS.AUTOMATIONS_VIEW), (c) => 
 app.post('/automations', requirePermission(PERMISSIONS.AUTOMATIONS_MANAGE), async (c) => {
   const user = requireAuth(c)
   const orgId = getOrgId(c)
-  const body = await c.req.json()
-
-  if (!body.name?.trim() || !body.trigger_type) {
-    return error(c, 'Name and trigger_type are required', 400)
-  }
+  const body = await validateBody(c, CreateAutomationSchema)
 
   const automation = automationService.create(orgId, user.id, body)
   return success(c, automation, 'Automation created', 201)
@@ -46,7 +63,7 @@ app.get('/automations/:id', requirePermission(PERMISSIONS.AUTOMATIONS_VIEW), (c)
 app.put('/automations/:id', requirePermission(PERMISSIONS.AUTOMATIONS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const automationId = c.req.param('id')
-  const body = await c.req.json()
+  const body = await validateBody(c, CreateAutomationSchema.partial())
 
   const updated = automationService.update(orgId, automationId, body)
   if (!updated) return error(c, 'Automation not found or cannot be edited while active', 404)
@@ -118,16 +135,12 @@ app.get('/automations/:id/enrollments', requirePermission(PERMISSIONS.AUTOMATION
 app.post('/automations/:id/enroll', requirePermission(PERMISSIONS.AUTOMATIONS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const automationId = c.req.param('id')
-  const body = await c.req.json()
-
-  if (!body.contact_id) {
-    return error(c, 'contact_id is required', 400)
-  }
+  const { contact_id } = await validateBody(c, EnrollSchema)
 
   const automation = automationService.get(orgId, automationId)
   if (!automation) return error(c, 'Automation not found', 404)
 
-  const enrolled = automationService.enrollContact(automationId, body.contact_id)
+  const enrolled = automationService.enrollContact(automationId, contact_id)
   if (!enrolled) return error(c, 'Could not enroll contact (already enrolled or no steps)', 400)
 
   return success(c, undefined, 'Contact enrolled')
