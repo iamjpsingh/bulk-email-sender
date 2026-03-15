@@ -4,6 +4,7 @@ import { FileService } from './fileService'
 import { d1Service } from './d1Service'
 import { logger } from '../utils/logger'
 import { TRACKING } from '../config'
+import { htmlToText } from '../utils/htmlToText'
 import type { EmailConfig, Contact, EmailJob } from '../types/index'
 
 export class EmailService {
@@ -95,6 +96,7 @@ export class EmailService {
           to: contact.Email,
           subject: personalizedSubject,
           html: personalizedContent,
+          text: htmlToText(personalizedContent),
           headers: {
             Precedence: 'bulk',
             'Feedback-ID': `${campaignId}:${trackingOptions?.userId || 'unknown'}:dispatch`,

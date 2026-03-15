@@ -5,7 +5,9 @@ import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { webhookService } from '../services/webhookService'
+import { parseSES, parseMailgun, parseSendGrid, processBounce } from '../services/bounceProcessor'
 import { success, error } from '../utils/response'
+import { logger } from '../utils/logger'
 
 const app = new Hono()
 
@@ -126,6 +128,69 @@ app.delete('/webhooks/:id/logs', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE),
 
   const cleared = webhookService.clearLogs(webhookId)
   return success(c, { cleared }, `${cleared} log(s) cleared`)
+})
+
+// ============================================================================
+// Inbound Bounce/Complaint Webhooks (public — no auth)
+// Providers call these endpoints to notify us of bounces, complaints, unsubs.
+// ============================================================================
+
+app.post('/webhooks/bounce/ses', async (c) => {
+  try {
+    const payload = await c.req.json()
+    const event = parseSES(payload)
+
+    if (!event) {
+      return c.json({ ok: true, message: 'Ignored (not a bounce/complaint)' })
+    }
+
+    // SES doesn't tell us the userId — we look up by email in suppression context
+    // For now, use a system-level userId. In production, map via campaign tracking.
+    const userId = payload.userId || 'system'
+    processBounce(userId, event)
+
+    return c.json({ ok: true, processed: event.type })
+  } catch (err) {
+    logger.error('SES webhook error:', err)
+    return c.json({ ok: false }, 400)
+  }
+})
+
+app.post('/webhooks/bounce/mailgun', async (c) => {
+  try {
+    const payload = await c.req.json()
+    const event = parseMailgun(payload)
+
+    if (!event) {
+      return c.json({ ok: true, message: 'Ignored' })
+    }
+
+    const userId = payload.userId || 'system'
+    processBounce(userId, event)
+
+    return c.json({ ok: true, processed: event.type })
+  } catch (err) {
+    logger.error('Mailgun webhook error:', err)
+    return c.json({ ok: false }, 400)
+  }
+})
+
+app.post('/webhooks/bounce/sendgrid', async (c) => {
+  try {
+    const payload = await c.req.json()
+    const events = Array.isArray(payload) ? payload : [payload]
+    const bounceEvents = parseSendGrid(events)
+
+    for (const event of bounceEvents) {
+      const userId = 'system'
+      processBounce(userId, event)
+    }
+
+    return c.json({ ok: true, processed: bounceEvents.length })
+  } catch (err) {
+    logger.error('SendGrid webhook error:', err)
+    return c.json({ ok: false }, 400)
+  }
 })
 
 export default app

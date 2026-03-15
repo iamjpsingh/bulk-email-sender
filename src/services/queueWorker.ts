@@ -1,13 +1,15 @@
 // src/services/queueWorker.ts - Job processing worker with retry and notification
 
-import { emailService } from './emailService'
 import { logService } from './logService'
 import { d1Service } from './d1Service'
 import { retryEngine } from './retryEngine'
 import { FileService } from './fileService'
 import { logger } from '../utils/logger'
+import { htmlToText } from '../utils/htmlToText'
+import { createTransport, configFromRecord } from './transports'
+import type { EmailTransport } from './transports'
 import type { QueueDatabase, QueueJob } from './queueDatabase'
-import type { EmailConfig, Contact } from '../types/index'
+import type { Contact } from '../types/index'
 
 // ============================================================================
 // Queue Worker
@@ -113,10 +115,10 @@ export class QueueWorker {
    */
   private async executeJob(job: QueueJob, control: { abort: boolean }) {
     const contacts: Contact[] = JSON.parse(job.contacts_json)
-    const emailConfig: EmailConfig = JSON.parse(job.config_json)
+    const emailConfig = JSON.parse(job.config_json)
 
-    // Configure transporter
-    emailService.createTransport(emailConfig)
+    // Create transport from config (supports SMTP, SES, Mailgun, SendGrid)
+    const transport = createTransport(configFromRecord(emailConfig))
 
     const campaignId = job.campaign_id || d1Service.generateCampaignId()
     let sentCount = job.sent_count
@@ -143,7 +145,7 @@ export class QueueWorker {
       }
 
       // Attempt to send with retry
-      const success = await this.sendWithRetry(job, contact, campaignId, emailConfig)
+      const success = await this.sendWithRetry(job, contact, campaignId, transport)
 
       if (success) {
         sentCount++
@@ -192,7 +194,7 @@ export class QueueWorker {
     job: QueueJob,
     contact: Contact,
     campaignId: string,
-    emailConfig: EmailConfig
+    transport: EmailTransport
   ): Promise<boolean> {
     let attempts = 0
     const maxAttempts = 4 // 1 initial + 3 retries for temporary errors
@@ -228,20 +230,19 @@ export class QueueWorker {
         const unsubUrl = job.from_email ? `mailto:${job.from_email}?subject=unsubscribe` : ''
         const feedbackId = `${job.id}:${Date.now()}:${job.from_email || 'noreply'}`
 
-        const mailOptions = {
-          from: `${job.from_name || ''} <${job.from_email || ''}>`,
+        const info = await transport.send({
+          from: { name: job.from_name || '', email: job.from_email || '' },
           to: contact.Email,
           subject: personalizedSubject,
           html: personalizedContent,
+          text: htmlToText(personalizedContent),
           headers: {
             'List-Unsubscribe': `<${unsubUrl}>`,
             'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
             Precedence: 'bulk',
             'Feedback-ID': feedbackId,
           },
-        }
-
-        const info = await emailService.sendSingleEmail(mailOptions)
+        })
 
         // Log success
         logService.addLog({

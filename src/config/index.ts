@@ -49,6 +49,7 @@ export const AUTH = {
     '/health',
     '/public/',
     '/api/events/stream',
+    '/api/webhooks/bounce/',
   ],
 } as const
 

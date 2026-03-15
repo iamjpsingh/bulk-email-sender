@@ -30,7 +30,11 @@ export interface D1SMTPConfig {
   password?: string;
   from_email: string;
   from_name: string;
-  provider_type: 'smtp' | 'google' | 'microsoft';
+  provider_type: 'smtp' | 'google' | 'microsoft' | 'ses' | 'mailgun' | 'sendgrid';
+  api_key?: string;
+  api_secret?: string;
+  api_region?: string;
+  api_domain?: string;
   oauth_email?: string;
   oauth_access_token?: string;
   oauth_refresh_token?: string;

@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- SMTP Configurations
+-- SMTP / Provider Configurations
 CREATE TABLE IF NOT EXISTS smtp_configs (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -42,6 +42,10 @@ CREATE TABLE IF NOT EXISTS smtp_configs (
   from_email TEXT,
   from_name TEXT,
   provider_type TEXT DEFAULT 'smtp',
+  api_key TEXT,
+  api_secret TEXT,
+  api_region TEXT,
+  api_domain TEXT,
   oauth_email TEXT,
   oauth_access_token TEXT,
   oauth_refresh_token TEXT,

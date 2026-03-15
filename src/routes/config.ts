@@ -10,6 +10,7 @@ import { PERMISSIONS } from '../services/rbacService'
 import { success, error } from '../utils/response'
 import { logger } from '../utils/logger'
 import { validateSMTPConfig } from '../utils/validation'
+import { createTransport, configFromRecord } from '../services/transports'
 
 const app = new Hono()
 
@@ -327,6 +328,98 @@ app.post('/config/test/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE), a
 })
 
 // ============================================================================
+// API Provider Configuration (SES, Mailgun, SendGrid)
+// ============================================================================
+
+/**
+ * Create API provider configuration
+ * POST /config/provider
+ */
+app.post('/config/provider', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
+  try {
+    const user = requireAuth(c)
+    const body = await c.req.json()
+
+    const providerType = body.provider_type
+    if (!['ses', 'mailgun', 'sendgrid'].includes(providerType)) {
+      return error(c, 'Invalid provider_type. Must be ses, mailgun, or sendgrid', 400)
+    }
+
+    // Validate required fields per provider
+    if (providerType === 'ses' && (!body.access_key_id || !body.secret_access_key || !body.region)) {
+      return error(c, 'SES requires access_key_id, secret_access_key, and region', 400)
+    }
+    if (providerType === 'mailgun' && (!body.api_key || !body.domain)) {
+      return error(c, 'Mailgun requires api_key and domain', 400)
+    }
+    if (providerType === 'sendgrid' && !body.api_key) {
+      return error(c, 'SendGrid requires api_key', 400)
+    }
+    if (!body.from_email) {
+      return error(c, 'from_email is required', 400)
+    }
+
+    const configId = await d1UserDatabase.createSMTPConfig({
+      user_id: user.id,
+      name: body.name || `${providerType.toUpperCase()} Configuration`,
+      host: providerType === 'mailgun' ? body.domain : '',
+      port: 0,
+      secure: false,
+      username: providerType === 'ses' ? body.access_key_id : '',
+      password: providerType === 'ses' ? body.secret_access_key : body.api_key,
+      from_email: body.from_email,
+      from_name: body.from_name || '',
+      provider_type: providerType,
+      is_default: !!body.is_default,
+      // API-specific fields stored as extra data
+      api_key: body.api_key,
+      api_secret: providerType === 'ses' ? body.secret_access_key : undefined,
+      api_region: body.region || body.api_region,
+      api_domain: body.domain || body.api_domain,
+    })
+
+    if (!configId) {
+      return error(c, 'Failed to create configuration', 500)
+    }
+
+    return success(c, { configId }, `${providerType.toUpperCase()} configuration saved`)
+  } catch (err) {
+    logger.error('Error creating provider config:', err)
+    return error(c, 'Failed to save configuration', 500)
+  }
+})
+
+/**
+ * Test any provider configuration by ID
+ * POST /config/provider/test/:configId
+ */
+app.post('/config/provider/test/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
+  try {
+    const user = requireAuth(c)
+    const configId = c.req.param('configId')
+
+    const configs = await d1UserDatabase.getUserSMTPConfigs(user.id)
+    const config = configs.find((cfg) => cfg.id === configId)
+
+    if (!config) {
+      return error(c, 'Not found', 404)
+    }
+
+    const transport = createTransport(configFromRecord(config as any))
+    const isValid = await transport.verify()
+
+    return success(
+      c,
+      { valid: isValid, provider: transport.name },
+      isValid ? `${transport.name.toUpperCase()} connection verified` : `${transport.name.toUpperCase()} connection failed`
+    )
+  } catch (err) {
+    logger.error('Provider test error:', err)
+    return error(c, 'Test failed', 500)
+  }
+})
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -334,20 +427,32 @@ app.post('/config/test/:configId', requirePermission(PERMISSIONS.SMTP_MANAGE), a
  * Format config for API response
  */
 function formatConfig(config: any) {
-  return {
+  const base: Record<string, any> = {
     id: config.id,
     name: config.name,
     provider_type: config.provider_type || 'smtp',
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    user: config.username,
     from_email: config.from_email,
     from_name: config.from_name,
     is_default: config.is_default,
     oauth_email: config.oauth_email,
     created_at: config.created_at,
   }
+
+  // Include SMTP-specific fields only for SMTP
+  if (!config.provider_type || config.provider_type === 'smtp') {
+    base.host = config.host
+    base.port = config.port
+    base.secure = config.secure
+    base.user = config.username
+  }
+
+  // Include API region/domain for API providers
+  if (['ses', 'mailgun', 'sendgrid'].includes(config.provider_type)) {
+    base.api_region = config.api_region
+    base.api_domain = config.api_domain
+  }
+
+  return base
 }
 
 /**
@@ -386,6 +491,10 @@ function buildUpdates(body: Record<string, any>) {
   if (body.from_name !== undefined) updates.from_name = body.from_name
   if (body.isDefault !== undefined) updates.is_default = body.isDefault
   if (body.is_default !== undefined) updates.is_default = body.is_default
+  if (body.api_key !== undefined) updates.api_key = body.api_key
+  if (body.api_secret !== undefined) updates.api_secret = body.api_secret
+  if (body.api_region !== undefined) updates.api_region = body.api_region
+  if (body.api_domain !== undefined) updates.api_domain = body.api_domain
 
   return updates
 }
