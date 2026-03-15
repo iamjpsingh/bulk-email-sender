@@ -6,14 +6,20 @@ import { dirname } from 'path'
 import { eventBus } from './eventBus'
 import { logger } from '../utils/logger'
 import { generateId } from '../utils/id'
+import { evaluateCondition } from './conditionEngine'
+import { contactService } from './contactService'
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type TriggerType = 'list_join' | 'tag_added' | 'score_change' | 'date_field' | 'manual' | 'api'
+export type TriggerType = 'list_join' | 'tag_added' | 'score_change' | 'date_field' | 'form_submit' | 'manual' | 'api'
 export type AutomationStatus = 'draft' | 'active' | 'paused' | 'completed'
-export type StepType = 'send_email' | 'wait' | 'condition' | 'update_contact' | 'add_tag' | 'remove_tag' | 'move_to_list' | 'webhook' | 'end'
+export type StepType =
+  | 'send_email' | 'wait' | 'condition' | 'filter' | 'split_test'
+  | 'delay_until' | 'http_request' | 'score_change'
+  | 'update_contact' | 'add_tag' | 'remove_tag' | 'move_to_list'
+  | 'webhook' | 'end'
 export type EnrollmentStatus = 'active' | 'paused' | 'completed' | 'exited'
 
 export interface Automation {
@@ -71,12 +77,19 @@ export interface AutomationFlow {
 }
 
 export type FlowNode =
+  | { id: string; type: 'trigger'; triggerType: TriggerType; config?: Record<string, unknown> }
   | { id: string; type: 'send_email'; templateId: string; subject: string }
   | { id: string; type: 'wait'; duration: number; unit: 'hours' | 'days' | 'weeks' }
   | { id: string; type: 'condition'; field: string; operator: string; value: string }
+  | { id: string; type: 'filter'; field: string; operator: string; value: string }
+  | { id: string; type: 'split_test'; paths: { label: string; percentage: number }[] }
+  | { id: string; type: 'delay_until'; date?: string; field?: string }
+  | { id: string; type: 'http_request'; url: string; method: string; headers?: Record<string, string>; bodyTemplate?: string }
+  | { id: string; type: 'score_change'; amount: number; reason?: string }
   | { id: string; type: 'update_contact'; field: string; value: string }
   | { id: string; type: 'add_tag'; tag: string }
   | { id: string; type: 'remove_tag'; tag: string }
+  | { id: string; type: 'move_to_list'; listId: string }
   | { id: string; type: 'webhook'; url: string; method: 'GET' | 'POST' }
   | { id: string; type: 'end' }
 
@@ -386,13 +399,14 @@ class AutomationService {
    */
   processDueActions(): number {
     const due = this.db.prepare(`
-      SELECT e.*, s.step_type, s.config_json, s.next_step_id, s.true_step_id, s.false_step_id
+      SELECT e.*, s.step_type, s.config_json, s.next_step_id, s.true_step_id, s.false_step_id, a.org_id
       FROM automation_enrollments e
       JOIN automation_steps s ON e.current_step_id = s.id
+      JOIN automations a ON e.automation_id = a.id
       WHERE e.status = 'active' AND e.next_action_at <= datetime('now')
       ORDER BY e.next_action_at
       LIMIT 100
-    `).all() as (AutomationEnrollment & { step_type: StepType; config_json: string; next_step_id: string | null; true_step_id: string | null; false_step_id: string | null })[]
+    `).all() as (AutomationEnrollment & { step_type: StepType; config_json: string; next_step_id: string | null; true_step_id: string | null; false_step_id: string | null; org_id: string })[]
 
     let processed = 0
 
@@ -408,7 +422,7 @@ class AutomationService {
     return processed
   }
 
-  private executeStep(enrollment: AutomationEnrollment & { step_type: StepType; config_json: string; next_step_id: string | null; true_step_id: string | null; false_step_id: string | null }): void {
+  private executeStep(enrollment: AutomationEnrollment & { step_type: StepType; config_json: string; next_step_id: string | null; true_step_id: string | null; false_step_id: string | null; org_id: string }): void {
     const config = JSON.parse(enrollment.config_json)
 
     switch (enrollment.step_type) {
@@ -437,11 +451,95 @@ class AutomationService {
         break
       }
 
-      case 'condition':
-        // Simple condition evaluation - advance to true or false branch
-        // In a full implementation, this would evaluate against contact data
-        this.advanceToNext(enrollment.id, enrollment.true_step_id || enrollment.next_step_id)
+      case 'condition': {
+        // Evaluate condition against contact data
+        const contact = contactService.getContact(enrollment.org_id || '', enrollment.contact_id)
+        if (contact) {
+          const result = evaluateCondition(contact, { field: config.field, operator: config.operator, value: config.value })
+          this.advanceToNext(enrollment.id, result ? (enrollment.true_step_id || enrollment.next_step_id) : (enrollment.false_step_id || enrollment.next_step_id))
+        } else {
+          // Contact not found — take false branch
+          this.advanceToNext(enrollment.id, enrollment.false_step_id || enrollment.next_step_id)
+        }
         break
+      }
+
+      case 'filter': {
+        // Filter is like condition but only has one output (pass or exit)
+        const filterContact = contactService.getContact(enrollment.org_id || '', enrollment.contact_id)
+        if (filterContact && evaluateCondition(filterContact, { field: config.field, operator: config.operator, value: config.value })) {
+          this.advanceToNext(enrollment.id, enrollment.next_step_id)
+        } else {
+          // Filtered out — exit automation
+          this.db.prepare(`
+            UPDATE automation_enrollments SET status = 'exited', exit_reason = 'filtered', completed_at = datetime('now') WHERE id = ?
+          `).run(enrollment.id)
+        }
+        break
+      }
+
+      case 'split_test': {
+        // A/B split — randomly choose path based on percentages
+        const paths: { label: string; percentage: number }[] = config.paths || []
+        const rand = Math.random() * 100
+        let cumulative = 0
+        let chosenIndex = 0
+        for (let i = 0; i < paths.length; i++) {
+          cumulative += paths[i].percentage
+          if (rand < cumulative) { chosenIndex = i; break }
+        }
+        // For split tests, step has multiple next_step references encoded in config
+        const nextSteps: string[] = config.next_steps || []
+        this.advanceToNext(enrollment.id, nextSteps[chosenIndex] || enrollment.next_step_id)
+        break
+      }
+
+      case 'delay_until': {
+        // Wait until a specific date or contact field date
+        let targetDate: string
+        if (config.field) {
+          const dateContact = contactService.getContact(enrollment.org_id || '', enrollment.contact_id)
+          const customFields = dateContact ? JSON.parse(dateContact.custom_fields || '{}') : {}
+          targetDate = customFields[config.field] || new Date().toISOString()
+        } else {
+          targetDate = config.date || new Date().toISOString()
+        }
+        if (new Date(targetDate) <= new Date()) {
+          this.advanceToNext(enrollment.id, enrollment.next_step_id)
+        } else {
+          this.db.prepare(`
+            UPDATE automation_enrollments SET next_action_at = ? WHERE id = ?
+          `).run(targetDate, enrollment.id)
+        }
+        break
+      }
+
+      case 'http_request': {
+        // Call external API
+        const url = config.url
+        if (url) {
+          fetch(url, {
+            method: config.method || 'POST',
+            headers: { 'Content-Type': 'application/json', ...(config.headers || {}) },
+            body: config.bodyTemplate || JSON.stringify({ contactId: enrollment.contact_id }),
+          }).catch((err) => logger.error('HTTP request node error:', err))
+        }
+        this.advanceToNext(enrollment.id, enrollment.next_step_id)
+        break
+      }
+
+      case 'score_change': {
+        // Change engagement score
+        eventBus.emit('automation_step_completed', '', {
+          automationId: enrollment.automation_id,
+          contactId: enrollment.contact_id,
+          stepType: 'score_change',
+          amount: config.amount || 0,
+          reason: config.reason || 'automation',
+        })
+        this.advanceToNext(enrollment.id, enrollment.next_step_id)
+        break
+      }
 
       case 'add_tag':
       case 'remove_tag':
