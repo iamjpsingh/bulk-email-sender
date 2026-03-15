@@ -145,6 +145,26 @@ CREATE INDEX IF NOT EXISTS idx_suppressions_email ON suppressions(email);
 CREATE INDEX IF NOT EXISTS idx_suppressions_reason ON suppressions(reason);
 
 -- ============================================================================
+-- EMAIL PREFERENCES
+-- ============================================================================
+
+-- Email Preferences (unsubscribe preference center)
+CREATE TABLE IF NOT EXISTS email_preferences (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  preference TEXT NOT NULL CHECK (preference IN
+    ('subscribed', 'campaign_only', 'digest_weekly', 'digest_monthly', 'paused', 'unsubscribed')),
+  pause_until TEXT,
+  reason TEXT,
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(user_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_prefs_user ON email_preferences(user_id);
+CREATE INDEX IF NOT EXISTS idx_prefs_email ON email_preferences(email);
+
+-- ============================================================================
 -- INDEXES
 -- ============================================================================
 

@@ -16,6 +16,7 @@ import { PERMISSIONS } from '../services/rbacService'
 import { success, error } from '../utils/response'
 import { parseIntSafe } from '../utils/validation'
 import { logger } from '../utils/logger'
+import { scanForSpam } from '../services/spamScanner'
 import type { EmailJob, BatchConfig, Contact, EmailConfig } from '../types/index'
 
 import {
@@ -170,6 +171,10 @@ app.post('/send', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => 
       return error(c, finalHtmlContent.error, 400)
     }
 
+    // Spam content pre-scan
+    const spamScan = scanForSpam(subject, typeof finalHtmlContent === 'string' ? finalHtmlContent : finalHtmlContent.html)
+    // Return warnings to frontend but don't block sending (user decides)
+
     // Build email config
     const emailConfig = isOAuthConfig ? null : buildEmailConfig(userConfig)
     const fromEmail = userConfig.from_email || userConfig.oauth_email || ''
@@ -240,6 +245,20 @@ app.post('/send', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => 
     const message = err instanceof Error ? err.message : 'Unknown error occurred'
     return error(c, `Server error: ${message}`, 500)
   }
+})
+
+// ============================================================================
+// Spam Scanner Endpoint
+// ============================================================================
+
+/**
+ * Pre-scan email content for spam indicators
+ * POST /send/spam-check
+ */
+app.post('/send/spam-check', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const body = await c.req.json()
+  const result = scanForSpam(body.subject || '', body.html || '')
+  return success(c, result)
 })
 
 // ============================================================================

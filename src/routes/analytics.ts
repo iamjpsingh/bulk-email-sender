@@ -129,4 +129,63 @@ app.post('/analytics/seed', requirePermission(PERMISSIONS.ANALYTICS_VIEW), async
   return success(c, null, 'Campaign analytics seeded')
 })
 
+// ============================================================================
+// Email Health Dashboard
+// ============================================================================
+
+app.get('/analytics/email-health', requirePermission(PERMISSIONS.ANALYTICS_VIEW), async (c) => {
+  const orgId = getOrgId(c)
+  const summary = analyticsService.getSummary(orgId)
+
+  // Calculate rates from summary data
+  const totalSent = summary.totalSent || 1
+  const bounceRate = ((summary.totalBounced || 0) / totalSent) * 100
+  const complaintRate = ((summary.totalComplaints || 0) / totalSent) * 100
+  const unsubRate = ((summary.totalUnsubscribed || 0) / totalSent) * 100
+  const openRate = ((summary.totalOpened || 0) / totalSent) * 100
+  const clickRate = ((summary.totalClicked || 0) / totalSent) * 100
+
+  // Score: Excellent (90+), Good (70-89), Needs Improvement (50-69), Poor (<50)
+  let score = 100
+  const recommendations: string[] = []
+
+  // Bounce rate penalty
+  if (bounceRate > 5) { score -= 30; recommendations.push(`Bounce rate is ${bounceRate.toFixed(1)}% (target: <2%). Clean your list and validate emails before sending.`) }
+  else if (bounceRate > 2) { score -= 15; recommendations.push(`Bounce rate is ${bounceRate.toFixed(1)}% (target: <2%). Consider validating your contact list.`) }
+
+  // Complaint rate penalty
+  if (complaintRate > 0.5) { score -= 30; recommendations.push(`Complaint rate is ${complaintRate.toFixed(2)}% (target: <0.1%). Review your content and sending frequency.`) }
+  else if (complaintRate > 0.1) { score -= 15; recommendations.push(`Complaint rate is ${complaintRate.toFixed(2)}% (target: <0.1%). Consider adding an unsubscribe link.`) }
+
+  // Unsubscribe rate penalty
+  if (unsubRate > 2) { score -= 15; recommendations.push(`Unsubscribe rate is ${unsubRate.toFixed(1)}% (target: <0.5%). Segment your audience for more relevant content.`) }
+  else if (unsubRate > 0.5) { score -= 5; recommendations.push(`Unsubscribe rate is ${unsubRate.toFixed(1)}% — within acceptable range but could improve.`) }
+
+  // Low engagement penalty
+  if (openRate < 10) { score -= 20; recommendations.push(`Open rate is ${openRate.toFixed(1)}% (benchmark: >20%). Improve subject lines and send time.`) }
+  else if (openRate < 20) { score -= 10; recommendations.push(`Open rate is ${openRate.toFixed(1)}% (benchmark: >20%). Test different subject lines.`) }
+
+  score = Math.max(0, score)
+
+  let rating: string
+  if (score >= 90) rating = 'Excellent'
+  else if (score >= 70) rating = 'Good'
+  else if (score >= 50) rating = 'Needs Improvement'
+  else rating = 'Poor'
+
+  return success(c, {
+    score,
+    rating,
+    metrics: {
+      bounce_rate: +bounceRate.toFixed(2),
+      complaint_rate: +complaintRate.toFixed(3),
+      unsubscribe_rate: +unsubRate.toFixed(2),
+      open_rate: +openRate.toFixed(2),
+      click_rate: +clickRate.toFixed(2),
+      total_sent: totalSent,
+    },
+    recommendations,
+  })
+})
+
 export default app

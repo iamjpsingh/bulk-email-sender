@@ -113,6 +113,16 @@ export default {
         })
       }
 
+      // ========== PREFERENCE CENTER (public) ==========
+      if (path.startsWith('/preferences/')) {
+        const trackingId = path.slice('/preferences/'.length)
+        if (request.method === 'POST') {
+          return handleSavePreferences(env.DB, trackingId, request, corsHeaders)
+        }
+        // GET — show preference page
+        return handleShowPreferences(env.DB, trackingId, corsHeaders)
+      }
+
       // ========== BOUNCE WEBHOOK ==========
       if (path === '/api/bounce' && request.method === 'POST') {
         return handleBounceWebhook(env.DB, request, corsHeaders)
@@ -1479,4 +1489,149 @@ async function handleCheckSuppression(
   } catch (err) {
     return json({ success: false, error: String(err) }, 500, corsHeaders)
   }
+}
+
+// =============================================================================
+// PREFERENCE CENTER HANDLERS
+// =============================================================================
+
+async function handleShowPreferences(
+  db: D1Database,
+  trackingId: string,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const email = await db
+    .prepare('SELECT user_id, recipient_email FROM emails WHERE tracking_id = ?')
+    .bind(trackingId)
+    .first<{ user_id: string; recipient_email: string }>()
+
+  if (!email) {
+    return new Response('Invalid tracking ID', { status: 404, headers: corsHeaders })
+  }
+
+  const pref = await db
+    .prepare('SELECT preference, reason FROM email_preferences WHERE user_id = ? AND email = ?')
+    .bind(email.user_id, email.recipient_email)
+    .first<{ preference: string; reason: string }>()
+
+  const currentPref = pref?.preference || 'subscribed'
+
+  return new Response(preferencePageHtml(trackingId, email.recipient_email, currentPref), {
+    status: 200,
+    headers: { 'Content-Type': 'text/html', ...corsHeaders },
+  })
+}
+
+async function handleSavePreferences(
+  db: D1Database,
+  trackingId: string,
+  request: Request,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const email = await db
+    .prepare('SELECT user_id, recipient_email FROM emails WHERE tracking_id = ?')
+    .bind(trackingId)
+    .first<{ user_id: string; recipient_email: string }>()
+
+  if (!email) {
+    return new Response('Invalid tracking ID', { status: 404, headers: corsHeaders })
+  }
+
+  let preference: string
+  let reason: string | null = null
+  let pauseUntil: string | null = null
+
+  const contentType = request.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    const body = await request.json() as any
+    preference = body.preference || 'unsubscribed'
+    reason = body.reason || null
+  } else {
+    const formData = await request.formData()
+    preference = (formData.get('preference') as string) || 'unsubscribed'
+    reason = formData.get('reason') as string || null
+  }
+
+  const validPrefs = ['subscribed', 'campaign_only', 'digest_weekly', 'digest_monthly', 'paused', 'unsubscribed']
+  if (!validPrefs.includes(preference)) preference = 'unsubscribed'
+
+  if (preference === 'paused') {
+    pauseUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  }
+
+  const id = crypto.randomUUID()
+  await db
+    .prepare(`INSERT INTO email_preferences (id, user_id, email, preference, pause_until, reason, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id, email) DO UPDATE SET preference = ?, pause_until = ?, reason = ?, updated_at = datetime('now')`)
+    .bind(id, email.user_id, email.recipient_email, preference, pauseUntil, reason, preference, pauseUntil, reason)
+    .run()
+
+  if (preference === 'unsubscribed') {
+    const supId = crypto.randomUUID()
+    await db
+      .prepare(`INSERT OR IGNORE INTO suppressions (id, user_id, email, reason, source)
+        VALUES (?, ?, ?, 'unsubscribe', 'preference_center')`)
+      .bind(supId, email.user_id, email.recipient_email)
+      .run()
+  }
+
+  return new Response(preferenceConfirmHtml(preference), {
+    status: 200,
+    headers: { 'Content-Type': 'text/html', ...corsHeaders },
+  })
+}
+
+function preferencePageHtml(trackingId: string, emailAddr: string, current: string): string {
+  const checked = (val: string) => current === val ? 'checked' : ''
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email Preferences</title>
+<style>body{margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f4f5;color:#18181b}
+.card{max-width:520px;margin:40px auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+h1{font-size:22px;margin:0 0 8px}p.sub{color:#71717a;margin:0 0 24px;font-size:14px}
+label{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid #e4e4e7;border-radius:8px;margin-bottom:8px;cursor:pointer}
+label:hover{background:#fafafa}input[type=radio]{margin-top:3px}
+.title{font-weight:500;font-size:14px}.desc{color:#71717a;font-size:13px}
+.reason{margin-top:16px}textarea{width:100%;padding:8px;border:1px solid #e4e4e7;border-radius:6px;font-size:14px;resize:vertical;min-height:60px;box-sizing:border-box}
+button{margin-top:20px;width:100%;padding:12px;background:#18181b;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer}
+button:hover{background:#27272a}</style>
+</head><body><div class="card">
+<h1>Email Preferences</h1>
+<p class="sub">Manage how you receive emails at <strong>${emailAddr}</strong></p>
+<form method="POST" action="/preferences/${trackingId}">
+<label><input type="radio" name="preference" value="subscribed" ${checked('subscribed')}>
+<div><div class="title">Keep receiving all emails</div><div class="desc">Continue receiving marketing emails as usual</div></div></label>
+<label><input type="radio" name="preference" value="digest_weekly" ${checked('digest_weekly')}>
+<div><div class="title">Weekly digest only</div><div class="desc">Receive a summary once per week instead of individual emails</div></div></label>
+<label><input type="radio" name="preference" value="digest_monthly" ${checked('digest_monthly')}>
+<div><div class="title">Monthly digest only</div><div class="desc">Receive a summary once per month</div></div></label>
+<label><input type="radio" name="preference" value="paused" ${checked('paused')}>
+<div><div class="title">Pause for 30 days</div><div class="desc">Stop emails temporarily, they resume automatically</div></div></label>
+<label><input type="radio" name="preference" value="unsubscribed" ${checked('unsubscribed')}>
+<div><div class="title">Unsubscribe from all</div><div class="desc">Stop all marketing emails from this sender</div></div></label>
+<div class="reason"><label for="reason" style="display:block;border:none;padding:0;margin-bottom:6px;font-size:13px;color:#71717a">Reason (optional)</label>
+<textarea id="reason" name="reason" placeholder="Too many emails, not relevant, etc."></textarea></div>
+<button type="submit">Save Preferences</button>
+</form></div></body></html>`
+}
+
+function preferenceConfirmHtml(preference: string): string {
+  const messages: Record<string, string> = {
+    subscribed: 'You will continue receiving emails as usual.',
+    campaign_only: 'You will only receive campaign-specific emails.',
+    digest_weekly: 'You will receive a weekly digest instead of individual emails.',
+    digest_monthly: 'You will receive a monthly digest instead of individual emails.',
+    paused: 'Your emails have been paused for 30 days.',
+    unsubscribed: 'You have been unsubscribed from all marketing emails.',
+  }
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Preferences Updated</title>
+<style>body{margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f4f5;color:#18181b;text-align:center}
+.card{max-width:480px;margin:60px auto;background:#fff;border-radius:12px;padding:40px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+h1{font-size:24px;margin:0 0 16px}p{color:#52525b;line-height:1.6}</style>
+</head><body><div class="card"><h1>Preferences Updated</h1>
+<p>${messages[preference] || 'Your preferences have been saved.'}</p>
+</div></body></html>`
 }
