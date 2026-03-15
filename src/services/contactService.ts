@@ -4,6 +4,7 @@ import Database from 'bun:sqlite';
 import { existsSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { logger } from '../utils/logger';
+import { generateId } from '../utils/id';
 
 // ============================================================================
 // Types
@@ -83,6 +84,12 @@ export interface ImportHistory {
   field_mapping: string | null;
   created_at: string;
 }
+
+// Whitelist of allowed sort columns to prevent SQL injection
+const ALLOWED_SORT_COLUMNS = new Set([
+  'created_at', 'updated_at', 'email', 'first_name', 'last_name',
+  'company', 'status', 'engagement_score',
+])
 
 // ============================================================================
 // Service
@@ -179,7 +186,7 @@ class ContactService {
   // --------------------------------------------------------------------------
 
   createList(orgId: string, userId: string, name: string, description?: string): ContactList {
-    const id = `list_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const id = generateId('list');
     this.db.prepare(`
       INSERT INTO contact_lists (id, org_id, user_id, name, description)
       VALUES (?, ?, ?, ?, ?)
@@ -188,13 +195,9 @@ class ContactService {
   }
 
   getLists(orgId: string): ContactList[] {
-    this.db.exec(`
-      UPDATE contact_lists SET contact_count = (
-        SELECT COUNT(*) FROM contacts WHERE contacts.list_id = contact_lists.id
-      )
-    `);
     return this.db.prepare(`
-      SELECT * FROM contact_lists WHERE org_id = ? ORDER BY created_at DESC
+      SELECT cl.*, (SELECT COUNT(*) FROM contacts WHERE contacts.list_id = cl.id) AS contact_count
+      FROM contact_lists cl WHERE cl.org_id = ? ORDER BY cl.created_at DESC
     `).all(orgId) as ContactList[];
   }
 
@@ -224,7 +227,7 @@ class ContactService {
   // --------------------------------------------------------------------------
 
   addContact(orgId: string, userId: string, listId: string, input: ContactInput): Contact {
-    const id = `con_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const id = generateId('con');
     this.db.prepare(`
       INSERT INTO contacts (id, org_id, user_id, list_id, email, first_name, last_name, company, phone, tags, custom_fields, status, source)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -279,7 +282,7 @@ class ContactService {
     const page = filters.page || 1;
     const limit = Math.min(filters.limit || 50, 200);
     const offset = (page - 1) * limit;
-    const sortBy = filters.sort_by || 'created_at';
+    const sortBy = ALLOWED_SORT_COLUMNS.has(filters.sort_by || '') ? filters.sort_by! : 'created_at';
     const sortOrder = filters.sort_order === 'asc' ? 'ASC' : 'DESC';
 
     const conditions: string[] = ['org_id = ?', 'list_id = ?'];
@@ -380,7 +383,7 @@ class ContactService {
           }
         }
 
-        const id = `con_${Date.now()}_${Math.random().toString(36).substring(2, 6)}_${i}`;
+        const id = `${generateId('con')}_${i}`;
 
         try {
           insertStmt.run(
@@ -403,7 +406,7 @@ class ContactService {
   }
 
   recordImport(orgId: string, userId: string, listId: string, filename: string, format: string, result: ImportResult, fieldMapping: Record<string, string>) {
-    const id = `imp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const id = generateId('imp');
     this.db.prepare(`
       INSERT INTO import_history (id, org_id, user_id, list_id, filename, format, total_rows, imported, duplicates, invalid, field_mapping)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

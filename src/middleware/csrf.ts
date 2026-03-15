@@ -53,7 +53,7 @@ export async function csrfProtection(c: Context, next: Next) {
 
   // Skip tracking/webhook endpoints (external callers)
   const path = c.req.path
-  if (path.startsWith('/track/') || path.startsWith('/webhooks/incoming')) {
+  if (path.startsWith('/api/track/') || path.startsWith('/api/webhooks/')) {
     return next()
   }
 

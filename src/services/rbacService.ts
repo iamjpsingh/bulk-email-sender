@@ -1,6 +1,7 @@
 // src/services/rbacService.ts — Role-Based Access Control
 
 import { db } from '../db/connection'
+import { generateId } from '../utils/id'
 
 // ---------------------------------------------------------------------------
 // Permission constants
@@ -213,10 +214,6 @@ class RbacService {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
-}
 
 // ---------------------------------------------------------------------------
 // Singleton export

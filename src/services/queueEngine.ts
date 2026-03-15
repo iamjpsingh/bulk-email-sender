@@ -2,6 +2,7 @@
 
 import { d1Service } from './d1Service'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 import { QueueDatabase } from './queueDatabase'
 import { QueueWorker } from './queueWorker'
 import type { EmailConfig, Contact } from '../types/index'
@@ -36,7 +37,7 @@ class QueueEngine {
     contacts: Contact[],
     options: import('./queueDatabase').EnqueueOptions
   ): string {
-    const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const jobId = generateId('job')
     const campaignId = options.campaignId || d1Service.generateCampaignId()
 
     this.queueDb.insertJob(

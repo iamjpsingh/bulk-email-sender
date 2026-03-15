@@ -1,5 +1,6 @@
 import { db } from '../db/connection'
 import { auditService } from './auditService'
+import { generateId } from '../utils/id'
 
 export interface Team {
   id: string
@@ -25,14 +26,14 @@ export interface TeamMember {
 
 class TeamService {
   create(orgId: string, name: string, createdBy: string, description?: string): Team {
-    const id = `team_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const id = generateId('team')
 
     db.prepare(`
       INSERT INTO teams (id, org_id, name, description, created_by) VALUES (?, ?, ?, ?, ?)
     `).run(id, orgId, name, description || null, createdBy)
 
     // Creator becomes team lead
-    const tmId = `tm_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const tmId = generateId('tm')
     db.prepare(`
       INSERT INTO team_members (id, team_id, user_id, role) VALUES (?, ?, ?, 'lead')
     `).run(tmId, id, createdBy)
@@ -112,7 +113,7 @@ class TeamService {
   }
 
   addMember(orgId: string, teamId: string, userId: string, role: string, actorId: string): boolean {
-    const id = `tm_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const id = generateId('tm')
     try {
       db.prepare(`
         INSERT INTO team_members (id, team_id, user_id, role) VALUES (?, ?, ?, ?)

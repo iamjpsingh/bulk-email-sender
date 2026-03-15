@@ -5,6 +5,7 @@ import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { eventBus } from './eventBus'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 
 // ============================================================================
 // Types
@@ -189,7 +190,7 @@ class CampaignService {
   // --------------------------------------------------------------------------
 
   create(orgId: string, userId: string, input: CampaignInput): CampaignRecord {
-    const id = `camp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('camp')
 
     this.db.prepare(`
       INSERT INTO campaigns (id, org_id, user_id, name, type, subject, from_name, from_email, reply_to, template_id, list_id, segment_id, tags, folder, batch_size, email_delay, batch_delay)
@@ -386,7 +387,7 @@ class CampaignService {
   // --------------------------------------------------------------------------
 
   createABVariant(campaignId: string, label: string, percentage: number, opts: { subject?: string; templateId?: string; senderName?: string; senderEmail?: string } = {}): ABVariant {
-    const id = `var_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('var')
 
     this.db.prepare(`
       INSERT INTO ab_variants (id, campaign_id, variant_label, subject, template_id, sender_name, sender_email, percentage)

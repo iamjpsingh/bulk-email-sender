@@ -6,6 +6,7 @@ import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { success, error } from '../utils/response'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 import Database from 'bun:sqlite'
 import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
@@ -102,7 +103,7 @@ app.post('/api-keys', requirePermission(PERMISSIONS.APIKEYS_MANAGE), async (c) =
   const scopes: string[] = (body.scopes || ['read']).filter((s: string) => validScopes.includes(s))
 
   // Generate API key
-  const id = `ak_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+  const id = generateId('ak')
   const rawKey = generateApiKey()
   const keyPrefix = rawKey.substring(0, 8)
   const keyHash = await Bun.password.hash(rawKey, { algorithm: 'argon2id' })

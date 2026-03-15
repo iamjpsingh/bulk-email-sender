@@ -1,4 +1,5 @@
 import { logsDb } from '../db/connection'
+import { generateId } from '../utils/id'
 
 export type AuditAction =
   // Auth
@@ -72,7 +73,7 @@ class AuditService {
    * Record an audit log entry (security-sensitive actions)
    */
   log(entry: AuditEntry): void {
-    const id = `aud_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const id = generateId('aud')
     logsDb.prepare(`
       INSERT INTO audit_logs (id, org_id, actor_id, actor_email, action, entity_type, entity_id, changes, ip_address, user_agent, metadata)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -95,7 +96,7 @@ class AuditService {
    * Record an activity log entry (product actions)
    */
   logActivity(entry: ActivityEntry): void {
-    const id = `act_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const id = generateId('act')
     logsDb.prepare(`
       INSERT INTO activity_logs (id, org_id, actor_id, actor_email, action, entity_type, entity_id, description, metadata)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

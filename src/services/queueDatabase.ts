@@ -4,6 +4,7 @@ import Database from 'bun:sqlite'
 import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 import type { ErrorType } from './retryEngine'
 
 // ============================================================================
@@ -415,7 +416,7 @@ export class QueueDatabase {
     errorType: ErrorType,
     attempts: number
   ) {
-    const id = `dl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('dl')
     this.db
       .prepare(
         `
@@ -470,7 +471,7 @@ export class QueueDatabase {
    * Add email to suppression list
    */
   suppress(userId: string, email: string, reason: string, source?: string) {
-    const id = `sup_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('sup')
     try {
       this.db
         .prepare(

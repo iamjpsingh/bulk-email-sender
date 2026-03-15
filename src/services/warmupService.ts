@@ -5,6 +5,7 @@ import Database from 'bun:sqlite'
 import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 
 // ============================================================================
 // Types
@@ -162,7 +163,7 @@ class WarmupService {
   // --------------------------------------------------------------------------
 
   create(userId: string, input: WarmupInput): WarmupPlan {
-    const id = `wu_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('wu')
     const start = input.starting_volume || 20
     const target = input.target_volume || 500
 
@@ -297,7 +298,7 @@ class WarmupService {
       const schedule: WarmupScheduleDay[] = JSON.parse(plan.schedule_json)
 
       // Log today's progress
-      const logId = `wl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+      const logId = generateId('wl')
       this.db.prepare(`
         INSERT INTO warmup_logs (id, plan_id, day, target, sent)
         VALUES (?, ?, ?, ?, ?)

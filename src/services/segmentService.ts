@@ -4,6 +4,7 @@ import Database from 'bun:sqlite'
 import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 
 // ============================================================================
 // Types
@@ -108,7 +109,7 @@ class SegmentService {
   // --------------------------------------------------------------------------
 
   create(orgId: string, userId: string, input: SegmentInput): Segment {
-    const id = `seg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('seg')
 
     this.db.prepare(`
       INSERT INTO segments (id, org_id, user_id, name, description, type, rules_json)

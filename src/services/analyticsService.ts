@@ -5,6 +5,7 @@ import Database from 'bun:sqlite'
 import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 
 // ============================================================================
 // Types
@@ -179,7 +180,7 @@ class AnalyticsService {
     geoCountry?: string
     geoCity?: string
   }) {
-    const id = `ae_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('ae')
     const now = new Date()
 
     const clientName = event.userAgent ? this.parseClientName(event.userAgent) : 'unknown'
@@ -217,7 +218,7 @@ class AnalyticsService {
         WHERE id = ?
       `).run(existing.id)
     } else {
-      const id = `la_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+      const id = generateId('la')
       this.db.prepare(`
         INSERT INTO link_analytics (id, org_id, user_id, campaign_id, url, click_count, unique_clicks, first_clicked_at, last_clicked_at)
         VALUES (?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))
@@ -231,7 +232,7 @@ class AnalyticsService {
     `).get(orgId, campaignId) as any
 
     if (!existing) {
-      const id = `ca_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+      const id = generateId('ca')
       this.db.prepare(`
         INSERT INTO campaign_analytics (id, org_id, user_id, campaign_id) VALUES (?, ?, ?, ?)
       `).run(id, orgId, orgId, campaignId)
@@ -568,7 +569,7 @@ class AnalyticsService {
         existing.id
       )
     } else {
-      const id = `ca_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+      const id = generateId('ca')
       this.db.prepare(`
         INSERT INTO campaign_analytics (id, org_id, user_id, campaign_id, campaign_name, total_sent, delivered, failed, opened, clicked, bounced, unsubscribed)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

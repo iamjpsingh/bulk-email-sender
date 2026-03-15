@@ -4,6 +4,7 @@ import Database from 'bun:sqlite'
 import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 
 // ============================================================================
 // Types
@@ -166,7 +167,7 @@ class TemplateService {
   // --------------------------------------------------------------------------
 
   create(orgId: string, userId: string, input: TemplateInput): Template {
-    const id = `tpl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('tpl')
     const variables = this.extractVariables(input.html_content)
 
     this.db.prepare(`
@@ -319,7 +320,7 @@ class TemplateService {
     const parent = this.get(orgId, templateId)
     if (!parent) return null
 
-    const id = `tpl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('tpl')
     const variables = this.extractVariables(input.html_content)
 
     this.db.prepare(`

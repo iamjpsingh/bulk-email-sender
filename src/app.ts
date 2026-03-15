@@ -234,6 +234,25 @@ async function initialize() {
 await initialize()
 
 // ============================================================================
+// Graceful Shutdown
+// ============================================================================
+
+function shutdown(signal: string) {
+  logger.info(`${signal} received — shutting down gracefully...`)
+
+  // Stop workers first (no new jobs picked up)
+  queueEngine.stopWorker()
+  automationService.stopWorker()
+  warmupService.stopWorker()
+
+  logger.info('All workers stopped. Goodbye.')
+  process.exit(0)
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))
+
+// ============================================================================
 // Export
 // ============================================================================
 

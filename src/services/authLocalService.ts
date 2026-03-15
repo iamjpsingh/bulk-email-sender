@@ -1,6 +1,7 @@
 import { db } from '../db/connection'
 import { auditService } from './auditService'
 import { orgService } from './orgService'
+import { generateId } from '../utils/id'
 
 export interface AuthUser {
   id: string
@@ -25,7 +26,7 @@ class AuthLocalService {
     const existing = db.prepare('SELECT 1 FROM users WHERE email = ?').get(email.toLowerCase().trim())
     if (existing) return null
 
-    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const userId = generateId('usr')
     const passwordHash = await Bun.password.hash(password, { algorithm: 'argon2id' })
 
     db.prepare(`
@@ -199,7 +200,7 @@ class AuthLocalService {
 
   private createSession(userId: string, orgId: string | null, ipAddress?: string, userAgent?: string): AuthSession {
     const token = this.generateToken()
-    const sessionId = `ses_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const sessionId = generateId('ses')
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
 
     db.prepare(`

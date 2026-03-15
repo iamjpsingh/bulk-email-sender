@@ -5,6 +5,7 @@ import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { eventBus, type EventType } from './eventBus'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 
 // ============================================================================
 // Types
@@ -122,7 +123,7 @@ class WebhookService {
   // --------------------------------------------------------------------------
 
   create(orgId: string, userId: string, input: WebhookInput): Webhook {
-    const id = `wh_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('wh')
     const secret = this.generateSecret()
 
     this.db.prepare(`
@@ -268,7 +269,7 @@ class WebhookService {
   }
 
   private logDelivery(webhookId: string, eventType: string, status: 'success' | 'failed', statusCode: number | null, responseBody: string | null, error: string | null, durationMs: number) {
-    const id = `whl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('whl')
     this.db.prepare(`
       INSERT INTO webhook_logs (id, webhook_id, event_type, status, status_code, response_body, error, duration_ms)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)

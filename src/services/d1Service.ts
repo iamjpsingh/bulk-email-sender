@@ -1,3 +1,5 @@
+import { generateId } from '../utils/id'
+
 /**
  * D1 Tracking Service
  * Connects to Cloudflare Worker for email tracking
@@ -210,7 +212,7 @@ class D1Service {
    * Generate campaign ID
    */
   generateCampaignId(): string {
-    return 'c_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6)
+    return generateId('c')
   }
 
   /**

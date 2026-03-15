@@ -5,6 +5,7 @@ import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { eventBus } from './eventBus'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 
 // ============================================================================
 // Types
@@ -179,7 +180,7 @@ class AutomationService {
   // --------------------------------------------------------------------------
 
   create(orgId: string, userId: string, input: AutomationInput): Automation {
-    const id = `auto_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('auto')
 
     this.db.prepare(`
       INSERT INTO automations (id, org_id, user_id, name, description, trigger_type, trigger_config, entry_list_id, flow_json)
@@ -285,7 +286,7 @@ class AutomationService {
 
     if (!firstStep) return false
 
-    const id = `enr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('enr')
 
     try {
       this.db.prepare(`

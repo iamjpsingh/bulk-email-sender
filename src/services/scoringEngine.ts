@@ -5,6 +5,7 @@ import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { eventBus } from './eventBus'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 
 // ============================================================================
 // Types
@@ -120,7 +121,7 @@ class ScoringEngine {
 
   recordEvent(contactId: string, userId: string, eventType: keyof typeof SCORE_RULES, campaignId?: string | null): number {
     const rule = SCORE_RULES[eventType]
-    const id = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('evt')
 
     this.db.prepare(`
       INSERT INTO engagement_events (id, contact_id, user_id, campaign_id, event_type, points)

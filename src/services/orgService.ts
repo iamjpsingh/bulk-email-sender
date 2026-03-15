@@ -1,5 +1,6 @@
 import { db } from '../db/connection'
 import { auditService } from './auditService'
+import { generateId } from '../utils/id'
 
 export interface Organization {
   id: string
@@ -33,7 +34,7 @@ class OrgService {
    * Create a new organization. Creator becomes owner.
    */
   create(userId: string, name: string, slug?: string): Organization {
-    const orgId = `org_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const orgId = generateId('org')
     const orgSlug = slug || this.generateSlug(name)
 
     // Check slug uniqueness
@@ -47,7 +48,7 @@ class OrgService {
     `).run(orgId, name, orgSlug)
 
     // Add creator as owner
-    const memberId = `om_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const memberId = generateId('om')
     db.prepare(`
       INSERT INTO org_members (id, org_id, user_id, role, status) VALUES (?, ?, ?, 'owner', 'active')
     `).run(memberId, orgId, userId)
@@ -144,7 +145,7 @@ class OrgService {
   }
 
   addMember(orgId: string, userId: string, role: string, invitedBy: string): OrgMember {
-    const id = `om_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    const id = generateId('om')
     db.prepare(`
       INSERT INTO org_members (id, org_id, user_id, role, status, invited_by, invited_at)
       VALUES (?, ?, ?, ?, 'active', ?, datetime('now'))

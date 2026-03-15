@@ -5,6 +5,7 @@ import Database from 'bun:sqlite'
 import { existsSync, mkdirSync, readFileSync, readdirSync } from 'fs'
 import { dirname, join } from 'path'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 
 // ============================================================================
 // Types
@@ -163,7 +164,7 @@ class PluginManager {
   // --------------------------------------------------------------------------
 
   install(userId: string, input: PluginInput): Plugin {
-    const id = `plg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    const id = generateId('plg')
 
     this.db.prepare(`
       INSERT INTO plugins (id, user_id, name, version, description, author, type, manifest_json, settings_json, entry_path)

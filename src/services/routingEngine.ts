@@ -6,6 +6,7 @@ import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { eventBus } from './eventBus'
 import { logger } from '../utils/logger'
+import { generateId } from '../utils/id'
 
 // ============================================================================
 // Types
@@ -184,7 +185,7 @@ class RoutingEngine {
     `).get(userId, configId, today) as ProviderStats | null
 
     if (!stats) {
-      const id = `rs_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+      const id = generateId('rs')
       const limit = DEFAULT_LIMITS[providerType] || 500
 
       this.db.prepare(`
@@ -335,7 +336,7 @@ class RoutingEngine {
     const decision = this.selectProvider(userId, [failedConfigId])
 
     if (decision) {
-      const id = `fo_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+      const id = generateId('fo')
       this.db.prepare(`
         INSERT INTO failover_log (id, user_id, from_config_id, to_config_id, reason)
         VALUES (?, ?, ?, ?, ?)
@@ -375,7 +376,7 @@ class RoutingEngine {
 
       this.db.prepare(`UPDATE routing_config SET ${sets.join(', ')} WHERE user_id = ?`).run(...params)
     } else {
-      const id = `rc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+      const id = generateId('rc')
       this.db.prepare(`
         INSERT INTO routing_config (id, user_id, weights_json, failover_enabled, min_success_rate, max_avg_send_time_ms)
         VALUES (?, ?, ?, ?, ?, ?)
