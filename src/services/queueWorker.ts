@@ -3,6 +3,9 @@
 import { logService } from './logService'
 import { d1Service } from './d1Service'
 import { retryEngine } from './retryEngine'
+import { frequencyCapService } from './frequencyCapService'
+import { preferenceCenterService } from './preferenceCenterService'
+import { graymailService } from './graymailService'
 import { FileService } from './fileService'
 import { logger } from '../utils/logger'
 import { htmlToText } from '../utils/htmlToText'
@@ -144,11 +147,37 @@ export class QueueWorker {
         continue
       }
 
+      // Check frequency cap
+      if (!frequencyCapService.canSend(job.user_id, contact.Email)) {
+        logger.debug(`Skipping frequency-capped email: ${contact.Email}`)
+        lastIndex = i + 1
+        this.queueDb.updateProgress(job.id, lastIndex, sentCount, failedCount)
+        continue
+      }
+
+      // Check email preferences (unsubscribed, paused, etc.)
+      if (!preferenceCenterService.canReceive(job.user_id, contact.Email)) {
+        logger.debug(`Skipping unsubscribed/paused email: ${contact.Email}`)
+        lastIndex = i + 1
+        this.queueDb.updateProgress(job.id, lastIndex, sentCount, failedCount)
+        continue
+      }
+
+      // Check graymail suppression (no engagement after N sends)
+      if (!graymailService.canSend(job.user_id, contact.Email)) {
+        logger.debug(`Skipping graymail: ${contact.Email}`)
+        lastIndex = i + 1
+        this.queueDb.updateProgress(job.id, lastIndex, sentCount, failedCount)
+        continue
+      }
+
       // Attempt to send with retry
       const success = await this.sendWithRetry(job, contact, campaignId, transport)
 
       if (success) {
         sentCount++
+        frequencyCapService.logSend(job.user_id, contact.Email, campaignId)
+        graymailService.recordSend(job.user_id, contact.Email)
       } else {
         failedCount++
       }

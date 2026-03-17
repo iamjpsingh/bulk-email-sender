@@ -33,8 +33,9 @@ export {
   type BulkValidationResult,
   type DuplicateGroup,
   type TimelineEvent,
+  type ContactPreference,
 } from './contacts'
-export { campaignsApi, type Campaign, type CampaignInput, type CampaignType, type CampaignStatus } from './campaigns'
+export { campaignsApi, type Campaign, type CampaignInput, type CampaignType, type CampaignStatus, type FrequencyCapConfig } from './campaigns'
 export { configApi, oauthApi, reportApi, dashboardApi } from './config'
 export { templatesApi, type Template, type TemplateInput, type TemplateCategory } from './templates'
 export {
@@ -47,6 +48,7 @@ export {
   warmupApi,
   pluginsApi,
   type AnalyticsSummary,
+  type EmailHealth,
   type CampaignReport,
   type LinkClickData,
   type RoutingScore,

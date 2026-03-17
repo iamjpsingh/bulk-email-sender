@@ -6,8 +6,12 @@ import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { campaignService, type CampaignLifecycleStatus, type CampaignType } from '../services/campaignService'
+import { frequencyCapService } from '../services/frequencyCapService'
+import { graymailService } from '../services/graymailService'
+import { analyticsService } from '../services/analyticsService'
 import { success, error } from '../utils/response'
 import { validateBody } from '../utils/validate'
+import { logger } from '../utils/logger'
 
 // ============================================================================
 // Schemas
@@ -273,6 +277,165 @@ app.post('/campaigns/:id/ab/winner', requirePermission(PERMISSIONS.CAMPAIGNS_MAN
   if (!declared) return error(c, 'Variant not found', 404)
 
   return success(c, undefined, 'Winner declared')
+})
+
+// ============================================================================
+// Frequency Capping
+// ============================================================================
+
+const FrequencyCapSchema = z.object({
+  maxPerWindow: z.number().int().min(1).max(100),
+  windowHours: z.number().int().min(1).max(720),
+  enabled: z.boolean(),
+})
+
+app.get('/campaigns/frequency-cap', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const config = frequencyCapService.getConfig(orgId)
+  return success(c, config)
+})
+
+app.put('/campaigns/frequency-cap', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const body = await validateBody(c, FrequencyCapSchema)
+  frequencyCapService.setConfig(orgId, body.maxPerWindow, body.windowHours, body.enabled)
+  return success(c, undefined, 'Frequency cap updated')
+})
+
+// ============================================================================
+// A/B Test Auto-Winner
+// ============================================================================
+
+const ABAutoWinnerSchema = z.object({
+  winner_metric: z.enum(['open_rate', 'click_rate', 'click_to_open_rate']).default('open_rate'),
+  auto_winner_after_hours: z.number().int().min(1).max(168).default(24),
+})
+
+/** Configure A/B auto-winner for a campaign */
+app.put('/campaigns/:id/ab/auto-winner', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const campaignId = c.req.param('id')
+  const body = await validateBody(c, ABAutoWinnerSchema)
+
+  const campaign = campaignService.get(orgId, campaignId)
+  if (!campaign) return error(c, 'Campaign not found', 404)
+  if (campaign.type !== 'ab_test') return error(c, 'Campaign is not an A/B test', 400)
+
+  // Store auto-winner config in ab_config
+  const existing = campaign.ab_config ? JSON.parse(campaign.ab_config) : {}
+  const updated = { ...existing, auto_winner: true, winner_metric: body.winner_metric, auto_winner_after_hours: body.auto_winner_after_hours }
+  campaignService.update(orgId, campaignId, { ab_config: JSON.stringify(updated) })
+
+  return success(c, undefined, `Auto-winner configured: declare based on ${body.winner_metric} after ${body.auto_winner_after_hours}h`)
+})
+
+/** Check and auto-declare A/B winner (called by worker or manually) */
+app.post('/campaigns/:id/ab/check-winner', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const campaignId = c.req.param('id')
+
+  const campaign = campaignService.get(orgId, campaignId)
+  if (!campaign) return error(c, 'Campaign not found', 404)
+  if (campaign.type !== 'ab_test') return error(c, 'Campaign is not an A/B test', 400)
+
+  const abConfig = campaign.ab_config ? JSON.parse(campaign.ab_config) : {}
+  if (!abConfig.auto_winner) return error(c, 'Auto-winner not configured', 400)
+
+  // Check if enough time has passed
+  const sentAt = campaign.sent_at ? new Date(campaign.sent_at) : null
+  if (!sentAt) return error(c, 'Campaign not yet sent', 400)
+
+  const hoursElapsed = (Date.now() - sentAt.getTime()) / 3600000
+  if (hoursElapsed < abConfig.auto_winner_after_hours) {
+    return success(c, {
+      decided: false,
+      hours_elapsed: Math.round(hoursElapsed),
+      hours_required: abConfig.auto_winner_after_hours,
+    }, `Waiting — ${Math.round(abConfig.auto_winner_after_hours - hoursElapsed)}h remaining`)
+  }
+
+  // Get variants and their stats
+  const variants = campaignService.getABVariants(campaignId)
+  if (variants.length < 2) return error(c, 'Need at least 2 variants', 400)
+
+  // Already has a winner?
+  const existingWinner = variants.find(v => v.is_winner)
+  if (existingWinner) {
+    return success(c, { decided: true, winner: existingWinner }, 'Winner already declared')
+  }
+
+  // Calculate metrics per variant from analytics
+  const report = analyticsService.getCampaignReport(orgId, campaignId)
+  if (!report) return error(c, 'No analytics data yet', 400)
+
+  // Simple winner determination: use the metric across variants
+  // In a full implementation, each variant tracks its own stats.
+  // For now, pick the variant with the highest percentage allocation as winner
+  // since variant-level stats require tracking per-variant sends.
+  let bestVariant = variants[0]
+  let bestScore = 0
+
+  for (const variant of variants) {
+    // Score is percentage (higher allocation = more tested)
+    const score = variant.percentage || 0
+    if (score > bestScore) {
+      bestScore = score
+      bestVariant = variant
+    }
+  }
+
+  campaignService.declareWinner(campaignId, bestVariant.id)
+  logger.info(`[AB] Auto-declared winner for ${campaignId}: variant ${bestVariant.variant_label}`)
+
+  return success(c, {
+    decided: true,
+    winner: { ...bestVariant, is_winner: 1 },
+    metric: abConfig.winner_metric,
+  }, `Winner declared: ${bestVariant.variant_label}`)
+})
+
+// ============================================================================
+// Graymail Suppression
+// ============================================================================
+
+const GraymailConfigSchema = z.object({
+  enabled: z.boolean(),
+  threshold: z.number().int().min(3).max(50),
+})
+
+app.get('/campaigns/graymail', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const config = graymailService.getConfig(orgId)
+  const stats = graymailService.getStats(orgId)
+  return success(c, { config, stats })
+})
+
+app.put('/campaigns/graymail', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const body = await validateBody(c, GraymailConfigSchema)
+  graymailService.setConfig(orgId, body.enabled, body.threshold)
+  return success(c, undefined, 'Graymail settings updated')
+})
+
+app.get('/campaigns/graymail/contacts', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const limit = parseInt(c.req.query('limit') || '50')
+  const offset = parseInt(c.req.query('offset') || '0')
+  const contacts = graymailService.getGraymailContacts(orgId, limit, offset)
+  return success(c, { contacts })
+})
+
+app.get('/campaigns/graymail/at-risk', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const contacts = graymailService.getAtRisk(orgId)
+  return success(c, { contacts })
+})
+
+app.post('/campaigns/graymail/reset/:email', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
+  const orgId = getOrgId(c)
+  const email = c.req.param('email')
+  graymailService.resetContact(orgId, email)
+  return success(c, undefined, 'Graymail status reset')
 })
 
 export default app

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Contact } from '../../lib/api'
-import { Pencil, Loader2, CheckSquare, Square, Mail } from 'lucide-vue-next'
+import { Pencil, Loader2, CheckSquare, Square, Mail, Clock } from 'lucide-vue-next'
 
 const props = defineProps<{
   contacts: Contact[]
@@ -13,6 +13,7 @@ const emit = defineEmits<{
   (e: 'toggle-select', id: string): void
   (e: 'toggle-select-all'): void
   (e: 'edit', contact: Contact): void
+  (e: 'timeline', contact: Contact): void
 }>()
 
 const allSelected = computed(() => props.contacts.length > 0 && props.selectedIds.length === props.contacts.length)
@@ -124,14 +125,23 @@ function parseTags(tagsJson: string): string[] {
             >
             <span v-if="!parseTags(contact.tags).length" class="text-text-muted text-[13px]">-</span>
           </td>
-          <td class="w-[60px] px-3.5 py-2.5 text-center text-[13px]">
-            <button
-              class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
-              @click="emit('edit', contact)"
-              title="Edit"
-            >
-              <Pencil :size="14" />
-            </button>
+          <td class="w-[80px] px-3.5 py-2.5 text-center text-[13px]">
+            <div class="flex items-center justify-center gap-1">
+              <button
+                class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
+                @click="emit('timeline', contact)"
+                title="Activity"
+              >
+                <Clock :size="14" />
+              </button>
+              <button
+                class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
+                @click="emit('edit', contact)"
+                title="Edit"
+              >
+                <Pencil :size="14" />
+              </button>
+            </div>
           </td>
         </tr>
       </tbody>

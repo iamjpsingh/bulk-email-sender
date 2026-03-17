@@ -3,12 +3,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { adminApi } from '../../lib/api/admin'
 import type { SystemMailerConfig, ProviderType } from '../../lib/api/admin'
+import { cloudflareApi } from '../../lib/api/cloudflare'
 import { useToast } from '../../composables/useToast'
 import Skeleton from '../../components/ui/Skeleton.vue'
 import InfoTip from '../../components/ui/InfoTip.vue'
 import {
   Mail, Loader2, CheckCircle, XCircle, Send, Trash2, Server, Cloud, Globe, Zap,
-  Settings, Link2, AlertTriangle,
+  Settings, Link2, AlertTriangle, Radio, Webhook,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -64,6 +65,12 @@ const msClientSecret = ref('')
 const googleOAuthSaved = ref(false)
 const msOAuthSaved = ref(false)
 
+// Cloudflare tracking
+const cfConnected = ref(false)
+const cfAccountName = ref('')
+const webhookRegistered = ref(false)
+const webhookProvider = ref('')
+
 const providers = [
   { value: 'smtp' as ProviderType, label: 'SMTP Server', icon: Server, desc: 'Any SMTP server', domainLevel: false },
   { value: 'ses' as ProviderType, label: 'Amazon SES', icon: Cloud, desc: 'AWS — Domain-level sending', domainLevel: true },
@@ -98,6 +105,8 @@ const setupStatus = computed(() => ({
   mailer: isConfigured.value,
   googleOAuth: googleOAuthSaved.value,
   microsoftOAuth: msOAuthSaved.value,
+  tracking: cfConnected.value,
+  webhooks: webhookRegistered.value,
 }))
 
 const setupComplete = computed(() => setupStatus.value.mailer)
@@ -143,14 +152,20 @@ function applyConfig(cfg: SystemMailerConfig) {
 
 async function loadConfig() {
   try {
-    const [mailerData, oauthData] = await Promise.all([
+    const [mailerData, oauthData, cfStatus, whStatus] = await Promise.all([
       adminApi.getSystemMailer(),
       adminApi.getOAuthCredentials(),
+      cloudflareApi.getStatus().catch(() => ({ connected: false })),
+      adminApi.getWebhookStatus().catch(() => ({ registered: false, status: null })),
     ])
     isConfigured.value = mailerData.configured
     if (mailerData.config) applyConfig(mailerData.config)
     if (oauthData.google) { googleClientId.value = oauthData.google.clientId; googleClientSecret.value = oauthData.google.clientSecret; googleOAuthSaved.value = true }
     if (oauthData.microsoft) { msClientId.value = oauthData.microsoft.clientId; msClientSecret.value = oauthData.microsoft.clientSecret; msOAuthSaved.value = true }
+    cfConnected.value = cfStatus.connected
+    cfAccountName.value = (cfStatus as any).accountName || ''
+    webhookRegistered.value = whStatus.registered
+    webhookProvider.value = whStatus.status?.provider || ''
   } catch (e: any) {
     toast.error(e.message || 'Failed to load config')
   } finally {
@@ -229,6 +244,14 @@ onMounted(() => {
     toast.error(`OAuth error: ${q.oauth_error}`)
     window.history.replaceState({}, '', route.path)
   }
+  if (q.cf_success) {
+    toast.success(`Cloudflare connected — ${q.account || 'success'}`)
+    window.history.replaceState({}, '', route.path)
+  }
+  if (q.cf_error) {
+    toast.error(`Cloudflare error: ${q.cf_error}`)
+    window.history.replaceState({}, '', route.path)
+  }
   loadConfig()
 })
 </script>
@@ -275,6 +298,20 @@ onMounted(() => {
             <AlertTriangle v-else :size="16" class="text-warning shrink-0" />
             <span :class="setupStatus.microsoftOAuth ? 'text-text-primary' : 'text-text-muted'">
               Microsoft OAuth — {{ setupStatus.microsoftOAuth ? 'Configured' : 'Optional — enables Outlook campaign sending' }}
+            </span>
+          </div>
+          <div class="flex items-center gap-3 text-sm">
+            <CheckCircle v-if="setupStatus.webhooks" :size="16" class="text-success shrink-0" />
+            <AlertTriangle v-else :size="16" class="text-warning shrink-0" />
+            <span :class="setupStatus.webhooks ? 'text-text-primary' : 'text-text-muted'">
+              Bounce Webhooks — {{ setupStatus.webhooks ? `Auto-registered (${webhookProvider})` : 'Auto-registers when mailer is saved' }}
+            </span>
+          </div>
+          <div class="flex items-center gap-3 text-sm">
+            <CheckCircle v-if="setupStatus.tracking" :size="16" class="text-success shrink-0" />
+            <AlertTriangle v-else :size="16" class="text-warning shrink-0" />
+            <span :class="setupStatus.tracking ? 'text-text-primary' : 'text-text-muted'">
+              Email Tracking — {{ setupStatus.tracking ? `Cloudflare connected (${cfAccountName})` : 'Optional — deploy Workers for open/click tracking' }}
             </span>
           </div>
         </div>

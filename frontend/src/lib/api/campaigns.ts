@@ -133,4 +133,70 @@ export const campaignsApi = {
     const res = await api.get<any>('/campaigns/dashboard')
     return res.data
   },
+
+  // Frequency capping
+  getFrequencyCap: async (): Promise<FrequencyCapConfig> => {
+    const res = await api.get<FrequencyCapConfig>('/campaigns/frequency-cap')
+    return res.data || { maxPerWindow: 5, windowHours: 168, enabled: false }
+  },
+
+  setFrequencyCap: async (config: FrequencyCapConfig) => {
+    const res = await api.put('/campaigns/frequency-cap', config)
+    if (!res.success) throw new Error(res.message || 'Failed to update')
+  },
+
+  // A/B auto-winner
+  setAutoWinner: async (id: string, metric: string, hours: number) => {
+    const res = await api.put(`/campaigns/${id}/ab/auto-winner`, { winner_metric: metric, auto_winner_after_hours: hours })
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  checkAutoWinner: async (id: string) => {
+    const res = await api.post<any>(`/campaigns/${id}/ab/check-winner`)
+    if (!res.success) throw new Error(res.message || 'Failed')
+    return res.data
+  },
+
+  // Graymail
+  getGraymail: async (): Promise<{ config: GraymailConfig; stats: GraymailStats }> => {
+    const res = await api.get<{ config: GraymailConfig; stats: GraymailStats }>('/campaigns/graymail')
+    return res.data || { config: { enabled: false, threshold: 11 }, stats: { totalTracked: 0, graymailCount: 0, graymailPercentage: 0 } }
+  },
+
+  setGraymail: async (config: GraymailConfig) => {
+    const res = await api.put('/campaigns/graymail', config)
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  getGraymailContacts: async (limit = 50) => {
+    const res = await api.get<{ contacts: any[] }>(`/campaigns/graymail/contacts?limit=${limit}`)
+    return res.data?.contacts || []
+  },
+
+  getAtRiskContacts: async () => {
+    const res = await api.get<{ contacts: any[] }>('/campaigns/graymail/at-risk')
+    return res.data?.contacts || []
+  },
+
+  resetGraymail: async (email: string) => {
+    const res = await api.post(`/campaigns/graymail/reset/${encodeURIComponent(email)}`)
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+}
+
+export interface FrequencyCapConfig {
+  maxPerWindow: number
+  windowHours: number
+  enabled: boolean
+}
+
+export interface GraymailConfig {
+  enabled: boolean
+  threshold: number
+}
+
+export interface GraymailStats {
+  totalTracked: number
+  graymailCount: number
+  graymailPercentage: number
 }

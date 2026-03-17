@@ -52,6 +52,8 @@ export const AUTH = {
     '/api/webhooks/bounce/',
     '/api/whatsapp/webhook',
     '/api/admin/platform/settings/mailer/oauth/callback',
+    '/api/admin/cloudflare/callback',
+    '/api/contacts/preferences/public/',
   ],
 } as const
 

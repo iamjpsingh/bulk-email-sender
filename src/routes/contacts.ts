@@ -8,6 +8,7 @@ import { PERMISSIONS } from '../services/rbacService'
 import { contactService } from '../services/contactService'
 import { validationService } from '../services/validationService'
 import { scoringEngine } from '../services/scoringEngine'
+import { preferenceCenterService, type PreferenceType } from '../services/preferenceCenterService'
 import { FileService } from '../services/fileService'
 import { success, error } from '../utils/response'
 import { validateBody } from '../utils/validate'
@@ -376,6 +377,89 @@ function formatTimelineEvent(type: string, metadataJson: string | null): string 
     default: return type.replace(/_/g, ' ')
   }
 }
+
+// ============================================================================
+// Preference Center
+// ============================================================================
+
+const PreferenceSchema = z.object({
+  preference: z.enum(['subscribed', 'campaign_only', 'digest_weekly', 'digest_monthly', 'paused', 'unsubscribed']),
+  reason: z.string().max(500).optional(),
+  pause_days: z.number().int().min(1).max(365).optional(),
+})
+
+/** Get email preferences for a contact */
+app.get('/contacts/preferences/:contactId', requirePermission(PERMISSIONS.CONTACTS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const contactId = c.req.param('contactId')
+
+  const contact = contactService.getContact(orgId, contactId)
+  if (!contact) return error(c, 'Contact not found', 404)
+
+  const pref = preferenceCenterService.getPreference(orgId, contact.email)
+  const effective = preferenceCenterService.getEffectivePreference(orgId, contact.email)
+
+  return success(c, {
+    preference: effective,
+    details: pref,
+    canReceiveMarketing: preferenceCenterService.canReceive(orgId, contact.email, 'marketing'),
+  })
+})
+
+/** Update email preferences for a contact */
+app.put('/contacts/preferences/:contactId', requirePermission(PERMISSIONS.CONTACTS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const contactId = c.req.param('contactId')
+  const body = await validateBody(c, PreferenceSchema)
+
+  const contact = contactService.getContact(orgId, contactId)
+  if (!contact) return error(c, 'Contact not found', 404)
+
+  if (body.preference === 'paused') {
+    preferenceCenterService.pause(orgId, contact.email, body.pause_days || 30)
+  } else {
+    preferenceCenterService.setPreference(orgId, contact.email, body.preference as PreferenceType, body.reason)
+  }
+
+  return success(c, undefined, `Preference updated to ${body.preference}`)
+})
+
+/** Get preference stats for the org */
+app.get('/contacts/preferences', requirePermission(PERMISSIONS.CONTACTS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const stats = preferenceCenterService.getStats(orgId)
+  return success(c, { stats })
+})
+
+/** Public: preference center page data (for tracking worker to call) */
+app.get('/contacts/preferences/public/:email', (c) => {
+  // This is called by the tracking worker when a contact visits the preference page.
+  // No auth required — email is the identifier.
+  const email = c.req.param('email')
+  const orgId = c.req.query('org') || ''
+  if (!orgId || !email) return error(c, 'Missing parameters', 400)
+
+  const pref = preferenceCenterService.getEffectivePreference(orgId, email)
+  return success(c, { email, preference: pref })
+})
+
+/** Public: update preference from tracking worker */
+app.post('/contacts/preferences/public/:email', async (c) => {
+  const email = c.req.param('email')
+  const body = await c.req.json() as { org: string; preference: string; reason?: string; pause_days?: number }
+  if (!body.org || !email) return error(c, 'Missing parameters', 400)
+
+  const validPrefs = ['subscribed', 'campaign_only', 'digest_weekly', 'digest_monthly', 'paused', 'unsubscribed']
+  if (!validPrefs.includes(body.preference)) return error(c, 'Invalid preference', 400)
+
+  if (body.preference === 'paused') {
+    preferenceCenterService.pause(body.org, email, body.pause_days || 30)
+  } else {
+    preferenceCenterService.setPreference(body.org, email, body.preference as PreferenceType, body.reason)
+  }
+
+  return success(c, undefined, 'Preference updated')
+})
 
 // ============================================================================
 // Helpers

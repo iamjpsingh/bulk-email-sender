@@ -9,6 +9,7 @@ import { useAnalyticsSummary, useAnalyticsReports, useDeviceAnalytics, useTimeAn
 import { analyticsApi } from '../lib/api'
 import PageHeader from '../components/ui/PageHeader.vue'
 import StatCard from '../components/ui/StatCard.vue'
+import EmailHealthDashboard from '../components/analytics/EmailHealthDashboard.vue'
 import { BarChart3, Mail, TrendingUp, MousePointer, AlertTriangle, Clock } from 'lucide-vue-next'
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
@@ -213,6 +214,11 @@ async function exportData(format: 'csv' | 'json') {
         <StatCard :icon="MousePointer" :value="`${summary.avgClickRate.toFixed(1)}%`" label="Avg Click Rate" color="success" />
         <StatCard :icon="AlertTriangle" :value="`${summary.avgBounceRate.toFixed(1)}%`" label="Avg Bounce Rate" :color="summary.avgBounceRate > 5 ? 'danger' : 'success'" />
         <StatCard :icon="Clock" :value="bestSendTime" label="Best Send Time" color="accent" />
+      </section>
+
+      <!-- Email Health Score -->
+      <section class="mb-8">
+        <EmailHealthDashboard />
       </section>
 
       <!-- Campaign Reports Table -->

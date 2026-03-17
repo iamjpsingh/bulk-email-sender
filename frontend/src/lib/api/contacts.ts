@@ -241,4 +241,26 @@ export const contactsApi = {
     const res = await api.get<{ timeline: TimelineEvent[] }>(`/contacts/timeline/${contactId}?limit=${limit}`)
     return res.data?.timeline || []
   },
+
+  // Preferences
+  getPreferences: async (contactId: string): Promise<ContactPreference> => {
+    const res = await api.get<ContactPreference>(`/contacts/preferences/${contactId}`)
+    return res.data || { preference: 'subscribed', details: null, canReceiveMarketing: true }
+  },
+
+  setPreferences: async (contactId: string, preference: string, reason?: string, pauseDays?: number) => {
+    const res = await api.put(`/contacts/preferences/${contactId}`, { preference, reason, pause_days: pauseDays })
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  getPreferenceStats: async (): Promise<Record<string, number>> => {
+    const res = await api.get<{ stats: Record<string, number> }>('/contacts/preferences')
+    return res.data?.stats || {}
+  },
+}
+
+export interface ContactPreference {
+  preference: string
+  details: any
+  canReceiveMarketing: boolean
 }

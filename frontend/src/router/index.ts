@@ -144,6 +144,12 @@ const routes = [
             component: () => import('../views/settings/WebhooksSettings.vue'),
             meta: { breadcrumb: 'Webhooks' },
           },
+          {
+            path: 'tracking',
+            name: 'SettingsTracking',
+            component: () => import('../views/settings/TrackingSettings.vue'),
+            meta: { breadcrumb: 'Tracking' },
+          },
         ],
       },
 

@@ -7,6 +7,7 @@ import {
   Server,
   Hash,
   Webhook,
+  Radio,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -16,6 +17,7 @@ const navItems = [
   { path: '/settings/smtp', label: 'SMTP', icon: Server, description: 'SMTP server configurations' },
   { path: '/settings/api-keys', label: 'API Keys', icon: Hash, description: 'Manage API access' },
   { path: '/settings/webhooks', label: 'Webhooks', icon: Webhook, description: 'Event notifications' },
+  { path: '/settings/tracking', label: 'Tracking', icon: Radio, description: 'Email open & click tracking' },
 ]
 
 function isActive(path: string): boolean {

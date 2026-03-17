@@ -164,6 +164,91 @@ export function parseSendGrid(events: any[]): BounceEvent[] {
   return results
 }
 
+/**
+ * Parse Postmark webhook event.
+ * Postmark POSTs JSON with RecordType: "Bounce" | "SpamComplaint"
+ */
+export function parsePostmark(payload: any): BounceEvent | null {
+  const recordType = payload.RecordType
+
+  if (recordType === 'Bounce') {
+    return {
+      email: payload.Email,
+      type: payload.Type === 'HardBounce' ? 'hard_bounce' : 'soft_bounce',
+      reason: payload.Description || payload.Details || 'Bounce',
+      code: payload.TypeCode?.toString(),
+      provider: 'postmark',
+      rawEvent: payload,
+    }
+  }
+
+  if (recordType === 'SpamComplaint') {
+    return {
+      email: payload.Email,
+      type: 'complaint',
+      reason: payload.Description || 'Spam complaint via Postmark',
+      provider: 'postmark',
+      rawEvent: payload,
+    }
+  }
+
+  return null
+}
+
+/**
+ * Parse SparkPost webhook events.
+ * SparkPost POSTs a JSON array, each wrapped in msys.message_event.
+ */
+export function parseSparkPost(payload: any): BounceEvent[] {
+  const results: BounceEvent[] = []
+  const events = Array.isArray(payload) ? payload : [payload]
+
+  for (const wrapper of events) {
+    const event = wrapper.msys?.message_event || wrapper.msys?.relay_message || wrapper
+
+    const type = event.type
+    const email = event.rcpt_to || event.raw_rcpt_to
+
+    if (!email) continue
+
+    if (type === 'bounce' || type === 'out_of_band') {
+      // bounce_class 10 = hard bounce (invalid recipient), 30 = generic hard bounce
+      const isHard = event.bounce_class === '10' || event.bounce_class === '30' ||
+                     event.bounce_class === '22' || event.bounce_class === '23'
+      results.push({
+        email,
+        type: isHard ? 'hard_bounce' : 'soft_bounce',
+        reason: event.reason || event.raw_reason || 'Bounce',
+        code: event.error_code,
+        provider: 'sparkpost',
+        rawEvent: wrapper,
+      })
+    }
+
+    if (type === 'spam_complaint') {
+      results.push({
+        email,
+        type: 'complaint',
+        reason: event.report_by || 'Spam complaint via SparkPost',
+        provider: 'sparkpost',
+        rawEvent: wrapper,
+      })
+    }
+
+    if (type === 'list_unsubscribe' || type === 'link_unsubscribe') {
+      results.push({
+        email,
+        type: 'unsubscribe',
+        reason: 'Unsubscribed via SparkPost',
+        provider: 'sparkpost',
+        rawEvent: wrapper,
+      })
+    }
+  }
+
+  return results
+}
+
 // ============================================================================
 // Unified Processing
 // ============================================================================

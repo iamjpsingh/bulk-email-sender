@@ -1,4 +1,4 @@
-// src/routes/webhooks.ts - Webhook Management API
+// src/routes/webhooks.ts - Webhook Management API + Inbound Bounce Processing
 
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -6,7 +6,16 @@ import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { webhookService } from '../services/webhookService'
-import { parseSES, parseMailgun, parseSendGrid, processBounce } from '../services/bounceProcessor'
+import { parseSES, parseMailgun, parseSendGrid, parsePostmark, parseSparkPost, processBounce } from '../services/bounceProcessor'
+import {
+  verifySNSSignature,
+  verifyMailgunSignature,
+  verifySendGridSignature,
+  verifySparkPostSignature,
+  getMailgunSigningKey,
+  getSendGridVerificationKey,
+  getSparkPostAuthToken,
+} from '../middleware/webhookSignature'
 import { success, error } from '../utils/response'
 import { logger } from '../utils/logger'
 import { validateBody } from '../utils/validate'
@@ -90,9 +99,9 @@ app.delete('/webhooks/:id', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), (c) 
 app.post('/webhooks/:id/toggle', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE), async (c) => {
   const orgId = getOrgId(c)
   const webhookId = c.req.param('id')
-  const { enabled } = await validateBody(c, ToggleWebhookSchema)
+  const body = await validateBody(c, ToggleWebhookSchema)
 
-  const toggled = webhookService.toggleEnabled(orgId, webhookId, enabled)
+  const toggled = webhookService.toggleEnabled(orgId, webhookId, body.enabled)
   if (!toggled) return error(c, 'Webhook not found', 404)
 
   return success(c, undefined, body.enabled ? 'Webhook enabled' : 'Webhook disabled')
@@ -137,20 +146,39 @@ app.delete('/webhooks/:id/logs', requirePermission(PERMISSIONS.WEBHOOKS_MANAGE),
 // ============================================================================
 // Inbound Bounce/Complaint Webhooks (public — no auth)
 // Providers call these endpoints to notify us of bounces, complaints, unsubs.
+// Each endpoint includes signature verification when keys are available.
 // ============================================================================
 
+// --- AWS SES (via SNS) ---
 app.post('/webhooks/bounce/ses', async (c) => {
   try {
     const payload = await c.req.json()
-    const event = parseSES(payload)
 
+    // Auto-confirm SNS subscription
+    if (payload.Type === 'SubscriptionConfirmation') {
+      if (payload.SubscribeURL) {
+        logger.info('[Webhook] SNS: Auto-confirming subscription...')
+        await fetch(payload.SubscribeURL)
+        logger.info('[Webhook] SNS: Subscription confirmed')
+      }
+      return c.json({ ok: true, message: 'Subscription confirmed' })
+    }
+
+    // Verify SNS signature
+    if (payload.SigningCertURL) {
+      const valid = await verifySNSSignature(payload)
+      if (!valid) {
+        logger.warn('[Webhook] SES: Invalid SNS signature')
+        return c.json({ ok: false, error: 'Invalid signature' }, 401)
+      }
+    }
+
+    const event = parseSES(payload)
     if (!event) {
       return c.json({ ok: true, message: 'Ignored (not a bounce/complaint)' })
     }
 
-    // SES doesn't tell us the userId — we look up by email in suppression context
-    // For now, use a system-level userId. In production, map via campaign tracking.
-    const userId = payload.userId || 'system'
+    const userId = 'system'
     processBounce(userId, event)
 
     return c.json({ ok: true, processed: event.type })
@@ -160,16 +188,31 @@ app.post('/webhooks/bounce/ses', async (c) => {
   }
 })
 
+// --- Mailgun ---
 app.post('/webhooks/bounce/mailgun', async (c) => {
   try {
     const payload = await c.req.json()
-    const event = parseMailgun(payload)
 
+    // Verify Mailgun signature if signing key is available
+    const signingKey = getMailgunSigningKey()
+    if (signingKey) {
+      const eventData = payload['event-data'] || payload
+      const sig = eventData.signature || payload.signature
+      if (sig && sig.timestamp && sig.token && sig.signature) {
+        const valid = verifyMailgunSignature(sig.timestamp, sig.token, sig.signature, signingKey)
+        if (!valid) {
+          logger.warn('[Webhook] Mailgun: Invalid signature')
+          return c.json({ ok: false, error: 'Invalid signature' }, 401)
+        }
+      }
+    }
+
+    const event = parseMailgun(payload)
     if (!event) {
       return c.json({ ok: true, message: 'Ignored' })
     }
 
-    const userId = payload.userId || 'system'
+    const userId = 'system'
     processBounce(userId, event)
 
     return c.json({ ok: true, processed: event.type })
@@ -179,20 +222,90 @@ app.post('/webhooks/bounce/mailgun', async (c) => {
   }
 })
 
+// --- SendGrid ---
 app.post('/webhooks/bounce/sendgrid', async (c) => {
   try {
-    const payload = await c.req.json()
+    const rawBody = await c.req.text()
+
+    // Verify SendGrid signature if verification key is available
+    const verificationKey = getSendGridVerificationKey()
+    if (verificationKey) {
+      const signature = c.req.header('x-twilio-email-event-webhook-signature')
+      const timestamp = c.req.header('x-twilio-email-event-webhook-timestamp')
+      if (signature && timestamp) {
+        const valid = verifySendGridSignature(verificationKey, rawBody, signature, timestamp)
+        if (!valid) {
+          logger.warn('[Webhook] SendGrid: Invalid signature')
+          return c.json({ ok: false, error: 'Invalid signature' }, 401)
+        }
+      }
+    }
+
+    const payload = JSON.parse(rawBody)
     const events = Array.isArray(payload) ? payload : [payload]
     const bounceEvents = parseSendGrid(events)
 
     for (const event of bounceEvents) {
-      const userId = 'system'
-      processBounce(userId, event)
+      processBounce('system', event)
     }
 
     return c.json({ ok: true, processed: bounceEvents.length })
   } catch (err) {
     logger.error('SendGrid webhook error:', err)
+    return c.json({ ok: false }, 400)
+  }
+})
+
+// --- Postmark ---
+app.post('/webhooks/bounce/postmark', async (c) => {
+  try {
+    const payload = await c.req.json()
+
+    // Postmark doesn't use signature verification — relies on webhook URL secrecy
+    // and optional basic auth (configured at Postmark's end)
+
+    const event = parsePostmark(payload)
+    if (!event) {
+      return c.json({ ok: true, message: 'Ignored' })
+    }
+
+    processBounce('system', event)
+
+    return c.json({ ok: true, processed: event.type })
+  } catch (err) {
+    logger.error('Postmark webhook error:', err)
+    return c.json({ ok: false }, 400)
+  }
+})
+
+// --- SparkPost ---
+app.post('/webhooks/bounce/sparkpost', async (c) => {
+  try {
+    const rawBody = await c.req.text()
+
+    // Verify SparkPost signature if auth token is available
+    const authToken = getSparkPostAuthToken()
+    if (authToken) {
+      const signature = c.req.header('x-messagesystems-webhook-token')
+      if (signature) {
+        const valid = verifySparkPostSignature(rawBody, signature, authToken)
+        if (!valid) {
+          logger.warn('[Webhook] SparkPost: Invalid signature')
+          return c.json({ ok: false, error: 'Invalid signature' }, 401)
+        }
+      }
+    }
+
+    const payload = JSON.parse(rawBody)
+    const events = parseSparkPost(payload)
+
+    for (const event of events) {
+      processBounce('system', event)
+    }
+
+    return c.json({ ok: true, processed: events.length })
+  } catch (err) {
+    logger.error('SparkPost webhook error:', err)
     return c.json({ ok: false }, 400)
   }
 })

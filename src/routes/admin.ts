@@ -14,6 +14,8 @@ import { invitationService } from '../services/invitationService'
 import { systemSettingsService } from '../services/systemSettingsService'
 import { systemMailerService } from '../services/systemMailerService'
 import type { SystemMailerConfig, GmailOAuthProviderConfig, OutlookOAuthProviderConfig } from '../services/systemMailerService'
+import { webhookRegistrationService } from '../services/webhookRegistrationService'
+import { cloudflareService } from '../services/cloudflareService'
 import { SERVER } from '../config'
 import { success, error, paginated } from '../utils/response'
 import { validateBody } from '../utils/validate'
@@ -104,6 +106,18 @@ app.put('/admin/platform/settings/mailer', requirePlatformAdmin(), async (c) => 
       return error(c, 'fromName, fromEmail, and providerConfig are required', 400)
     }
     systemMailerService.saveConfig(body, user.id)
+
+    // Auto-register bounce webhooks with provider API (fire-and-forget)
+    webhookRegistrationService.register(body.providerConfig).then(result => {
+      if (result.success) {
+        systemSettingsService.set('webhook_registration_status', JSON.stringify({
+          provider: body.providerConfig.provider,
+          webhookId: result.webhookId,
+          registeredAt: new Date().toISOString(),
+        }))
+      }
+    }).catch(() => { /* non-blocking */ })
+
     return success(c, undefined, 'System mailer configuration saved')
   } catch (e: any) {
     return error(c, e.message || 'Failed to save mailer config', 500)
@@ -288,6 +302,168 @@ app.get('/admin/platform/settings/mailer/oauth/callback', async (c) => {
   } catch (e: any) {
     return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?oauth_error=${encodeURIComponent(e.message)}`)
   }
+})
+
+// ============================================================================
+// Cloudflare Tracking Integration (platform admin)
+// ============================================================================
+
+/** Save Cloudflare OAuth credentials */
+app.put('/admin/platform/settings/cloudflare', requirePlatformAdmin(), async (c) => {
+  const user = requireAuth(c)
+  try {
+    const body = await c.req.json() as { clientId: string; clientSecret: string }
+    if (!body.clientId || !body.clientSecret) {
+      return error(c, 'clientId and clientSecret required', 400)
+    }
+    systemSettingsService.setJson('cloudflare_oauth', body, user.id)
+    return success(c, undefined, 'Cloudflare OAuth credentials saved')
+  } catch (e: any) {
+    return error(c, e.message || 'Failed', 500)
+  }
+})
+
+/** Get Cloudflare OAuth credentials (masked) */
+app.get('/admin/platform/settings/cloudflare', requirePlatformAdmin(), (c) => {
+  const creds = systemSettingsService.getJson<{ clientId: string; clientSecret: string }>('cloudflare_oauth')
+  return success(c, {
+    configured: !!creds,
+    clientId: creds?.clientId || null,
+    clientSecret: creds ? '********' : null,
+  })
+})
+
+/** Initiate Cloudflare OAuth connect flow */
+app.get('/admin/cloudflare/connect', requirePlatformAdmin(), (c) => {
+  try {
+    const user = requireAuth(c)
+    const orgId = c.req.query('orgId') || 'platform'
+    const authUrl = cloudflareService.getAuthUrl(orgId)
+    return success(c, { authUrl })
+  } catch (e: any) {
+    return error(c, e.message, 400)
+  }
+})
+
+/** Cloudflare OAuth callback */
+app.get('/admin/cloudflare/callback', async (c) => {
+  const code = c.req.query('code')
+  const stateParam = c.req.query('state')
+  const cfError = c.req.query('error')
+
+  if (cfError || !code || !stateParam) {
+    return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?cf_error=${cfError || 'missing_code'}`)
+  }
+
+  let stateData: { orgId: string; purpose: string }
+  try {
+    stateData = JSON.parse(Buffer.from(stateParam, 'base64url').toString())
+  } catch {
+    return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?cf_error=invalid_state`)
+  }
+
+  try {
+    const connection = await cloudflareService.exchangeCode(code)
+    cloudflareService.saveConnection(stateData.orgId, connection)
+    return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?cf_success=true&account=${encodeURIComponent(connection.accountName)}`)
+  } catch (e: any) {
+    return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?cf_error=${encodeURIComponent(e.message)}`)
+  }
+})
+
+/** Get Cloudflare connection status */
+app.get('/admin/cloudflare/status', requirePlatformAdmin(), (c) => {
+  const orgId = c.req.query('orgId') || 'platform'
+  const conn = cloudflareService.getConnection(orgId)
+  if (!conn) {
+    return success(c, { connected: false })
+  }
+  return success(c, {
+    connected: true,
+    accountId: conn.accountId,
+    accountName: conn.accountName,
+  })
+})
+
+/** List Cloudflare zones (domains) */
+app.get('/admin/cloudflare/zones', requirePlatformAdmin(), async (c) => {
+  try {
+    const orgId = c.req.query('orgId') || 'platform'
+    const zones = await cloudflareService.listZones(orgId)
+    const deployments = cloudflareService.getAllDeployments(orgId)
+
+    // Annotate zones with deployment status
+    const annotated = zones.map(z => ({
+      ...z,
+      deployed: deployments.some(d => d.domain === z.name),
+      deployment: deployments.find(d => d.domain === z.name) || null,
+    }))
+
+    return success(c, { zones: annotated })
+  } catch (e: any) {
+    return error(c, e.message, 500)
+  }
+})
+
+/** Deploy tracking Worker to a zone */
+app.post('/admin/cloudflare/deploy', requirePlatformAdmin(), async (c) => {
+  try {
+    const body = await c.req.json() as {
+      orgId?: string
+      zoneId: string
+      domain: string
+      openPath?: string
+      clickPath?: string
+      unsubPath?: string
+      useSubdomain?: boolean
+      subdomain?: string
+    }
+    const orgId = body.orgId || 'platform'
+
+    const deployment = await cloudflareService.deployTrackingWorker(orgId, body.zoneId, body.domain, {
+      openPath: body.openPath,
+      clickPath: body.clickPath,
+      unsubPath: body.unsubPath,
+      useSubdomain: body.useSubdomain,
+      subdomain: body.subdomain,
+    })
+
+    return success(c, deployment, 'Tracking Worker deployed')
+  } catch (e: any) {
+    return error(c, e.message, 500)
+  }
+})
+
+/** Undeploy tracking Worker from a zone */
+app.delete('/admin/cloudflare/undeploy/:domain', requirePlatformAdmin(), async (c) => {
+  try {
+    const domain = c.req.param('domain')
+    const orgId = c.req.query('orgId') || 'platform'
+    await cloudflareService.undeployTrackingWorker(orgId, domain)
+    return success(c, undefined, 'Tracking Worker removed')
+  } catch (e: any) {
+    return error(c, e.message, 500)
+  }
+})
+
+/** Get tracking analytics from D1 */
+app.get('/admin/cloudflare/analytics', requirePlatformAdmin(), async (c) => {
+  try {
+    const orgId = c.req.query('orgId') || 'platform'
+    const domain = c.req.query('domain')
+    if (!domain) return error(c, 'domain query param required', 400)
+
+    const stats = await cloudflareService.getTrackingStats(orgId, domain)
+    return success(c, stats)
+  } catch (e: any) {
+    return error(c, e.message, 500)
+  }
+})
+
+/** Get webhook registration status */
+app.get('/admin/platform/settings/webhook-status', requirePlatformAdmin(), (c) => {
+  const status = webhookRegistrationService.getWebhookStatus()
+  return success(c, { registered: !!status, status })
 })
 
 // ============================================================================

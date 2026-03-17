@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import ContactTimeline from '../components/contacts/ContactTimeline.vue'
+import ContactPreferences from '../components/contacts/ContactPreferences.vue'
 import ContactFormModal from '../components/contacts/ContactFormModal.vue'
 import ImportModal from '../components/contacts/ImportModal.vue'
 import ContactFilters from '../components/contacts/ContactFilters.vue'
@@ -57,6 +59,10 @@ const showBulkTagModal = ref(false)
 const showBulkMoveModal = ref(false)
 const showValidateModal = ref(false)
 const showDuplicatesModal = ref(false)
+const showTimelineModal = ref(false)
+const timelineContactId = ref('')
+const timelineContactName = ref('')
+const timelineTab = ref<'activity' | 'preferences'>('activity')
 const duplicates = ref<DuplicateGroup[]>([])
 const duplicatesLoading = ref(false)
 const mergingId = ref<string | null>(null)
@@ -203,6 +209,13 @@ async function handleUpdateContact(data: { id?: string } & Partial<ContactInput>
   } catch (e: any) {
     toast.error(e.message)
   }
+}
+
+function openTimeline(contact: Contact) {
+  timelineContactId.value = contact.id
+  timelineContactName.value = contact.first_name ? `${contact.first_name} ${contact.last_name || ''}`.trim() : contact.email
+  timelineTab.value = 'activity'
+  showTimelineModal.value = true
 }
 
 function handleBulkDelete() {
@@ -421,6 +434,7 @@ function toggleSelectAll() {
               @toggle-select="toggleSelect"
               @toggle-select-all="toggleSelectAll"
               @edit="openEditContact"
+              @timeline="openTimeline"
             />
 
             <!-- Pagination -->
@@ -516,6 +530,24 @@ function toggleSelectAll() {
         @confirm="deleteConfirm.type === 'list' ? confirmDeleteList() : confirmBulkDelete()"
         @cancel="deleteConfirm.show = false"
       />
+      <!-- Timeline / Preferences Modal -->
+      <Modal :show="showTimelineModal" :title="timelineContactName" size="md" @close="showTimelineModal = false">
+        <div class="flex gap-1 mb-4 border-b border-border">
+          <button
+            class="px-3 py-2 text-xs font-medium transition-all border-b-2"
+            :class="timelineTab === 'activity' ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-secondary'"
+            @click="timelineTab = 'activity'"
+          >Activity</button>
+          <button
+            class="px-3 py-2 text-xs font-medium transition-all border-b-2"
+            :class="timelineTab === 'preferences' ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-secondary'"
+            @click="timelineTab = 'preferences'"
+          >Preferences</button>
+        </div>
+        <ContactTimeline v-if="timelineTab === 'activity' && timelineContactId" :contact-id="timelineContactId" />
+        <ContactPreferences v-if="timelineTab === 'preferences' && timelineContactId" :contact-id="timelineContactId" />
+      </Modal>
+
       <!-- Duplicates Modal -->
       <Modal :show="showDuplicatesModal" title="Duplicate Contacts" size="lg" @close="showDuplicatesModal = false">
         <div v-if="duplicatesLoading" class="flex justify-center py-12">

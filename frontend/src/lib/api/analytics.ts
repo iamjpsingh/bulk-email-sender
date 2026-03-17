@@ -7,6 +7,20 @@ import { api } from './client'
 // Analytics Types
 // ============================================================================
 
+export interface EmailHealth {
+  score: number
+  rating: 'Excellent' | 'Good' | 'Needs Improvement' | 'Poor'
+  metrics: {
+    bounce_rate: number
+    complaint_rate: number
+    unsubscribe_rate: number
+    open_rate: number
+    click_rate: number
+    total_sent: number
+  }
+  recommendations: string[]
+}
+
 export interface AnalyticsSummary {
   total_campaigns: number
   total_emails_sent: number
@@ -185,6 +199,11 @@ export const analyticsApi = {
     const res = await api.get<any>('/analytics/time')
     return res.data
   },
+  getEmailHealth: async (): Promise<EmailHealth> => {
+    const res = await api.get<EmailHealth>('/analytics/email-health')
+    return res.data || { score: 0, rating: 'Poor', metrics: { bounce_rate: 0, complaint_rate: 0, unsubscribe_rate: 0, open_rate: 0, click_rate: 0, total_sent: 0 }, recommendations: [] }
+  },
+
   export: async (format: string): Promise<Blob> => {
     const response = await fetch(`/api/analytics/export?format=${format}`, {
       credentials: 'include',

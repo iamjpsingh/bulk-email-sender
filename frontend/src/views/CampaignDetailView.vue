@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StatCard from '../components/ui/StatCard.vue'
+import ClickHeatmap from '../components/analytics/ClickHeatmap.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ProgressBar from '../components/ui/ProgressBar.vue'
 import Skeleton from '../components/ui/Skeleton.vue'
@@ -282,6 +283,11 @@ function campaignTypeLabel(type: string | undefined): string {
         <StatCard :icon="MousePointer" :value="formatNumber(stats?.clicked ?? campaign.click_count)" :label="`Clicks (${formatRate(stats?.click_rate)}%)`" color="accent" />
         <StatCard :icon="AlertTriangle" :value="formatNumber(stats?.bounced ?? campaign.bounce_count)" label="Bounced" color="danger" />
         <StatCard :icon="UserMinus" :value="formatNumber(stats?.unsubscribed ?? campaign.unsubscribe_count)" label="Unsubscribed" color="warning" />
+      </div>
+
+      <!-- Click Heatmap -->
+      <div class="mb-6" v-if="campaign.status === 'completed' || campaign.status === 'sending'">
+        <ClickHeatmap :campaign-id="campaign.id" />
       </div>
 
       <!-- Campaign Details -->

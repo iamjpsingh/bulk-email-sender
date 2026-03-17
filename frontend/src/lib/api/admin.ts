@@ -331,6 +331,12 @@ export const adminApi = {
     if (!res.success) throw new Error(res.message || 'Failed to get auth URL')
     return res.data!.authUrl
   },
+
+  // --- Webhook Registration Status ---
+  getWebhookStatus: async (): Promise<{ registered: boolean; status: any }> => {
+    const res = await api.get<any>('/admin/platform/settings/webhook-status')
+    return res.data!
+  },
 }
 
 export type ProviderType = 'smtp' | 'ses' | 'sendgrid' | 'mailgun' | 'postmark' | 'sparkpost' | 'gmail' | 'outlook'
