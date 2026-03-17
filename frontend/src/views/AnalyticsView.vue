@@ -10,6 +10,7 @@ import { analyticsApi } from '../lib/api'
 import PageHeader from '../components/ui/PageHeader.vue'
 import StatCard from '../components/ui/StatCard.vue'
 import EmailHealthDashboard from '../components/analytics/EmailHealthDashboard.vue'
+import ReportBuilder from '../components/analytics/ReportBuilder.vue'
 import { BarChart3, Mail, TrendingUp, MousePointer, AlertTriangle, Clock } from 'lucide-vue-next'
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
@@ -342,6 +343,10 @@ async function exportData(format: 'csv' | 'json') {
           </div>
         </section>
       </div>
+      <!-- Custom Report Builder -->
+      <section class="mb-8">
+        <ReportBuilder />
+      </section>
     </template>
   </div>
 </template>

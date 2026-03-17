@@ -607,6 +607,33 @@ class AnalyticsService {
     if (lower.includes('tablet') || lower.includes('ipad')) return 'tablet'
     return 'desktop'
   }
+
+  /**
+   * Get raw event records for deep analytics parsing.
+   * Returns events with user_agent, referrer, etc. for UA/geo analysis.
+   */
+  getRawEvents(orgId: string, campaignId: string, limit = 1000): any[] {
+    try {
+      return this.db.prepare(`
+        SELECT * FROM analytics_events
+        WHERE org_id = ? AND campaign_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `).all(orgId, campaignId, limit) as any[]
+    } catch {
+      // Table may not have org_id or campaign_id — try without filters
+      try {
+        return this.db.prepare(`
+          SELECT * FROM analytics_events
+          WHERE campaign_id = ?
+          ORDER BY created_at DESC
+          LIMIT ?
+        `).all(campaignId, limit) as any[]
+      } catch {
+        return []
+      }
+    }
+  }
 }
 
 export const analyticsService = new AnalyticsService()

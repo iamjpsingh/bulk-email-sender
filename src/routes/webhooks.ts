@@ -310,4 +310,93 @@ app.post('/webhooks/bounce/sparkpost', async (c) => {
   }
 })
 
+// ============================================================================
+// Inbound Email (Reply Tracking)
+// Providers forward inbound emails to these endpoints.
+// We match replies to campaigns via In-Reply-To / References headers.
+// ============================================================================
+
+app.post('/webhooks/inbound/sendgrid', async (c) => {
+  try {
+    // SendGrid Inbound Parse sends multipart/form-data
+    const body = await c.req.parseBody()
+    const from = String(body.from || '')
+    const to = String(body.to || '')
+    const subject = String(body.subject || '')
+    const text = String(body.text || '')
+    const inReplyTo = String(body.headers || '').match(/In-Reply-To:\s*<([^>]+)>/i)?.[1] || ''
+
+    logger.info(`[Reply] Inbound from ${from} — subject: ${subject}${inReplyTo ? ` — reply to: ${inReplyTo}` : ''}`)
+
+    eventBus.emit('email_reply_received', {
+      provider: 'sendgrid',
+      from,
+      to,
+      subject,
+      textBody: text.substring(0, 1000),
+      inReplyTo,
+    })
+
+    return c.json({ ok: true })
+  } catch (err) {
+    logger.error('SendGrid inbound error:', err)
+    return c.json({ ok: false }, 400)
+  }
+})
+
+app.post('/webhooks/inbound/mailgun', async (c) => {
+  try {
+    const body = await c.req.parseBody()
+    const from = String(body.from || body.sender || '')
+    const to = String(body.recipient || '')
+    const subject = String(body.subject || '')
+    const text = String(body['body-plain'] || '')
+    const inReplyTo = String(body['In-Reply-To'] || body['message-headers'] || '')
+      .match(/<([^>]+)>/)?.[1] || ''
+
+    logger.info(`[Reply] Inbound from ${from} — subject: ${subject}`)
+
+    eventBus.emit('email_reply_received', {
+      provider: 'mailgun',
+      from,
+      to,
+      subject,
+      textBody: text.substring(0, 1000),
+      inReplyTo,
+    })
+
+    return c.json({ ok: true })
+  } catch (err) {
+    logger.error('Mailgun inbound error:', err)
+    return c.json({ ok: false }, 400)
+  }
+})
+
+app.post('/webhooks/inbound/postmark', async (c) => {
+  try {
+    const payload = await c.req.json()
+    const from = payload.FromFull?.Email || payload.From || ''
+    const to = payload.ToFull?.[0]?.Email || payload.To || ''
+    const subject = payload.Subject || ''
+    const text = payload.TextBody || ''
+    const inReplyTo = (payload.Headers || []).find((h: any) => h.Name === 'In-Reply-To')?.Value?.replace(/[<>]/g, '') || ''
+
+    logger.info(`[Reply] Inbound from ${from} — subject: ${subject}`)
+
+    eventBus.emit('email_reply_received', {
+      provider: 'postmark',
+      from,
+      to,
+      subject,
+      textBody: text.substring(0, 1000),
+      inReplyTo,
+    })
+
+    return c.json({ ok: true })
+  } catch (err) {
+    logger.error('Postmark inbound error:', err)
+    return c.json({ ok: false }, 400)
+  }
+})
+
 export default app

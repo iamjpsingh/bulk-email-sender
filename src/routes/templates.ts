@@ -6,6 +6,7 @@ import { requireAuth, getOrgId } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
 import { PERMISSIONS } from '../services/rbacService'
 import { templateService, type TemplateCategory } from '../services/templateService'
+import mjml2html from 'mjml'
 import { d1UserDatabase } from '../services/d1UserDatabase'
 import { createTransport, configFromRecord } from '../services/transports'
 import { htmlToText } from '../utils/htmlToText'
@@ -210,6 +211,119 @@ app.post('/templates/:id/test-send', requirePermission(PERMISSIONS.TEMPLATES_MAN
     return success(c, { messageId: result.messageId }, `Test email sent to ${recipientEmail}`)
   } catch (err: any) {
     return error(c, `Failed to send test: ${err.message}`, 500)
+  }
+})
+
+// ============================================================================
+// Reusable Template Sections
+// ============================================================================
+
+const SectionSchema = z.object({
+  name: z.string().min(1, 'Section name is required').max(200),
+  category: z.enum(['header', 'footer', 'cta', 'hero', 'social', 'divider', 'general']).optional(),
+  html_content: z.string().min(1, 'HTML content is required'),
+})
+
+app.get('/templates/sections', requirePermission(PERMISSIONS.TEMPLATES_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const category = c.req.query('category')
+  const sections = templateService.listSections(orgId, category || undefined)
+  return success(c, { sections })
+})
+
+app.post('/templates/sections', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), async (c) => {
+  const user = requireAuth(c)
+  const orgId = getOrgId(c)
+  const body = await validateBody(c, SectionSchema)
+  const section = templateService.createSection(orgId, user.id, body)
+  return success(c, section, 'Section created', 201)
+})
+
+app.get('/templates/sections/:id', requirePermission(PERMISSIONS.TEMPLATES_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const section = templateService.getSection(orgId, c.req.param('id'))
+  if (!section) return error(c, 'Section not found', 404)
+  return success(c, section)
+})
+
+app.put('/templates/sections/:id', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const body = await validateBody(c, SectionSchema.partial())
+  const updated = templateService.updateSection(orgId, c.req.param('id'), body)
+  if (!updated) return error(c, 'Section not found', 404)
+  return success(c, undefined, 'Section updated')
+})
+
+app.delete('/templates/sections/:id', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), (c) => {
+  const orgId = getOrgId(c)
+  const deleted = templateService.deleteSection(orgId, c.req.param('id'))
+  if (!deleted) return error(c, 'Section not found', 404)
+  return success(c, undefined, 'Section deleted')
+})
+
+app.post('/templates/sections/:id/use', requirePermission(PERMISSIONS.TEMPLATES_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const section = templateService.getSection(orgId, c.req.param('id'))
+  if (!section) return error(c, 'Section not found', 404)
+  templateService.incrementSectionUsage(c.req.param('id'))
+  return success(c, { html_content: section.html_content })
+})
+
+// ============================================================================
+// MJML Compilation
+// ============================================================================
+
+const MjmlSchema = z.object({
+  mjml: z.string().min(1, 'MJML source is required'),
+})
+
+/** Compile MJML source to responsive HTML */
+app.post('/templates/compile', requirePermission(PERMISSIONS.TEMPLATES_VIEW), async (c) => {
+  const body = await validateBody(c, MjmlSchema)
+
+  try {
+    const result = mjml2html(body.mjml, {
+      validationLevel: 'soft',
+      minify: false,
+    })
+
+    return success(c, {
+      html: result.html,
+      errors: result.errors?.map((e: any) => ({ line: e.line, message: e.message, tagName: e.tagName })) || [],
+    })
+  } catch (err: any) {
+    return error(c, `MJML compilation failed: ${err.message}`, 400)
+  }
+})
+
+/** Compile MJML and save as template */
+app.post('/templates/from-mjml', requirePermission(PERMISSIONS.TEMPLATES_MANAGE), async (c) => {
+  const user = requireAuth(c)
+  const orgId = getOrgId(c)
+
+  const FromMjmlSchema = z.object({
+    name: z.string().min(1).max(200),
+    mjml: z.string().min(1),
+    subject: z.string().max(500).optional(),
+    category: z.string().max(50).optional() as any,
+    description: z.string().max(1000).optional(),
+  })
+
+  const body = await validateBody(c, FromMjmlSchema)
+
+  try {
+    const result = mjml2html(body.mjml, { validationLevel: 'soft' })
+    const template = templateService.create(orgId, user.id, {
+      name: body.name,
+      html_content: result.html,
+      subject: body.subject,
+      category: body.category,
+      description: body.description,
+      mjml_source: body.mjml,
+    })
+    return success(c, template, 'Template created from MJML')
+  } catch (err: any) {
+    return error(c, `MJML compilation failed: ${err.message}`, 400)
   }
 })
 

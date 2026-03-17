@@ -181,9 +181,13 @@ class AutomationService {
       CREATE INDEX IF NOT EXISTS idx_ae_contact ON automation_enrollments(contact_id);
     `)
 
-    // Add org_id to existing tables (idempotent)
+    // Add columns to existing tables (idempotent)
     try { this.db.exec('ALTER TABLE automations ADD COLUMN org_id TEXT') } catch {}
+    try { this.db.exec('ALTER TABLE automations ADD COLUMN goal_condition TEXT') } catch {}
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_auto_org ON automations(org_id)')
+
+    // Expand step_type CHECK constraint (SQLite doesn't support ALTER CHECK, so new types work via INSERT)
+    // New types: send_whatsapp, filter, split_test, delay_until, http_request, score_change
 
     logger.info('Automations database initialized (data/automations.db)')
   }
@@ -216,7 +220,7 @@ class AutomationService {
     `).get(automationId, orgId) as Automation | null
   }
 
-  update(orgId: string, automationId: string, updates: Partial<AutomationInput>): boolean {
+  update(orgId: string, automationId: string, updates: Partial<AutomationInput> & { goal_condition?: string | null; flow_json?: string }): boolean {
     const sets: string[] = []
     const params: any[] = []
 
@@ -226,6 +230,8 @@ class AutomationService {
     if (updates.trigger_config !== undefined) { sets.push('trigger_config = ?'); params.push(JSON.stringify(updates.trigger_config)) }
     if (updates.entry_list_id !== undefined) { sets.push('entry_list_id = ?'); params.push(updates.entry_list_id) }
     if (updates.flow !== undefined) { sets.push('flow_json = ?'); params.push(JSON.stringify(updates.flow)) }
+    if (updates.flow_json !== undefined) { sets.push('flow_json = ?'); params.push(updates.flow_json) }
+    if (updates.goal_condition !== undefined) { sets.push('goal_condition = ?'); params.push(updates.goal_condition) }
 
     if (sets.length === 0) return false
 
@@ -412,6 +418,13 @@ class AutomationService {
 
     for (const enrollment of due) {
       try {
+        // Check goal condition before executing step
+        if (this.checkGoal(enrollment)) {
+          this.exitWithGoal(enrollment.id, enrollment.automation_id)
+          processed++
+          continue
+        }
+
         this.executeStep(enrollment)
         processed++
       } catch (err) {
@@ -576,6 +589,44 @@ class AutomationService {
         `).run(enrollment.automation_id)
         break
     }
+  }
+
+  /**
+   * Check if a contact has achieved the automation's goal.
+   * If goal is met, the enrollment should exit early.
+   */
+  private checkGoal(enrollment: { id: string; automation_id: string; contact_id: string; org_id: string }): boolean {
+    const automation = this.db.prepare('SELECT goal_condition FROM automations WHERE id = ?').get(enrollment.automation_id) as any
+    if (!automation?.goal_condition) return false
+
+    try {
+      const goal = JSON.parse(automation.goal_condition) as { field: string; operator: string; value: string }
+      if (!goal.field) return false
+
+      const contact = contactService.getContact(enrollment.org_id || '', enrollment.contact_id)
+      if (!contact) return false
+
+      return evaluateCondition(contact, goal)
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Exit an enrollment because the goal was achieved.
+   */
+  private exitWithGoal(enrollmentId: string, automationId: string): void {
+    this.db.prepare(`
+      UPDATE automation_enrollments
+      SET status = 'exited', exit_reason = 'goal_achieved', completed_at = datetime('now')
+      WHERE id = ?
+    `).run(enrollmentId)
+
+    this.db.prepare(`
+      UPDATE automations SET completed_count = completed_count + 1 WHERE id = ?
+    `).run(automationId)
+
+    logger.info(`[Automation] Enrollment ${enrollmentId} exited — goal achieved`)
   }
 
   private advanceToNext(enrollmentId: string, nextStepId: string | null): void {

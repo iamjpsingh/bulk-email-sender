@@ -175,4 +175,39 @@ app.get('/automations/:id/stats', requirePermission(PERMISSIONS.AUTOMATIONS_VIEW
   return success(c, stats)
 })
 
+// ============================================================================
+// Goal-Based Exit
+// ============================================================================
+
+const GoalSchema = z.object({
+  field: z.string().min(1),
+  operator: z.string().min(1),
+  value: z.string(),
+})
+
+/** Set goal condition for an automation */
+app.put('/automations/:id/goal', requirePermission(PERMISSIONS.AUTOMATIONS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const automationId = c.req.param('id')
+  const body = await validateBody(c, GoalSchema)
+
+  const automation = automationService.get(orgId, automationId)
+  if (!automation) return error(c, 'Automation not found', 404)
+
+  automationService.update(orgId, automationId, { goal_condition: JSON.stringify(body) })
+  return success(c, undefined, 'Goal condition set')
+})
+
+/** Remove goal condition */
+app.delete('/automations/:id/goal', requirePermission(PERMISSIONS.AUTOMATIONS_MANAGE), (c) => {
+  const orgId = getOrgId(c)
+  const automationId = c.req.param('id')
+
+  const automation = automationService.get(orgId, automationId)
+  if (!automation) return error(c, 'Automation not found', 404)
+
+  automationService.update(orgId, automationId, { goal_condition: null })
+  return success(c, undefined, 'Goal condition removed')
+})
+
 export default app

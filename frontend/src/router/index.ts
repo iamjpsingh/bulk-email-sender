@@ -238,14 +238,32 @@ router.beforeEach(async (to, _from, next) => {
   if (requiresAuth && !isAuthenticated.value) {
     next({ path: '/login', replace: true })
   } else if (isGuestRoute && isAuthenticated.value) {
-    next({ path: '/', replace: true })
+    // Platform admin goes to platform dashboard, not org dashboard
+    const { isPlatformAdmin } = useAuth()
+    if (isPlatformAdmin.value) {
+      next({ path: '/admin/platform', replace: true })
+    } else {
+      next({ path: '/', replace: true })
+    }
   } else if (requiresAuth && isAuthenticated.value) {
+    const { isPlatformAdmin } = useAuth()
+
+    // Platform admin: block org-scoped routes, redirect to platform
+    if (isPlatformAdmin.value) {
+      const isPlatformRoute = to.path.startsWith('/admin/platform')
+      if (!isPlatformRoute && to.path !== '/') {
+        next({ path: '/admin/platform', replace: true })
+        return
+      }
+    }
+
     // Permission gating: admin routes require admin role
     const isAdminRoute = to.path.startsWith('/admin')
     const isSettingsRoute = to.path.startsWith('/settings')
     if (isAdminRoute || isSettingsRoute) {
       const { isAdmin, can } = usePermissions()
-      if (isAdminRoute && !isAdmin.value) {
+      // Platform admin can access /admin/platform* routes
+      if (isAdminRoute && !isAdmin.value && !isPlatformAdmin.value) {
         next({ path: '/', replace: true })
         return
       }

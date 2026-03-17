@@ -198,11 +198,7 @@ if (typeof window !== 'undefined') {
         class="flex-1 px-6 py-6"
       >
         <div class="max-w-[1400px] mx-auto">
-          <RouterView v-slot="{ Component }">
-            <Transition name="page" mode="out-in">
-              <component :is="Component" />
-            </Transition>
-          </RouterView>
+          <RouterView />
         </div>
       </main>
     </div>

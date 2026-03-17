@@ -161,6 +161,24 @@ app.post('/campaigns/:id/schedule', requirePermission(PERMISSIONS.CAMPAIGNS_MANA
   return success(c, undefined, 'Campaign scheduled')
 })
 
+/** Reschedule an already-scheduled campaign (for calendar drag-and-drop) */
+app.post('/campaigns/:id/reschedule', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const campaignId = c.req.param('id')
+  const { scheduled_at } = await validateBody(c, ScheduleSchema)
+
+  const campaign = campaignService.get(orgId, campaignId)
+  if (!campaign) return error(c, 'Campaign not found', 404)
+  if (!['draft', 'scheduled', 'testing'].includes(campaign.status)) {
+    return error(c, 'Can only reschedule draft or scheduled campaigns', 400)
+  }
+
+  const rescheduled = campaignService.schedule(orgId, campaignId, scheduled_at)
+  if (!rescheduled) return error(c, 'Failed to reschedule', 500)
+
+  return success(c, { scheduled_at }, 'Campaign rescheduled')
+})
+
 app.post('/campaigns/:id/launch', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), (c) => {
   const orgId = getOrgId(c)
   const campaignId = c.req.param('id')

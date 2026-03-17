@@ -123,6 +123,10 @@ export const campaignsApi = {
   schedule: async (id: string, scheduledAt: string) => {
     await api.post(`/campaigns/${id}/schedule`, { scheduled_at: scheduledAt })
   },
+  reschedule: async (id: string, scheduledAt: string) => {
+    const res = await api.post(`/campaigns/${id}/reschedule`, { scheduled_at: scheduledAt })
+    if (!res.success) throw new Error(res.message || 'Failed to reschedule')
+  },
 
   getStats: async (id: string) => {
     const res = await api.get<any>(`/campaigns/${id}/stats`)

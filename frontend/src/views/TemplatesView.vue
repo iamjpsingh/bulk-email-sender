@@ -10,8 +10,9 @@ import { templatesApi } from '../lib/api'
 import type { Template as TemplateType } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import HtmlCodeEditor from '../components/compose/HtmlCodeEditor.vue'
+import EmailBuilder from '../components/editor/EmailBuilder.vue'
 import Modal from '../components/ui/Modal.vue'
-import { FileText, Plus, Pencil, Trash2, Copy, Loader2, Inbox, Send } from 'lucide-vue-next'
+import { FileText, Plus, Pencil, Trash2, Copy, Loader2, Inbox, Send, Paintbrush, Code2 } from 'lucide-vue-next'
 
 const toast = useToast()
 
@@ -28,6 +29,7 @@ const searchQuery = ref('')
 const showEditor = ref(false)
 const editingId = ref<string | null>(null)
 const saving = ref(false)
+const editorMode = ref<'code' | 'visual'>('code')
 const previewHtml = ref('')
 const deleteConfirm = ref<{ show: boolean; id: string }>({ show: false, id: '' })
 
@@ -408,13 +410,33 @@ fetchStarters()
           </div>
         </div>
 
-        <!-- Monaco HTML editor -->
-        <div class="flex-1 px-5 pb-0 min-h-0">
-          <label class="form-label mb-1.5">HTML Content</label>
+        <!-- Editor mode toggle + content -->
+        <div class="flex-1 px-5 pb-0 min-h-0 flex flex-col">
+          <div class="flex items-center gap-2 mb-1.5">
+            <label class="form-label mb-0">Content</label>
+            <div class="flex gap-1 ml-auto">
+              <button
+                :class="['px-2 py-1 rounded text-[11px] font-medium transition', editorMode === 'code' ? 'bg-accent text-white' : 'bg-surface-2 text-text-muted hover:text-text-secondary']"
+                @click="editorMode = 'code'"
+              ><Code2 :size="11" class="inline mr-0.5" /> Code</button>
+              <button
+                :class="['px-2 py-1 rounded text-[11px] font-medium transition', editorMode === 'visual' ? 'bg-accent text-white' : 'bg-surface-2 text-text-muted hover:text-text-secondary']"
+                @click="editorMode = 'visual'"
+              ><Paintbrush :size="11" class="inline mr-0.5" /> Visual</button>
+            </div>
+          </div>
           <HtmlCodeEditor
+            v-if="editorMode === 'code'"
             :content="form.html_content"
             @update:content="form.html_content = $event"
-            class="h-[calc(100%-28px)]!"
+            class="flex-1 min-h-0"
+          />
+          <EmailBuilder
+            v-if="editorMode === 'visual'"
+            :content="form.html_content"
+            @save="(html) => { form.html_content = html }"
+            @change="(html) => { form.html_content = html }"
+            class="flex-1 min-h-0"
           />
         </div>
 

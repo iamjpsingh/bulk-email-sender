@@ -37,6 +37,7 @@ export interface TemplateInput {
   subject?: string
   html_content: string
   text_content?: string
+  mjml_source?: string
 }
 
 export interface TemplateFilters {
@@ -96,9 +97,29 @@ class TemplateService {
       CREATE INDEX IF NOT EXISTS idx_tpl_starter ON templates(is_starter);
     `)
 
-    // Add org_id to existing tables (idempotent)
+    // Add columns to existing tables (idempotent)
     try { this.db.exec('ALTER TABLE templates ADD COLUMN org_id TEXT') } catch {}
+    try { this.db.exec('ALTER TABLE templates ADD COLUMN mjml_source TEXT') } catch {}
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_tpl_org ON templates(org_id)')
+
+    // Reusable template sections (headers, footers, CTAs, etc.)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS template_sections (
+        id TEXT PRIMARY KEY,
+        org_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        category TEXT DEFAULT 'general' CHECK (category IN ('header', 'footer', 'cta', 'hero', 'social', 'divider', 'general')),
+        html_content TEXT NOT NULL,
+        thumbnail TEXT,
+        usage_count INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ts_org ON template_sections(org_id);
+      CREATE INDEX IF NOT EXISTS idx_ts_category ON template_sections(category);
+    `)
 
     logger.info('Templates database initialized (data/templates.db)')
   }
@@ -171,8 +192,8 @@ class TemplateService {
     const variables = this.extractVariables(input.html_content)
 
     this.db.prepare(`
-      INSERT INTO templates (id, org_id, user_id, name, description, category, subject, html_content, text_content, variables)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO templates (id, org_id, user_id, name, description, category, subject, html_content, text_content, variables, mjml_source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, orgId, userId,
       input.name,
@@ -181,7 +202,8 @@ class TemplateService {
       input.subject || null,
       input.html_content,
       input.text_content || null,
-      JSON.stringify(variables)
+      JSON.stringify(variables),
+      input.mjml_source || null
     )
 
     return this.db.prepare('SELECT * FROM templates WHERE id = ?').get(id) as Template
@@ -359,6 +381,52 @@ class TemplateService {
 
     // Fallback to the original template
     return this.get(orgId, templateId)
+  }
+
+  // --------------------------------------------------------------------------
+  // Reusable Template Sections
+  // --------------------------------------------------------------------------
+
+  createSection(orgId: string, userId: string, input: { name: string; category?: string; html_content: string }): any {
+    const id = generateId('sec')
+    this.db.prepare(`
+      INSERT INTO template_sections (id, org_id, user_id, name, category, html_content)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, orgId, userId, input.name, input.category || 'general', input.html_content)
+    return this.db.prepare('SELECT * FROM template_sections WHERE id = ?').get(id)
+  }
+
+  listSections(orgId: string, category?: string): any[] {
+    if (category) {
+      return this.db.prepare('SELECT * FROM template_sections WHERE org_id = ? AND category = ? ORDER BY usage_count DESC, created_at DESC').all(orgId, category) as any[]
+    }
+    return this.db.prepare('SELECT * FROM template_sections WHERE org_id = ? ORDER BY usage_count DESC, created_at DESC').all(orgId) as any[]
+  }
+
+  getSection(orgId: string, sectionId: string): any {
+    return this.db.prepare('SELECT * FROM template_sections WHERE id = ? AND org_id = ?').get(sectionId, orgId)
+  }
+
+  updateSection(orgId: string, sectionId: string, updates: { name?: string; category?: string; html_content?: string }): boolean {
+    const sets: string[] = []
+    const params: any[] = []
+    if (updates.name !== undefined) { sets.push('name = ?'); params.push(updates.name) }
+    if (updates.category !== undefined) { sets.push('category = ?'); params.push(updates.category) }
+    if (updates.html_content !== undefined) { sets.push('html_content = ?'); params.push(updates.html_content) }
+    if (sets.length === 0) return false
+    sets.push("updated_at = datetime('now')")
+    params.push(sectionId, orgId)
+    const result = this.db.prepare(`UPDATE template_sections SET ${sets.join(', ')} WHERE id = ? AND org_id = ?`).run(...params)
+    return result.changes > 0
+  }
+
+  deleteSection(orgId: string, sectionId: string): boolean {
+    const result = this.db.prepare('DELETE FROM template_sections WHERE id = ? AND org_id = ?').run(sectionId, orgId)
+    return result.changes > 0
+  }
+
+  incrementSectionUsage(sectionId: string): void {
+    this.db.prepare('UPDATE template_sections SET usage_count = usage_count + 1 WHERE id = ?').run(sectionId)
   }
 }
 

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { ChevronLeft, ChevronRight, X as XIcon, Calendar } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, X as XIcon, Calendar, GripVertical } from 'lucide-vue-next'
 import { useCampaigns } from '../lib/query'
+import { campaignsApi } from '../lib/api'
+import { useToast } from '../composables/useToast'
 import PageHeader from '../components/ui/PageHeader.vue'
 
 type ViewMode = 'month' | 'week' | 'day'
@@ -14,11 +16,14 @@ interface Campaign {
   scheduledAt: string
 }
 
+const toast = useToast()
 const viewMode = ref<ViewMode>('month')
 const currentDate = ref(new Date())
 const selectedDate = ref<Date | null>(null)
+const draggingCampaign = ref<Campaign | null>(null)
+const dragOverDate = ref<string | null>(null)
 
-const { data: campaignsData } = useCampaigns()
+const { data: campaignsData, refetch } = useCampaigns()
 
 const campaigns = computed<Campaign[]>(() => {
   if (!campaignsData.value) return []
@@ -133,6 +138,56 @@ function formatTime(dateStr: string): string {
 function isToday(date: Date): boolean {
   return isSameDay(date, new Date())
 }
+
+// Drag-and-drop rescheduling
+function onDragStart(e: DragEvent, campaign: Campaign) {
+  if (!['draft', 'scheduled', 'testing'].includes(campaign.status)) {
+    e.preventDefault()
+    return
+  }
+  draggingCampaign.value = campaign
+  e.dataTransfer?.setData('text/plain', campaign.id)
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+}
+
+function onDragOver(e: DragEvent, date: Date) {
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dragOverDate.value = date.toISOString()
+}
+
+function onDragLeave() {
+  dragOverDate.value = null
+}
+
+async function onDrop(e: DragEvent, date: Date) {
+  e.preventDefault()
+  dragOverDate.value = null
+  const campaign = draggingCampaign.value
+  draggingCampaign.value = null
+  if (!campaign) return
+
+  // Keep the original time, just change the date
+  const original = new Date(campaign.scheduledAt)
+  const newDate = new Date(date)
+  newDate.setHours(original.getHours(), original.getMinutes(), 0, 0)
+
+  try {
+    await campaignsApi.reschedule(campaign.id, newDate.toISOString())
+    toast.success(`"${campaign.name}" rescheduled to ${newDate.toLocaleDateString()}`)
+    refetch()
+  } catch (err: any) {
+    toast.error(err.message || 'Failed to reschedule')
+  }
+}
+
+function isDragOver(date: Date): boolean {
+  return dragOverDate.value === date.toISOString()
+}
+
+function isDraggable(campaign: Campaign): boolean {
+  return ['draft', 'scheduled', 'testing'].includes(campaign.status)
+}
 </script>
 
 <template>
@@ -188,17 +243,24 @@ function isToday(date: Date): boolean {
               'opacity-30': !cell.inMonth,
               'is-today': isToday(cell.date),
               'is-selected': selectedDate && isSameDay(cell.date, selectedDate),
+              'is-drag-over': isDragOver(cell.date),
             }"
             @click="selectDate(cell.date)"
+            @dragover="onDragOver($event, cell.date)"
+            @dragleave="onDragLeave"
+            @drop="onDrop($event, cell.date)"
           >
             <span class="day-number text-[13px] font-medium text-text-secondary">{{ cell.date.getDate() }}</span>
             <div class="flex gap-1 mt-1.5 flex-wrap">
               <span
                 v-for="c in getCampaignsForDate(cell.date).slice(0, 3)"
                 :key="c.id"
-                class="w-1.5 h-1.5 rounded-full shrink-0"
+                class="w-1.5 h-1.5 rounded-full shrink-0 cursor-grab active:cursor-grabbing"
+                :class="{ 'w-auto h-auto px-1 py-0 text-[9px] font-medium text-white rounded': isDraggable(c) }"
                 :style="{ backgroundColor: statusColors[c.status] || '#71717a' }"
-                :title="c.name"
+                :title="c.name + (isDraggable(c) ? ' (drag to reschedule)' : '')"
+                :draggable="isDraggable(c)"
+                @dragstart="onDragStart($event, c)"
               />
             </div>
             <span
@@ -289,7 +351,13 @@ function isToday(date: Date): boolean {
               <Calendar :size="36" class="text-text-muted mx-auto" />
               <p class="text-text-muted text-sm mt-3">No campaigns scheduled</p>
             </div>
-            <div v-for="c in selectedDayCampaigns" :key="c.id" class="flex gap-3 p-3 bg-bg-tertiary rounded-lg">
+            <div
+              v-for="c in selectedDayCampaigns" :key="c.id"
+              class="flex gap-3 p-3 bg-bg-tertiary rounded-lg"
+              :class="{ 'cursor-grab active:cursor-grabbing': isDraggable(c) }"
+              :draggable="isDraggable(c)"
+              @dragstart="onDragStart($event, c)"
+            >
               <div class="w-1 rounded-full shrink-0" :style="{ backgroundColor: statusColors[c.status] }" />
               <div class="flex-1 min-w-0">
                 <h4 class="text-sm font-semibold m-0 mb-1.5 whitespace-nowrap overflow-hidden text-ellipsis text-text-primary">
@@ -332,6 +400,12 @@ function isToday(date: Date): boolean {
 .day-cell.is-selected {
   background: rgba(6, 182, 212, 0.06);
   box-shadow: inset 0 0 0 1px var(--color-accent, #06b6d4);
+}
+
+/* Drag-over highlight */
+.day-cell.is-drag-over {
+  background: rgba(99, 102, 241, 0.1);
+  box-shadow: inset 0 0 0 2px rgba(99, 102, 241, 0.4);
 }
 
 /* Panel transition */

@@ -107,4 +107,16 @@ export const templatesApi = {
     if (!res.success) throw new Error(res.message || 'Failed to send test email')
     return res.data?.messageId || ''
   },
+
+  // MJML compilation
+  compileMjml: async (mjml: string): Promise<{ html: string; errors: { line: number; message: string }[] }> => {
+    const res = await api.post<{ html: string; errors: any[] }>('/templates/compile', { mjml })
+    return res.data || { html: '', errors: [] }
+  },
+
+  createFromMjml: async (name: string, mjml: string, opts?: { subject?: string; category?: string; description?: string }): Promise<Template> => {
+    const res = await api.post<Template>('/templates/from-mjml', { name, mjml, ...opts })
+    if (!res.success) throw new Error(res.message || 'Failed to create template')
+    return res.data!
+  },
 }
