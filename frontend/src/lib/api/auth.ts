@@ -57,4 +57,20 @@ export const authApi = {
     if (!res.success) throw new Error(res.message || 'Failed to update profile')
     return res.data!.user
   },
+
+  // Username
+  checkUsername: async (username: string): Promise<{ available: boolean; suggestions: string[] }> => {
+    const res = await api.get<any>(`/auth/check-username?username=${encodeURIComponent(username)}`)
+    return res.data!
+  },
+
+  setUsername: async (username: string) => {
+    const res = await api.put('/auth/profile/username', { username })
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  suggestUsername: async (): Promise<string> => {
+    const res = await api.get<{ suggestion: string }>('/auth/profile/username/suggest')
+    return res.data?.suggestion || ''
+  },
 }

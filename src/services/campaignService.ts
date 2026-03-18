@@ -178,8 +178,9 @@ class CampaignService {
       CREATE INDEX IF NOT EXISTS idx_ab_campaign ON ab_variants(campaign_id);
     `)
 
-    // Add org_id to existing tables (idempotent)
+    // Add columns to existing tables (idempotent)
     try { this.db.exec('ALTER TABLE campaigns ADD COLUMN org_id TEXT') } catch {}
+    try { this.db.exec('ALTER TABLE campaigns ADD COLUMN rotation_config TEXT') } catch {}
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_camp_org ON campaigns(org_id)')
 
     logger.info('Campaigns database initialized (data/campaigns.db)')
@@ -237,6 +238,8 @@ class CampaignService {
     if (updates.batch_size !== undefined) { sets.push('batch_size = ?'); params.push(updates.batch_size) }
     if (updates.email_delay !== undefined) { sets.push('email_delay = ?'); params.push(updates.email_delay) }
     if (updates.batch_delay !== undefined) { sets.push('batch_delay = ?'); params.push(updates.batch_delay) }
+    if ((updates as any).ab_config !== undefined) { sets.push('ab_config = ?'); params.push((updates as any).ab_config) }
+    if ((updates as any).rotation_config !== undefined) { sets.push('rotation_config = ?'); params.push((updates as any).rotation_config) }
 
     if (sets.length === 0) return false
 

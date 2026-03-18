@@ -186,6 +186,23 @@ export const campaignsApi = {
     const res = await api.post(`/campaigns/graymail/reset/${encodeURIComponent(email)}`)
     if (!res.success) throw new Error(res.message || 'Failed')
   },
+
+  // Rotation
+  getRotation: async (id: string): Promise<RotationConfig> => {
+    const res = await api.get<RotationConfig>(`/campaigns/${id}/rotation`)
+    return res.data || { mode: 'smart', config_ids: [], weights: {} }
+  },
+
+  setRotation: async (id: string, config: RotationConfig) => {
+    const res = await api.put(`/campaigns/${id}/rotation`, config)
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+}
+
+export interface RotationConfig {
+  mode: 'smart' | 'manual' | 'round_robin' | 'weighted'
+  config_ids?: string[]
+  weights?: Record<string, number>
 }
 
 export interface FrequencyCapConfig {

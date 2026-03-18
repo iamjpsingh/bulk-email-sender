@@ -62,6 +62,9 @@ const batchSize = ref(20)
 const batchDelay = ref(60)
 const emailDelay = ref(45)
 
+// Rotation
+const rotationMode = ref('smart')
+
 // Schedule
 const useSchedule = ref(false)
 const scheduledTime = ref('')
@@ -624,6 +627,28 @@ onMounted(() => { fetchTemplates() })
               </label>
               <input v-model="notifyEmail" type="email" class="form-input" placeholder="you@example.com" />
             </div>
+          </div>
+        </div>
+
+        <!-- Server Rotation -->
+        <div class="card">
+          <h3 class="card-title">
+            <Zap :size="16" class="text-accent" />
+            Server Rotation
+            <InfoTip text="When you have multiple sending providers, choose how to distribute emails across them. Smart mode picks the best provider automatically." side="right" />
+          </h3>
+          <div class="flex flex-col gap-2">
+            <label v-for="mode in [
+              { value: 'smart', label: 'Smart (Auto)', desc: 'Score-based selection — picks best provider by quota, speed, and success rate' },
+              { value: 'round_robin', label: 'Round Robin', desc: 'Distribute evenly across all configured providers' },
+              { value: 'manual', label: 'Manual', desc: 'Use only the selected provider above' },
+            ]" :key="mode.value" class="flex items-start gap-2.5 p-2.5 rounded-lg border border-border cursor-pointer hover:border-accent/30 transition" :class="rotationMode === mode.value ? 'border-accent/40 bg-accent/5' : ''">
+              <input type="radio" :value="mode.value" v-model="rotationMode" class="mt-0.5 accent-accent" />
+              <div>
+                <div class="text-xs font-medium" :class="rotationMode === mode.value ? 'text-accent' : 'text-text-primary'">{{ mode.label }}</div>
+                <div class="text-[10px] text-text-muted">{{ mode.desc }}</div>
+              </div>
+            </label>
           </div>
         </div>
 

@@ -59,30 +59,33 @@ Sidebar shows only Platform + Settings (no org items), org switcher hidden, rout
 
 ---
 
-## What's Remaining (v4.2 — Pick Up Next)
+## What's Done (v4.2 Session)
 
-### High Priority — Build Next
-| # | Item | Effort | Notes |
-|---|------|--------|-------|
-| 1 | **Org unique slug picker** | 2h | Auto-suggest, availability check, UI in OrgSettings |
-| 2 | **User unique username** | 2h | `username` column, auto-suggest from email, profile picker |
-| 3 | **Sending domain management** | 4h | Add domain → DNS records → verify → create sending emails |
-| 4 | **Sending emails per domain** | 3h | Multiple emails per domain, assign to users, admin controls |
-| 5 | **Manual/smart server rotation** | 4h | Per-campaign provider selection: smart/manual/round-robin/weighted |
-| 6 | **Deep analytics frontend** | 4h | Geo map, device breakdown, email client, referrer charts on campaign detail |
-| 7 | **Recipient profile page** | 3h | Full contact engagement view: stats, links, open hours, events |
-| 8 | **Campaign builder wizard** | 4h | Step-by-step: Recipients → Content → Sender → Settings → Schedule → Review |
-| 9 | **Tooltips on all campaign fields** | 2h | Subject, From, Reply-To, Batch Size, Delay, etc. |
-| 10 | **Professional starter templates** | 4h | 10 responsive templates (Welcome, Newsletter, Promo, etc.) |
+| # | Item | Status |
+|---|------|--------|
+| 1 | Org unique slug picker | Done — `checkSlugAvailability()`, `updateSlug()`, availability + suggestions API |
+| 2 | User unique username | Done — `username` column, `checkUsername()`, `setUsername()`, `suggestUsername()`, routes |
+| 3 | Sending domain management | Done — `sending_domains` table, add/verify/delete, DNS records generation |
+| 4 | Sending emails per domain | Done — `sending_emails` table, add/update/delete, assign to users, list for user |
+| 5 | Manual/smart server rotation | Done — `rotation_config` on campaigns, 4 modes: smart/manual/round_robin/weighted |
+| 6 | Bounce API polling | Done — `bouncePollingService.ts`, polls SendGrid/Mailgun/Postmark/SparkPost APIs |
+| 7 | Form webhook receiver | Done — `POST /forms/:id/webhook`, supports Typeform/JotForm/Zapier/flat JSON |
 
-### Medium Priority
-| # | Item | Effort | Notes |
-|---|------|--------|-------|
-| 11 | **Bounce API polling** | 3h | Backup bounce collection from provider APIs |
-| 12 | **Live preview with contact data** | 2h | Select contact, see real placeholder values |
-| 13 | **Form webhook receiver** | 2h | Connect Typeform/JotForm/Zapier to forms |
-| 14 | **Reusable sections frontend** | 2h | UI to save/browse/insert template sections (backend done) |
-| 15 | **Template thumbnail generation** | 2h | Auto-screenshot for template library grid |
+## All v4.2 Items Complete
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | Deep analytics frontend | Done — CampaignBreakdown.vue (devices/browsers/OS, email clients, referral sources) |
+| 2 | Recipient profile page | Done — RecipientProfile.vue (stats, open hours, top links, recent events, tags) |
+| 3 | Campaign builder wizard | Done — Already existed (4-step wizard in ComposeView) |
+| 4 | Tooltips on campaign fields | Done — Already had InfoTips on all 10+ fields |
+| 5 | Professional starter templates | Done — 10 templates (Welcome, Newsletter, Promo, Follow-up, Announcement, Event, Re-engagement, Product Update, Survey, Plain Text) |
+| 6 | Live preview with contact data | Done — Already existed in ComposeView |
+| 7 | Reusable sections API | Done — Frontend API methods added (list/create/delete/use) |
+| 8 | Org slug picker UI | Done — OrgSettings rewritten with slug picker, availability check, suggestions |
+| 9 | Username API | Done — Backend + frontend API (profile page TBD) |
+| 10 | Domain management UI | Done — DomainsSettings.vue (add domain, DNS records, verify, sending emails) |
+| 11 | Rotation config UI | Done — Server rotation selector in ComposeView (smart/round_robin/manual) |
 
 ### Future (v5.0)
 | # | Item | Notes |

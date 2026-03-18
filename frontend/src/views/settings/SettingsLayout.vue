@@ -3,21 +3,19 @@ import { RouterView, useRoute } from 'vue-router'
 import PageHeader from '../../components/ui/PageHeader.vue'
 import { cn } from '../../lib/utils'
 import {
-  Mail,
   Server,
+  Globe,
   Hash,
   Webhook,
-  Radio,
 } from 'lucide-vue-next'
 
 const route = useRoute()
 
 const navItems = [
-  { path: '/settings/email', label: 'Email Providers', icon: Mail, description: 'OAuth & connected accounts' },
-  { path: '/settings/smtp', label: 'SMTP', icon: Server, description: 'SMTP server configurations' },
-  { path: '/settings/api-keys', label: 'API Keys', icon: Hash, description: 'Manage API access' },
+  { path: '/settings/delivery-servers', label: 'Delivery Servers', icon: Server, description: 'Email providers & SMTP configs' },
+  { path: '/settings/sending-domains', label: 'Sending Domains', icon: Globe, description: 'Domains, tracking & emails' },
+  { path: '/settings/api-keys', label: 'API Keys', icon: Hash, description: 'Developer API access' },
   { path: '/settings/webhooks', label: 'Webhooks', icon: Webhook, description: 'Event notifications' },
-  { path: '/settings/tracking', label: 'Tracking', icon: Radio, description: 'Email open & click tracking' },
 ]
 
 function isActive(path: string): boolean {

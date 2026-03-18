@@ -287,14 +287,27 @@ class AuthLocalService {
   /**
    * List all users (platform admin only)
    */
+  /**
+   * List all regular users. Platform admin is a separate identity —
+   * never included in user lists, member lists, or any user-facing query.
+   * Only the platform admin's own session knows they're platform admin.
+   */
   listAllUsers(page = 1, limit = 50): { users: AuthUser[]; total: number } {
     const offset = (page - 1) * limit
-    const total = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count
+    const total = (db.prepare('SELECT COUNT(*) as count FROM users WHERE is_platform_admin = 0').get() as any).count
     const users = db.prepare(`
       SELECT id, email, name, status, is_platform_admin, last_login_at, created_at
-      FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?
+      FROM users WHERE is_platform_admin = 0 ORDER BY created_at DESC LIMIT ? OFFSET ?
     `).all(limit, offset) as AuthUser[]
     return { users, total }
+  }
+
+  /**
+   * Get a user by email — excludes platform admin from lookups.
+   * Platform admin can only be found by their own session, never by other users.
+   */
+  getUserByEmailPublic(email: string): AuthUser | null {
+    return db.prepare('SELECT id, email, name, status, is_platform_admin FROM users WHERE email = ? AND is_platform_admin = 0').get(email.toLowerCase().trim()) as AuthUser | null
   }
 
   // ------- Private -------
@@ -311,6 +324,59 @@ class AuthLocalService {
 
     const user = this.getUser(userId)!
     return { token, user, orgId, expiresAt }
+  }
+
+  // --------------------------------------------------------------------------
+  // Username
+  // --------------------------------------------------------------------------
+
+  checkUsername(username: string, excludeUserId?: string): { available: boolean; suggestions: string[] } {
+    const normalized = username.toLowerCase().replace(/[^a-z0-9_-]/g, '').substring(0, 30)
+    if (!normalized || normalized.length < 3) return { available: false, suggestions: [] }
+
+    const query = excludeUserId
+      ? db.prepare('SELECT 1 FROM users WHERE username = ? AND id != ?').get(normalized, excludeUserId)
+      : db.prepare('SELECT 1 FROM users WHERE username = ?').get(normalized)
+
+    if (!query) return { available: true, suggestions: [] }
+
+    const suggestions: string[] = []
+    for (let i = 1; i <= 5; i++) {
+      const candidate = `${normalized}${i}`
+      if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(candidate)) {
+        suggestions.push(candidate)
+        if (suggestions.length >= 3) break
+      }
+    }
+    return { available: false, suggestions }
+  }
+
+  setUsername(userId: string, username: string): boolean {
+    const normalized = username.toLowerCase().replace(/[^a-z0-9_-]/g, '').substring(0, 30)
+    if (!normalized || normalized.length < 3) throw new Error('Username must be at least 3 characters (letters, numbers, - _)')
+
+    const existing = db.prepare('SELECT 1 FROM users WHERE username = ? AND id != ?').get(normalized, userId)
+    if (existing) throw new Error(`Username "${normalized}" is already taken`)
+
+    const result = db.prepare("UPDATE users SET username = ?, updated_at = datetime('now') WHERE id = ?").run(normalized, userId)
+    return result.changes > 0
+  }
+
+  getUsername(userId: string): string | null {
+    const row = db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
+    return row?.username || null
+  }
+
+  suggestUsername(email: string): string {
+    const prefix = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 20)
+    if (prefix.length >= 3 && !db.prepare('SELECT 1 FROM users WHERE username = ?').get(prefix)) {
+      return prefix
+    }
+    for (let i = 1; i <= 99; i++) {
+      const candidate = `${prefix}${i}`
+      if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(candidate)) return candidate
+    }
+    return `${prefix}${Date.now() % 10000}`
   }
 
   private generateToken(): string {

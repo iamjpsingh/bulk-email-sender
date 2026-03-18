@@ -232,4 +232,88 @@ app.post('/forms/:id/toggle', requirePermission(PERMISSIONS.CONTACTS_MANAGE), (c
   return success(c, { status: newStatus }, `Form ${newStatus}`)
 })
 
+// ============================================================================
+// Webhook Receiver (connect external form services: Typeform, JotForm, Zapier)
+// ============================================================================
+
+app.post('/forms/:id/webhook', async (c) => {
+  const formId = c.req.param('id')
+  const form = formService.get(formId)
+
+  if (!form) return error(c, 'Form not found', 404)
+  if (form.status !== 'active') return error(c, 'Form is not active', 403)
+
+  let data: Record<string, unknown>
+  try {
+    const raw = await c.req.json()
+    // Support common webhook payload formats
+    // Typeform: { form_response: { answers: [...] } }
+    // JotForm: { rawRequest: "...", formID: "..." }
+    // Zapier/Make: flat object { email: "...", name: "..." }
+    // Generic: { data: { ... } }
+    if (raw.form_response?.answers) {
+      // Typeform format
+      data = {}
+      for (const answer of raw.form_response.answers) {
+        const fieldId = answer.field?.ref || answer.field?.id || `field_${answer.field?.type}`
+        data[fieldId] = answer.text || answer.email || answer.number || answer.choice?.label || answer.url || ''
+      }
+    } else if (raw.rawRequest) {
+      // JotForm format
+      try { data = JSON.parse(raw.rawRequest) } catch { data = raw }
+    } else if (raw.data && typeof raw.data === 'object') {
+      // Wrapped format
+      data = raw.data as Record<string, unknown>
+    } else {
+      // Flat format (Zapier, Make, direct API)
+      data = raw
+    }
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  // Record submission
+  const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || ''
+  const ua = c.req.header('User-Agent') || ''
+  formService.recordSubmission(formId, data, ip, ua)
+
+  // Map fields and add contact
+  const fieldMapping: Record<string, string> = JSON.parse(form.field_mapping || '{}')
+  const contactData: Record<string, string> = {}
+  for (const [formField, contactField] of Object.entries(fieldMapping)) {
+    if (data[formField] !== undefined) contactData[contactField] = String(data[formField])
+  }
+
+  if (contactData.email) {
+    try {
+      contactService.addContact(form.org_id, form.user_id, form.list_id, {
+        email: contactData.email,
+        first_name: contactData.first_name || '',
+        last_name: contactData.last_name || '',
+        company: contactData.company || '',
+        phone: contactData.phone || '',
+        source: 'webhook',
+      })
+    } catch { /* duplicate OK */ }
+  }
+
+  // Execute actions
+  const actions = JSON.parse(form.actions || '[]')
+  if (actions.length > 0 && contactData.email) {
+    for (const action of actions) {
+      if (action.type === 'add_tag' && action.tag) {
+        try {
+          const result = contactService.getContacts(form.org_id, form.list_id, { search: contactData.email, limit: 1 })
+          const match = result.contacts.find(ct => ct.email === contactData.email)
+          if (match) contactService.tagContacts(form.org_id, [match.id], [action.tag])
+        } catch { /* non-critical */ }
+      }
+    }
+  }
+
+  eventBus.emit('form:submitted', { formId, orgId: form.org_id, data: contactData, source: 'webhook' })
+
+  return c.json({ success: true, message: form.success_message })
+})
+
 export default app

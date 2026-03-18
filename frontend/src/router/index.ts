@@ -28,7 +28,46 @@ const routes = [
     component: () => import('../views/AcceptInviteView.vue'),
   },
 
-  // Authenticated routes (wrapped in MainLayout)
+  // Platform Admin routes (own layout, solo user with all features + platform powers)
+  {
+    path: '/platform',
+    component: () => import('../views/platform/PlatformLayout.vue'),
+    meta: { requiresAuth: true, platformOnly: true },
+    children: [
+      // Same features as org users
+      { path: '', name: 'PlatformDashboard', component: () => import('../views/platform/PlatformDashboard.vue') },
+      { path: 'compose', name: 'PlatformCompose', component: () => import('../views/ComposeView.vue') },
+      { path: 'campaigns', name: 'PlatformCampaigns', component: () => import('../views/CampaignsView.vue') },
+      { path: 'campaigns/:id', name: 'PlatformCampaignDetail', component: () => import('../views/CampaignDetailView.vue') },
+      { path: 'templates', name: 'PlatformTemplates', component: () => import('../views/TemplatesView.vue') },
+      { path: 'contacts', name: 'PlatformContacts', component: () => import('../views/ContactsView.vue') },
+      { path: 'automations', name: 'PlatformAutomations', component: () => import('../views/AutomationsView.vue') },
+      { path: 'forms', name: 'PlatformForms', component: () => import('../views/FormsView.vue') },
+      { path: 'pages', name: 'PlatformPages', component: () => import('../views/PagesView.vue') },
+      { path: 'calendar', name: 'PlatformCalendar', component: () => import('../views/CalendarView.vue') },
+      { path: 'analytics', name: 'PlatformAnalytics', component: () => import('../views/AnalyticsView.vue') },
+      { path: 'reports', name: 'PlatformReports', component: () => import('../views/ReportsView.vue') },
+      // Settings (platform admin's own delivery servers)
+      {
+        path: 'settings',
+        component: () => import('../views/settings/SettingsLayout.vue'),
+        children: [
+          { path: '', redirect: { name: 'PlatformSettingsServers' } },
+          { path: 'delivery-servers', name: 'PlatformSettingsServers', component: () => import('../views/settings/DeliveryServers.vue') },
+          { path: 'sending-domains', name: 'PlatformSettingsDomains', component: () => import('../views/settings/DomainsSettings.vue') },
+          { path: 'api-keys', name: 'PlatformSettingsApiKeys', component: () => import('../views/settings/ApiKeysSettings.vue') },
+          { path: 'webhooks', name: 'PlatformSettingsWebhooks', component: () => import('../views/settings/WebhooksSettings.vue') },
+        ],
+      },
+      // Platform-only powers (god mode)
+      { path: 'organizations', name: 'PlatformOrgs', component: () => import('../views/platform/PlatformOrganizations.vue') },
+      { path: 'users', name: 'PlatformUsers', component: () => import('../views/platform/PlatformUsers.vue') },
+      { path: 'system-settings', name: 'PlatformSystemSettings', component: () => import('../views/admin/PlatformSettingsPage.vue') },
+      { path: 'monitoring', name: 'PlatformMonitoring', component: () => import('../views/platform/PlatformDashboard.vue') },
+    ],
+  },
+
+  // Authenticated routes (wrapped in MainLayout — org context required)
   {
     path: '/',
     component: () => import('../components/layout/MainLayout.vue'),
@@ -113,24 +152,24 @@ const routes = [
         meta: { breadcrumb: 'Reports' },
       },
 
-      // Settings — nested sub-pages
+      // Settings — unified delivery servers + sending domains
       {
         path: 'settings',
         component: () => import('../views/settings/SettingsLayout.vue'),
         meta: { breadcrumb: 'Settings' },
         children: [
-          { path: '', redirect: { name: 'SettingsEmail' } },
+          { path: '', redirect: { name: 'SettingsDeliveryServers' } },
           {
-            path: 'email',
-            name: 'SettingsEmail',
-            component: () => import('../views/settings/EmailSettings.vue'),
-            meta: { breadcrumb: 'Email Providers' },
+            path: 'delivery-servers',
+            name: 'SettingsDeliveryServers',
+            component: () => import('../views/settings/DeliveryServers.vue'),
+            meta: { breadcrumb: 'Delivery Servers' },
           },
           {
-            path: 'smtp',
-            name: 'SettingsSMTP',
-            component: () => import('../views/settings/SmtpSettings.vue'),
-            meta: { breadcrumb: 'SMTP' },
+            path: 'sending-domains',
+            name: 'SettingsSendingDomains',
+            component: () => import('../views/settings/DomainsSettings.vue'),
+            meta: { breadcrumb: 'Sending Domains' },
           },
           {
             path: 'api-keys',
@@ -143,12 +182,6 @@ const routes = [
             name: 'SettingsWebhooks',
             component: () => import('../views/settings/WebhooksSettings.vue'),
             meta: { breadcrumb: 'Webhooks' },
-          },
-          {
-            path: 'tracking',
-            name: 'SettingsTracking',
-            component: () => import('../views/settings/TrackingSettings.vue'),
-            meta: { breadcrumb: 'Tracking' },
           },
         ],
       },
@@ -226,7 +259,7 @@ const router = createRouter({
 
 // Global navigation guard
 router.beforeEach(async (to, _from, next) => {
-  const { isAuthenticated, isInitialized, initializeAuth } = useAuth()
+  const { isAuthenticated, isInitialized, initializeAuth, isPlatformAdmin } = useAuth()
 
   if (!isInitialized.value) {
     await initializeAuth()
@@ -234,36 +267,37 @@ router.beforeEach(async (to, _from, next) => {
 
   const requiresAuth = to.matched.some(r => r.meta.requiresAuth)
   const isGuestRoute = to.meta.guest
+  const isPlatformRoute = to.path.startsWith('/platform')
 
   if (requiresAuth && !isAuthenticated.value) {
     next({ path: '/login', replace: true })
   } else if (isGuestRoute && isAuthenticated.value) {
-    // Platform admin goes to platform dashboard, not org dashboard
-    const { isPlatformAdmin } = useAuth()
+    // After login redirect: platform admin → /platform, normal user → /
     if (isPlatformAdmin.value) {
-      next({ path: '/admin/platform', replace: true })
+      next({ path: '/platform', replace: true })
     } else {
       next({ path: '/', replace: true })
     }
   } else if (requiresAuth && isAuthenticated.value) {
-    const { isPlatformAdmin } = useAuth()
 
-    // Platform admin: block org-scoped routes, redirect to platform
-    if (isPlatformAdmin.value) {
-      const isPlatformRoute = to.path.startsWith('/admin/platform')
-      if (!isPlatformRoute && to.path !== '/') {
-        next({ path: '/admin/platform', replace: true })
-        return
-      }
+    // Platform admin: can ONLY access /platform/* routes
+    if (isPlatformAdmin.value && !isPlatformRoute) {
+      next({ path: '/platform', replace: true })
+      return
     }
 
-    // Permission gating: admin routes require admin role
+    // Normal users: CANNOT access /platform/* routes
+    if (!isPlatformAdmin.value && isPlatformRoute) {
+      next({ path: '/', replace: true })
+      return
+    }
+
+    // Permission gating for org admin/settings routes
     const isAdminRoute = to.path.startsWith('/admin')
     const isSettingsRoute = to.path.startsWith('/settings')
     if (isAdminRoute || isSettingsRoute) {
       const { isAdmin, can } = usePermissions()
-      // Platform admin can access /admin/platform* routes
-      if (isAdminRoute && !isAdmin.value && !isPlatformAdmin.value) {
+      if (isAdminRoute && !isAdmin.value) {
         next({ path: '/', replace: true })
         return
       }
@@ -272,6 +306,7 @@ router.beforeEach(async (to, _from, next) => {
         return
       }
     }
+
     next()
   } else {
     next()

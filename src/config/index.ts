@@ -55,6 +55,7 @@ export const AUTH = {
     '/api/admin/cloudflare/callback',
     '/api/contacts/preferences/public/',
     '/api/webhooks/inbound/',
+    '/api/forms/',
   ],
 } as const
 

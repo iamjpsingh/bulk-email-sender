@@ -119,4 +119,36 @@ export const templatesApi = {
     if (!res.success) throw new Error(res.message || 'Failed to create template')
     return res.data!
   },
+
+  // Reusable Sections
+  listSections: async (category?: string): Promise<TemplateSection[]> => {
+    const qs = category ? `?category=${category}` : ''
+    const res = await api.get<{ sections: TemplateSection[] }>(`/templates/sections${qs}`)
+    return res.data?.sections || []
+  },
+
+  createSection: async (name: string, htmlContent: string, category?: string): Promise<TemplateSection> => {
+    const res = await api.post<TemplateSection>('/templates/sections', { name, html_content: htmlContent, category })
+    if (!res.success) throw new Error(res.message || 'Failed')
+    return res.data!
+  },
+
+  deleteSection: async (id: string) => {
+    const res = await api.delete(`/templates/sections/${id}`)
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  useSection: async (id: string): Promise<string> => {
+    const res = await api.post<{ html_content: string }>(`/templates/sections/${id}/use`)
+    return res.data?.html_content || ''
+  },
+}
+
+export interface TemplateSection {
+  id: string
+  name: string
+  category: string
+  html_content: string
+  usage_count: number
+  created_at: string
 }

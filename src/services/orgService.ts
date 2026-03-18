@@ -215,6 +215,46 @@ class OrgService {
     `).get(orgId) as any).count
   }
 
+  checkSlugAvailability(slug: string, excludeOrgId?: string): { available: boolean; suggestions: string[] } {
+    const normalized = slug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 48)
+    if (!normalized || normalized.length < 2) {
+      return { available: false, suggestions: [] }
+    }
+
+    const query = excludeOrgId
+      ? db.prepare('SELECT 1 FROM organizations WHERE slug = ? AND id != ?').get(normalized, excludeOrgId)
+      : db.prepare('SELECT 1 FROM organizations WHERE slug = ?').get(normalized)
+
+    if (!query) return { available: true, suggestions: [] }
+
+    // Generate suggestions
+    const suggestions: string[] = []
+    for (let i = 1; i <= 5; i++) {
+      const candidate = `${normalized}-${i}`
+      const exists = db.prepare('SELECT 1 FROM organizations WHERE slug = ?').get(candidate)
+      if (!exists) suggestions.push(candidate)
+      if (suggestions.length >= 3) break
+    }
+    // Try with random suffix
+    if (suggestions.length < 3) {
+      const rand = `${normalized}-${Math.random().toString(36).substring(2, 6)}`
+      suggestions.push(rand)
+    }
+
+    return { available: false, suggestions }
+  }
+
+  updateSlug(orgId: string, newSlug: string): boolean {
+    const normalized = newSlug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 48)
+    if (!normalized || normalized.length < 2) throw new Error('Slug must be at least 2 characters')
+
+    const existing = db.prepare('SELECT 1 FROM organizations WHERE slug = ? AND id != ?').get(normalized, orgId)
+    if (existing) throw new Error(`Slug "${normalized}" is already taken`)
+
+    const result = db.prepare("UPDATE organizations SET slug = ?, updated_at = datetime('now') WHERE id = ?").run(normalized, orgId)
+    return result.changes > 0
+  }
+
   private generateSlug(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 48)
   }

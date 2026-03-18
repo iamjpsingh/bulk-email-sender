@@ -47,39 +47,26 @@ async function handleSwitchOrg(id: string) {
   router.replace('/')
 }
 
-// Platform admin sees ONLY platform routes — no org-scoped items
-const mainNav = computed(() => {
-  if (isPlatformAdmin.value) {
-    return [
-      { path: '/admin/platform', label: 'Platform', icon: LayoutDashboard },
-      { path: '/admin/platform-settings', label: 'Settings', icon: Settings },
-    ]
-  }
-  return [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/compose', label: 'Compose', icon: PenSquare },
-    { path: '/campaigns', label: 'Campaigns', icon: SendIcon },
-    { path: '/templates', label: 'Templates', icon: FileText },
-    { path: '/contacts', label: 'Contacts', icon: Users },
-  ]
-})
+// Org user nav — platform admin uses PlatformLayout with its own sidebar, never sees this
+const mainNav = [
+  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/compose', label: 'Compose', icon: PenSquare },
+  { path: '/campaigns', label: 'Campaigns', icon: SendIcon },
+  { path: '/templates', label: 'Templates', icon: FileText },
+  { path: '/contacts', label: 'Contacts', icon: Users },
+]
 
-const toolsNav = computed(() => {
-  if (isPlatformAdmin.value) return [] // Platform admin has no tools
-  return [
-    { path: '/automations', label: 'Automations', icon: Zap },
-    { path: '/whatsapp', label: 'WhatsApp', icon: MessageCircle },
-    { path: '/forms', label: 'Forms', icon: FormInput },
-    { path: '/pages', label: 'Pages', icon: Globe },
-    { path: '/calendar', label: 'Calendar', icon: Calendar },
-    { path: '/analytics', label: 'Analytics', icon: BarChart2 },
-    { path: '/reports', label: 'Reports', icon: BarChart3 },
-  ]
-})
+const toolsNav = [
+  { path: '/automations', label: 'Automations', icon: Zap },
+  { path: '/whatsapp', label: 'WhatsApp', icon: MessageCircle },
+  { path: '/forms', label: 'Forms', icon: FormInput },
+  { path: '/pages', label: 'Pages', icon: Globe },
+  { path: '/calendar', label: 'Calendar', icon: Calendar },
+  { path: '/analytics', label: 'Analytics', icon: BarChart2 },
+  { path: '/reports', label: 'Reports', icon: BarChart3 },
+]
 
 const settingsNav = computed(() => {
-  // Platform admin has no org settings/admin — their nav is in mainNav
-  if (isPlatformAdmin.value) return []
   const items: Array<{ path: string; label: string; icon: any }> = []
   if (can('settings.view') || can('smtp.view')) {
     items.push({ path: '/settings', label: 'Settings', icon: Settings })
@@ -241,8 +228,8 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
       </button>
     </div>
 
-    <!-- Org Switcher (hidden for platform admin — they have no org) -->
-    <div v-if="orgs.length > 0 && !isPlatformAdmin" class="px-2 pt-2 shrink-0" data-org-switcher>
+    <!-- Org Switcher -->
+    <div v-if="orgs.length > 0" class="px-2 pt-2 shrink-0" data-org-switcher>
       <div class="relative">
         <button
           :class="cn(

@@ -282,6 +282,26 @@ export const adminApi = {
     return { orgs: res.data || [], total: res.meta?.pagination?.total || 0 }
   },
 
+  platformUpdateUserStatus: async (userId: string, status: string) => {
+    const res = await api.put(`/admin/platform/users/${userId}/status`, { status })
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  platformDeleteUser: async (userId: string) => {
+    const res = await api.delete(`/admin/platform/users/${userId}`)
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  platformUpdateOrgStatus: async (orgId: string, status: string) => {
+    const res = await api.put(`/admin/platform/orgs/${orgId}/status`, { status })
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  platformDeleteOrg: async (orgId: string) => {
+    const res = await api.delete(`/admin/platform/orgs/${orgId}`)
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
   platformCleanupSessions: async () => {
     const res = await api.post('/admin/platform/cleanup')
     if (!res.success) throw new Error(res.message || 'Cleanup failed')
@@ -337,6 +357,104 @@ export const adminApi = {
     const res = await api.get<any>('/admin/platform/settings/webhook-status')
     return res.data!
   },
+
+  // --- Org Slug ---
+  checkSlug: async (slug: string): Promise<{ available: boolean; suggestions: string[] }> => {
+    const res = await api.get<any>(`/admin/org/check-slug?slug=${encodeURIComponent(slug)}`)
+    return res.data!
+  },
+
+  updateSlug: async (slug: string) => {
+    const res = await api.put('/admin/org/slug', { slug })
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  // --- Sending Domains ---
+  getDomains: async (): Promise<SendingDomain[]> => {
+    const res = await api.get<{ domains: SendingDomain[] }>('/admin/org/domains')
+    return res.data?.domains || []
+  },
+
+  addDomain: async (domain: string): Promise<{ domain: SendingDomain; dnsRecords: DnsRecord[] }> => {
+    const res = await api.post<{ domain: SendingDomain; dnsRecords: DnsRecord[] }>('/admin/org/domains', { domain })
+    if (!res.success) throw new Error(res.message || 'Failed')
+    return res.data!
+  },
+
+  getDnsRecords: async (domainId: string): Promise<DnsRecord[]> => {
+    const res = await api.get<{ dnsRecords: DnsRecord[] }>(`/admin/org/domains/${domainId}/dns`)
+    return res.data?.dnsRecords || []
+  },
+
+  verifyDomain: async (domainId: string) => {
+    const res = await api.post(`/admin/org/domains/${domainId}/verify`)
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  deleteDomain: async (domainId: string) => {
+    const res = await api.delete(`/admin/org/domains/${domainId}`)
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  // --- Sending Emails ---
+  getSendingEmails: async (domainId?: string): Promise<SendingEmailRecord[]> => {
+    const qs = domainId ? `?domain_id=${domainId}` : ''
+    const res = await api.get<{ emails: SendingEmailRecord[] }>(`/admin/org/sending-emails${qs}`)
+    return res.data?.emails || []
+  },
+
+  getMySendingEmails: async (): Promise<SendingEmailRecord[]> => {
+    const res = await api.get<{ emails: SendingEmailRecord[] }>('/admin/org/sending-emails/mine')
+    return res.data?.emails || []
+  },
+
+  addSendingEmail: async (domainId: string, email: string, displayName?: string, assignedTo?: string): Promise<SendingEmailRecord> => {
+    const res = await api.post<SendingEmailRecord>('/admin/org/sending-emails', { domain_id: domainId, email, display_name: displayName, assigned_to: assignedTo })
+    if (!res.success) throw new Error(res.message || 'Failed')
+    return res.data!
+  },
+
+  updateSendingEmail: async (emailId: string, updates: { display_name?: string; assigned_to?: string | null; is_default?: boolean }) => {
+    const res = await api.put(`/admin/org/sending-emails/${emailId}`, updates)
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+
+  deleteSendingEmail: async (emailId: string) => {
+    const res = await api.delete(`/admin/org/sending-emails/${emailId}`)
+    if (!res.success) throw new Error(res.message || 'Failed')
+  },
+}
+
+export interface SendingDomain {
+  id: string
+  org_id: string
+  domain: string
+  verification_status: 'pending' | 'verified' | 'failed'
+  dkim_selector: string | null
+  dkim_record: string | null
+  return_path: string | null
+  verified_at: string | null
+  created_at: string
+}
+
+export interface DnsRecord {
+  type: string
+  name: string
+  value: string
+  purpose: string
+}
+
+export interface SendingEmailRecord {
+  id: string
+  org_id: string
+  domain_id: string
+  email: string
+  display_name: string | null
+  is_default: number
+  assigned_to: string | null
+  status: string
+  domain?: string
+  verification_status?: string
 }
 
 export type ProviderType = 'smtp' | 'ses' | 'sendgrid' | 'mailgun' | 'postmark' | 'sparkpost' | 'gmail' | 'outlook'

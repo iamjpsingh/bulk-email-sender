@@ -16,6 +16,8 @@ import { systemMailerService } from '../services/systemMailerService'
 import type { SystemMailerConfig, GmailOAuthProviderConfig, OutlookOAuthProviderConfig } from '../services/systemMailerService'
 import { webhookRegistrationService } from '../services/webhookRegistrationService'
 import { cloudflareService } from '../services/cloudflareService'
+import { sendingDomainService } from '../services/sendingDomainService'
+import { db } from '../db/connection'
 import { SERVER } from '../config'
 import { success, error, paginated } from '../utils/response'
 import { validateBody } from '../utils/validate'
@@ -85,6 +87,50 @@ app.post('/admin/platform/cleanup', requirePlatformAdmin(), (c) => {
   } catch (e: any) {
     return error(c, e.message || 'Cleanup failed', 500)
   }
+})
+
+/** Suspend/activate/delete a user (platform admin only) */
+app.put('/admin/platform/users/:userId/status', requirePlatformAdmin(), async (c) => {
+  const userId = c.req.param('userId')
+  const body = await c.req.json() as { status: string }
+  if (!['active', 'suspended', 'deactivated'].includes(body.status)) {
+    return error(c, 'Invalid status. Use: active, suspended, deactivated', 400)
+  }
+  const result = db.prepare("UPDATE users SET status = ?, updated_at = datetime('now') WHERE id = ? AND is_platform_admin = 0").run(body.status, userId)
+  if (result.changes === 0) return error(c, 'User not found', 404)
+  return success(c, undefined, `User ${body.status}`)
+})
+
+app.delete('/admin/platform/users/:userId', requirePlatformAdmin(), (c) => {
+  const userId = c.req.param('userId')
+  // Don't allow deleting platform admin
+  const user = db.prepare('SELECT is_platform_admin FROM users WHERE id = ?').get(userId) as any
+  if (!user) return error(c, 'User not found', 404)
+  if (user.is_platform_admin) return error(c, 'Cannot delete platform admin', 403)
+  db.prepare('DELETE FROM org_members WHERE user_id = ?').run(userId)
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId)
+  db.prepare('DELETE FROM users WHERE id = ?').run(userId)
+  return success(c, undefined, 'User deleted')
+})
+
+/** Suspend/activate/delete an org (platform admin only) */
+app.put('/admin/platform/orgs/:orgId/status', requirePlatformAdmin(), async (c) => {
+  const orgId = c.req.param('orgId')
+  const body = await c.req.json() as { status: string }
+  if (!['active', 'suspended', 'archived'].includes(body.status)) {
+    return error(c, 'Invalid status. Use: active, suspended, archived', 400)
+  }
+  const result = db.prepare("UPDATE organizations SET status = ?, updated_at = datetime('now') WHERE id = ?").run(body.status, orgId)
+  if (result.changes === 0) return error(c, 'Organization not found', 404)
+  return success(c, undefined, `Organization ${body.status}`)
+})
+
+app.delete('/admin/platform/orgs/:orgId', requirePlatformAdmin(), (c) => {
+  const orgId = c.req.param('orgId')
+  db.prepare('DELETE FROM org_members WHERE org_id = ?').run(orgId)
+  const result = db.prepare('DELETE FROM organizations WHERE id = ?').run(orgId)
+  if (result.changes === 0) return error(c, 'Organization not found', 404)
+  return success(c, undefined, 'Organization deleted')
 })
 
 // ============================================================================
@@ -464,6 +510,118 @@ app.get('/admin/cloudflare/analytics', requirePlatformAdmin(), async (c) => {
 app.get('/admin/platform/settings/webhook-status', requirePlatformAdmin(), (c) => {
   const status = webhookRegistrationService.getWebhookStatus()
   return success(c, { registered: !!status, status })
+})
+
+// ============================================================================
+// Organization Management (org-scoped)
+// ============================================================================
+
+/** Check org slug availability */
+app.get('/admin/org/check-slug', requirePermission(PERMISSIONS.ORG_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const slug = c.req.query('slug')
+  if (!slug) return error(c, 'slug query param required', 400)
+  const result = orgService.checkSlugAvailability(slug, orgId)
+  return success(c, result)
+})
+
+/** Update org slug */
+app.put('/admin/org/slug', requirePermission(PERMISSIONS.ORG_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const body = await c.req.json() as { slug: string }
+  if (!body.slug) return error(c, 'slug is required', 400)
+  try {
+    orgService.updateSlug(orgId, body.slug)
+    return success(c, undefined, 'Organization slug updated')
+  } catch (e: any) {
+    return error(c, e.message, 400)
+  }
+})
+
+// ============================================================================
+// Sending Domains & Emails (org-scoped)
+// ============================================================================
+
+app.get('/admin/org/domains', requirePermission(PERMISSIONS.ORG_MANAGE), (c) => {
+  const orgId = getOrgId(c)
+  const domains = sendingDomainService.listDomains(orgId)
+  return success(c, { domains })
+})
+
+app.post('/admin/org/domains', requirePermission(PERMISSIONS.ORG_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const body = await c.req.json() as { domain: string }
+  if (!body.domain) return error(c, 'domain is required', 400)
+  try {
+    const domain = sendingDomainService.addDomain(orgId, body.domain)
+    const dnsRecords = sendingDomainService.getDnsRecords(domain)
+    return success(c, { domain, dnsRecords }, 'Domain added — configure DNS records below', 201)
+  } catch (e: any) {
+    return error(c, e.message, 400)
+  }
+})
+
+app.get('/admin/org/domains/:id/dns', requirePermission(PERMISSIONS.ORG_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const domain = sendingDomainService.getDomain(orgId, c.req.param('id'))
+  if (!domain) return error(c, 'Domain not found', 404)
+  return success(c, { dnsRecords: sendingDomainService.getDnsRecords(domain) })
+})
+
+app.post('/admin/org/domains/:id/verify', requirePermission(PERMISSIONS.ORG_MANAGE), (c) => {
+  const orgId = getOrgId(c)
+  const verified = sendingDomainService.verifyDomain(orgId, c.req.param('id'))
+  if (!verified) return error(c, 'Domain not found', 404)
+  return success(c, undefined, 'Domain verified')
+})
+
+app.delete('/admin/org/domains/:id', requirePermission(PERMISSIONS.ORG_MANAGE), (c) => {
+  const orgId = getOrgId(c)
+  const deleted = sendingDomainService.deleteDomain(orgId, c.req.param('id'))
+  if (!deleted) return error(c, 'Domain not found', 404)
+  return success(c, undefined, 'Domain deleted')
+})
+
+// Sending emails under a domain
+app.get('/admin/org/sending-emails', requirePermission(PERMISSIONS.ORG_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const domainId = c.req.query('domain_id')
+  const emails = sendingDomainService.listEmails(orgId, domainId || undefined)
+  return success(c, { emails })
+})
+
+app.get('/admin/org/sending-emails/mine', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const user = requireAuth(c)
+  const orgId = getOrgId(c)
+  const emails = sendingDomainService.listEmailsForUser(orgId, user.id)
+  return success(c, { emails })
+})
+
+app.post('/admin/org/sending-emails', requirePermission(PERMISSIONS.ORG_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const body = await c.req.json() as { domain_id: string; email: string; display_name?: string; assigned_to?: string }
+  if (!body.domain_id || !body.email) return error(c, 'domain_id and email required', 400)
+  try {
+    const email = sendingDomainService.addEmail(orgId, body.domain_id, body.email, body.display_name, body.assigned_to)
+    return success(c, email, 'Sending email created', 201)
+  } catch (e: any) {
+    return error(c, e.message, 400)
+  }
+})
+
+app.put('/admin/org/sending-emails/:id', requirePermission(PERMISSIONS.ORG_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const body = await c.req.json() as { display_name?: string; assigned_to?: string | null; is_default?: boolean }
+  const updated = sendingDomainService.updateEmail(orgId, c.req.param('id'), body)
+  if (!updated) return error(c, 'Email not found', 404)
+  return success(c, undefined, 'Sending email updated')
+})
+
+app.delete('/admin/org/sending-emails/:id', requirePermission(PERMISSIONS.ORG_MANAGE), (c) => {
+  const orgId = getOrgId(c)
+  const deleted = sendingDomainService.deleteEmail(orgId, c.req.param('id'))
+  if (!deleted) return error(c, 'Email not found', 404)
+  return success(c, undefined, 'Sending email deleted')
 })
 
 // ============================================================================

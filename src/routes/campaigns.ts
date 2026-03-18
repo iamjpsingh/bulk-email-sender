@@ -456,4 +456,39 @@ app.post('/campaigns/graymail/reset/:email', requirePermission(PERMISSIONS.CAMPA
   return success(c, undefined, 'Graymail status reset')
 })
 
+// ============================================================================
+// Server Rotation Config (per campaign)
+// ============================================================================
+
+const RotationConfigSchema = z.object({
+  mode: z.enum(['smart', 'manual', 'round_robin', 'weighted']),
+  config_ids: z.array(z.string()).optional(),
+  weights: z.record(z.number()).optional(),
+})
+
+/** Set rotation config for a campaign */
+app.put('/campaigns/:id/rotation', requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (c) => {
+  const orgId = getOrgId(c)
+  const campaignId = c.req.param('id')
+  const body = await validateBody(c, RotationConfigSchema)
+
+  const campaign = campaignService.get(orgId, campaignId)
+  if (!campaign) return error(c, 'Campaign not found', 404)
+
+  campaignService.update(orgId, campaignId, { rotation_config: JSON.stringify(body) })
+  return success(c, undefined, `Rotation set to ${body.mode}`)
+})
+
+/** Get rotation config for a campaign */
+app.get('/campaigns/:id/rotation', requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), (c) => {
+  const orgId = getOrgId(c)
+  const campaignId = c.req.param('id')
+
+  const campaign = campaignService.get(orgId, campaignId)
+  if (!campaign) return error(c, 'Campaign not found', 404)
+
+  const config = campaign.rotation_config ? JSON.parse(campaign.rotation_config) : { mode: 'smart', config_ids: [], weights: {} }
+  return success(c, config)
+})
+
 export default app

@@ -339,4 +339,44 @@ app.put('/auth/profile', async (c) => {
   }
 })
 
+// ============================================================================
+// Username
+// ============================================================================
+
+app.get('/auth/check-username', (c) => {
+  const username = c.req.query('username')
+  if (!username) return error(c, 'username query param required', 400)
+  const token = getCookie(c, COOKIE.SESSION_NAME)
+  const session = token ? authLocalService.validateSession(token) : null
+  const result = authLocalService.checkUsername(username, session?.user.id)
+  return success(c, result)
+})
+
+app.put('/auth/profile/username', async (c) => {
+  const token = getCookie(c, COOKIE.SESSION_NAME)
+  if (!token) return error(c, 'Authentication required', 401)
+  const session = authLocalService.validateSession(token)
+  if (!session) return error(c, 'Invalid session', 401)
+
+  const body = await c.req.json() as { username: string }
+  if (!body.username) return error(c, 'username is required', 400)
+
+  try {
+    authLocalService.setUsername(session.user.id, body.username)
+    return success(c, undefined, 'Username updated')
+  } catch (e: any) {
+    return error(c, e.message, 400)
+  }
+})
+
+app.get('/auth/profile/username/suggest', (c) => {
+  const token = getCookie(c, COOKIE.SESSION_NAME)
+  if (!token) return error(c, 'Authentication required', 401)
+  const session = authLocalService.validateSession(token)
+  if (!session) return error(c, 'Invalid session', 401)
+
+  const suggestion = authLocalService.suggestUsername(session.user.email)
+  return success(c, { suggestion })
+})
+
 export default app
