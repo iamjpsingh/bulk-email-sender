@@ -9,7 +9,7 @@ import Skeleton from '../../components/ui/Skeleton.vue'
 import InfoTip from '../../components/ui/InfoTip.vue'
 import {
   Mail, Loader2, CheckCircle, XCircle, Send, Trash2, Server, Cloud, Globe, Zap,
-  Settings, Link2, AlertTriangle, Radio, Webhook,
+  Settings, Link2, AlertTriangle, Radio, Webhook, Copy,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -110,6 +110,21 @@ const setupStatus = computed(() => ({
 }))
 
 const setupComplete = computed(() => setupStatus.value.mailer)
+
+// Base URL for redirect URIs (use backend URL, not frontend URL)
+const baseUrl = computed(() => {
+  // In dev: backend is on different port. In prod: same origin or BASE_URL env.
+  // The backend BASE_URL is what matters for OAuth callbacks.
+  const origin = window.location.origin
+  // If frontend is on 5173, backend is likely on 5500
+  if (origin.includes(':5173')) return origin.replace(':5173', ':5500')
+  return origin
+})
+
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text)
+  toast.success('Copied to clipboard')
+}
 
 function buildConfig(): SystemMailerConfig {
   const base: SystemMailerConfig = { fromName: fromName.value.trim(), fromEmail: fromEmail.value.trim(), providerConfig: { provider: provider.value } }
@@ -324,7 +339,7 @@ onMounted(() => {
           OAuth App Credentials
           <InfoTip text="Required for Gmail/Outlook OAuth flows — both for campaign sending (per-user) and system mailer. Create apps in Google Cloud Console and Azure AD." />
         </h3>
-        <p class="text-xs text-text-muted mb-4">These enable users to connect Gmail/Outlook for campaign sending</p>
+        <p class="text-xs text-text-muted mb-4">These enable users to connect Gmail/Outlook for campaign sending. You'll need the redirect URLs below when creating your OAuth apps.</p>
 
         <!-- Google -->
         <div class="mb-4 p-3 bg-bg-tertiary rounded-lg">
@@ -332,6 +347,20 @@ onMounted(() => {
             <span class="text-sm font-medium text-text-primary">Google OAuth</span>
             <span v-if="googleOAuthSaved" class="badge-sm badge-success">Saved</span>
           </div>
+
+          <!-- Redirect URLs -->
+          <div class="mb-3 p-2.5 bg-surface-0 rounded-lg">
+            <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1.5">Add these redirect URIs in Google Cloud Console</div>
+            <div class="flex items-center gap-2 mb-1">
+              <code class="text-[11px] text-accent font-mono flex-1 break-all">{{ baseUrl }}/api/auth/google/callback</code>
+              <button class="text-text-muted hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/auth/google/callback`)"><Copy :size="11" /></button>
+            </div>
+            <div class="flex items-center gap-2">
+              <code class="text-[11px] text-accent font-mono flex-1 break-all">{{ baseUrl }}/api/admin/platform/settings/mailer/oauth/callback</code>
+              <button class="text-text-muted hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/admin/platform/settings/mailer/oauth/callback`)"><Copy :size="11" /></button>
+            </div>
+          </div>
+
           <div class="grid grid-cols-2 gap-3">
             <div class="form-group mb-0">
               <label class="form-label text-xs">Client ID</label>
@@ -348,11 +377,25 @@ onMounted(() => {
         </div>
 
         <!-- Microsoft -->
-        <div class="p-3 bg-bg-tertiary rounded-lg">
+        <div class="mb-4 p-3 bg-bg-tertiary rounded-lg">
           <div class="flex items-center justify-between mb-2">
             <span class="text-sm font-medium text-text-primary">Microsoft OAuth</span>
             <span v-if="msOAuthSaved" class="badge-sm badge-success">Saved</span>
           </div>
+
+          <!-- Redirect URLs -->
+          <div class="mb-3 p-2.5 bg-surface-0 rounded-lg">
+            <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1.5">Add these redirect URIs in Azure AD App Registration</div>
+            <div class="flex items-center gap-2 mb-1">
+              <code class="text-[11px] text-accent font-mono flex-1 break-all">{{ baseUrl }}/api/auth/microsoft/callback</code>
+              <button class="text-text-muted hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/auth/microsoft/callback`)"><Copy :size="11" /></button>
+            </div>
+            <div class="flex items-center gap-2">
+              <code class="text-[11px] text-accent font-mono flex-1 break-all">{{ baseUrl }}/api/admin/platform/settings/mailer/oauth/callback</code>
+              <button class="text-text-muted hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/admin/platform/settings/mailer/oauth/callback`)"><Copy :size="11" /></button>
+            </div>
+          </div>
+
           <div class="grid grid-cols-2 gap-3">
             <div class="form-group mb-0">
               <label class="form-label text-xs">Client ID</label>
@@ -366,6 +409,26 @@ onMounted(() => {
           <button class="btn-secondary btn-sm mt-2" :disabled="savingOAuth || !msClientId || !msClientSecret" @click="saveOAuthCreds('microsoft')">
             <Loader2 v-if="savingOAuth" :size="14" class="animate-spin" /> Save Microsoft Credentials
           </button>
+        </div>
+
+        <!-- Cloudflare -->
+        <div class="p-3 bg-bg-tertiary rounded-lg">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-medium text-text-primary">Cloudflare OAuth</span>
+            <span v-if="cfConnected" class="badge-sm badge-success">Connected</span>
+          </div>
+
+          <!-- Redirect URL -->
+          <div class="mb-3 p-2.5 bg-surface-0 rounded-lg">
+            <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1.5">Add this redirect URI in Cloudflare Developer Dashboard</div>
+            <div class="flex items-center gap-2">
+              <code class="text-[11px] text-accent font-mono flex-1 break-all">{{ baseUrl }}/api/admin/cloudflare/callback</code>
+              <button class="text-text-muted hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/admin/cloudflare/callback`)"><Copy :size="11" /></button>
+            </div>
+          </div>
+
+          <p class="text-xs text-text-muted mb-3">Required for one-click Cloudflare Worker deployment for email tracking. Create an OAuth app in Cloudflare and add the redirect URI above.</p>
+          <p v-if="cfConnected" class="text-xs text-green-400 mb-2">Connected to {{ cfAccountName }}</p>
         </div>
       </div>
 

@@ -91,11 +91,10 @@ if (typeof window !== 'undefined') {
       <!-- Top bar -->
       <header
         :class="cn(
-          'sticky top-0 z-40 shrink-0',
+          'sticky top-0 z-30 shrink-0',
           'flex items-center justify-between',
           'h-14 px-6',
-          'bg-bg-primary/80 backdrop-blur-xl',
-          'border-b border-border'
+          'bg-bg-primary border-b border-border'
         )"
       >
         <!-- Left: Breadcrumbs -->

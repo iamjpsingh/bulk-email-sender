@@ -338,7 +338,7 @@ function toggleSelectAll() {
 
       <div class="flex max-md:flex-col gap-6 min-h-[calc(100vh-160px)]">
         <!-- Sidebar: Lists -->
-        <div class="w-[260px] max-md:w-full shrink-0 bg-bg-card border border-border rounded-xl overflow-hidden">
+        <div class="w-[260px] max-md:w-full shrink-0 bg-bg-card border border-border rounded-xl">
           <div class="px-4 py-3.5 border-b border-border">
             <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Lists</h3>
           </div>

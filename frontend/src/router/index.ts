@@ -54,7 +54,6 @@ const routes = [
         children: [
           { path: '', redirect: { name: 'PlatformSettingsServers' } },
           { path: 'delivery-servers', name: 'PlatformSettingsServers', component: () => import('../views/settings/DeliveryServers.vue') },
-          { path: 'sending-domains', name: 'PlatformSettingsDomains', component: () => import('../views/settings/DomainsSettings.vue') },
           { path: 'api-keys', name: 'PlatformSettingsApiKeys', component: () => import('../views/settings/ApiKeysSettings.vue') },
           { path: 'webhooks', name: 'PlatformSettingsWebhooks', component: () => import('../views/settings/WebhooksSettings.vue') },
         ],
@@ -164,12 +163,6 @@ const routes = [
             name: 'SettingsDeliveryServers',
             component: () => import('../views/settings/DeliveryServers.vue'),
             meta: { breadcrumb: 'Delivery Servers' },
-          },
-          {
-            path: 'sending-domains',
-            name: 'SettingsSendingDomains',
-            component: () => import('../views/settings/DomainsSettings.vue'),
-            meta: { breadcrumb: 'Sending Domains' },
           },
           {
             path: 'api-keys',
@@ -292,16 +285,11 @@ router.beforeEach(async (to, _from, next) => {
       return
     }
 
-    // Permission gating for org admin/settings routes
-    const isAdminRoute = to.path.startsWith('/admin')
-    const isSettingsRoute = to.path.startsWith('/settings')
-    if (isAdminRoute || isSettingsRoute) {
-      const { isAdmin, can } = usePermissions()
-      if (isAdminRoute && !isAdmin.value) {
-        next({ path: '/', replace: true })
-        return
-      }
-      if (isSettingsRoute && !can('settings.view') && !can('smtp.view')) {
+    // Permission gating: only block admin routes (org admin needs admin role)
+    // Settings routes are open to all authenticated users — the pages handle their own permission display
+    if (to.path.startsWith('/admin')) {
+      const { isAdmin } = usePermissions()
+      if (!isAdmin.value) {
         next({ path: '/', replace: true })
         return
       }

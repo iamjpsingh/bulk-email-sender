@@ -56,6 +56,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   member: [
     'org.view', 'users.view', 'teams.view',
+    'settings.view', 'smtp.view',
     'campaigns.view', 'campaigns.manage',
     'contacts.view', 'contacts.manage',
     'templates.view', 'segments.view',

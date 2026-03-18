@@ -227,7 +227,7 @@ function isDraggable(campaign: Campaign): boolean {
     <div class="flex-1 flex overflow-hidden pt-4 gap-4">
       <div class="flex-1 overflow-y-auto transition-[flex] duration-200">
         <!-- Month View -->
-        <div v-if="viewMode === 'month'" class="grid grid-cols-7 bg-bg-card border border-border rounded-xl overflow-hidden">
+        <div v-if="viewMode === 'month'" class="grid grid-cols-7 bg-bg-card border border-border rounded-xl">
           <div
             v-for="day in dayNames"
             :key="day"
@@ -308,7 +308,7 @@ function isDraggable(campaign: Campaign): boolean {
         </div>
 
         <!-- Day View -->
-        <div v-if="viewMode === 'day'" class="bg-bg-card border border-border rounded-xl overflow-hidden">
+        <div v-if="viewMode === 'day'" class="bg-bg-card border border-border rounded-xl">
           <div v-for="hour in 24" :key="hour" class="flex min-h-[52px] border-b border-border last:border-b-0">
             <span class="w-[60px] shrink-0 text-xs text-text-muted pt-2.5 pr-3 text-right">
               {{ (hour - 1).toString().padStart(2, '0') }}:00

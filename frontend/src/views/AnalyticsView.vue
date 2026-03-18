@@ -225,7 +225,7 @@ async function exportData(format: 'csv' | 'json') {
       <!-- Campaign Reports Table -->
       <section class="mb-8">
         <h2 class="text-base font-semibold text-text-primary mb-4">Campaign Reports</h2>
-        <div class="bg-bg-card border border-border rounded-xl overflow-hidden">
+        <div class="bg-bg-card border border-border rounded-xl">
           <div class="overflow-x-auto">
             <table class="data-table w-full border-collapse text-sm">
               <thead>

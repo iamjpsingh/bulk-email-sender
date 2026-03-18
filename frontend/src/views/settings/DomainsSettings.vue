@@ -140,7 +140,7 @@ onMounted(loadData)
     </div>
 
     <div v-else class="space-y-4">
-      <div v-for="domain in domains" :key="domain.id" class="bg-surface-1 border border-border rounded-xl overflow-hidden">
+      <div v-for="domain in domains" :key="domain.id" class="bg-surface-1 border border-border rounded-xl">
         <!-- Domain header -->
         <div class="px-4 py-3 flex items-center justify-between">
           <div class="flex items-center gap-3">

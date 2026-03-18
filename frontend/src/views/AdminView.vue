@@ -358,7 +358,7 @@ async function onTabChange(key: string) {
           <EmptyState :icon="Users" title="No members" description="Add your first team member" />
         </div>
 
-        <div v-else class="bg-bg-card border border-border rounded-xl overflow-hidden">
+        <div v-else class="bg-bg-card border border-border rounded-xl">
           <table class="data-table w-full">
             <thead>
               <tr>
@@ -617,7 +617,7 @@ async function onTabChange(key: string) {
           <EmptyState :icon="ScrollText" title="No logs yet" description="Actions will appear here as your team works" />
         </div>
 
-        <div v-else class="bg-bg-card border border-border rounded-xl overflow-hidden">
+        <div v-else class="bg-bg-card border border-border rounded-xl">
           <!-- Audit Logs Table -->
           <table v-if="auditLogType === 'audit'" class="data-table w-full">
             <thead>

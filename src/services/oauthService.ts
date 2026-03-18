@@ -4,29 +4,37 @@
  */
 import { randomBytes } from 'crypto'
 import { logger } from '../utils/logger'
-import { OAUTH } from '../config'
+import { SERVER } from '../config'
 import { systemSettingsService } from './systemSettingsService'
 
-/** Get OAuth credentials — system_settings first, then .env fallback */
+/**
+ * Get OAuth credentials from system_settings ONLY.
+ * No .env fallback — platform admin configures via UI.
+ * Redirect URI is auto-computed from BASE_URL.
+ */
 function getGoogleOAuth() {
   const stored = systemSettingsService.getJson<{ clientId: string; clientSecret: string }>('oauth_google')
   return {
-    CLIENT_ID: stored?.clientId || OAUTH.GOOGLE.CLIENT_ID || '',
-    CLIENT_SECRET: stored?.clientSecret || OAUTH.GOOGLE.CLIENT_SECRET || '',
-    REDIRECT_URI: OAUTH.GOOGLE.REDIRECT_URI,
-    SCOPES: OAUTH.GOOGLE.SCOPES,
-    isConfigured: () => !!(stored?.clientId || OAUTH.GOOGLE.CLIENT_ID),
+    CLIENT_ID: stored?.clientId || '',
+    CLIENT_SECRET: stored?.clientSecret || '',
+    REDIRECT_URI: `${SERVER.BASE_URL}/api/auth/google/callback`,
+    SCOPES: [
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+    ],
+    isConfigured: () => !!stored?.clientId,
   }
 }
 
 function getMicrosoftOAuth() {
   const stored = systemSettingsService.getJson<{ clientId: string; clientSecret: string }>('oauth_microsoft')
   return {
-    CLIENT_ID: stored?.clientId || OAUTH.MICROSOFT.CLIENT_ID || '',
-    CLIENT_SECRET: stored?.clientSecret || OAUTH.MICROSOFT.CLIENT_SECRET || '',
-    REDIRECT_URI: OAUTH.MICROSOFT.REDIRECT_URI,
-    SCOPES: OAUTH.MICROSOFT.SCOPES,
-    isConfigured: () => !!(stored?.clientId || OAUTH.MICROSOFT.CLIENT_ID),
+    CLIENT_ID: stored?.clientId || '',
+    CLIENT_SECRET: stored?.clientSecret || '',
+    REDIRECT_URI: `${SERVER.BASE_URL}/api/auth/microsoft/callback`,
+    SCOPES: ['https://graph.microsoft.com/Mail.Send', 'https://graph.microsoft.com/User.Read', 'offline_access'],
+    isConfigured: () => !!stored?.clientId,
   }
 }
 

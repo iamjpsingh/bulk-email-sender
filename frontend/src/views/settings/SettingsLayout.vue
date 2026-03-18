@@ -4,7 +4,6 @@ import PageHeader from '../../components/ui/PageHeader.vue'
 import { cn } from '../../lib/utils'
 import {
   Server,
-  Globe,
   Hash,
   Webhook,
 } from 'lucide-vue-next'
@@ -12,8 +11,7 @@ import {
 const route = useRoute()
 
 const navItems = [
-  { path: '/settings/delivery-servers', label: 'Delivery Servers', icon: Server, description: 'Email providers & SMTP configs' },
-  { path: '/settings/sending-domains', label: 'Sending Domains', icon: Globe, description: 'Domains, tracking & emails' },
+  { path: '/settings/delivery-servers', label: 'Delivery Servers', icon: Server, description: 'Email providers, domains & sending' },
   { path: '/settings/api-keys', label: 'API Keys', icon: Hash, description: 'Developer API access' },
   { path: '/settings/webhooks', label: 'Webhooks', icon: Webhook, description: 'Event notifications' },
 ]

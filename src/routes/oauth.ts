@@ -23,12 +23,12 @@ app.get('/oauth/status', (c) => {
   return success(c, {
     providers: {
       google: {
-        configured: !!(googleStored?.clientId || process.env.GOOGLE_CLIENT_ID),
+        configured: !!googleStored?.clientId,
         name: 'Google Gmail',
         description: 'Send emails via Gmail API',
       },
       microsoft: {
-        configured: !!(msStored?.clientId || process.env.MICROSOFT_CLIENT_ID),
+        configured: !!msStored?.clientId,
         name: 'Microsoft Outlook/365',
         description: 'Send emails via Microsoft Graph API',
       },

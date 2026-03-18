@@ -69,33 +69,35 @@ class SendingDomainService {
   }
 
   /**
-   * Get DNS records the org needs to add for domain verification.
+   * Get DNS record guidance for a domain.
+   * These are informational — actual DNS records come from your email provider
+   * (SES, SendGrid, Mailgun, etc.), not from Dispatch.
    */
   getDnsRecords(domain: SendingDomain): { type: string; name: string; value: string; purpose: string }[] {
     return [
       {
-        type: 'TXT',
-        name: `${domain.dkim_selector}._domainkey.${domain.domain}`,
-        value: `v=DKIM1; k=rsa; p=YOUR_DKIM_PUBLIC_KEY`,
-        purpose: 'DKIM — Email authentication',
+        type: 'INFO',
+        name: 'SPF Record',
+        value: `Add your email provider's SPF include to your domain's TXT record. Example: v=spf1 include:amazonses.com ~all`,
+        purpose: 'SPF — Authorizes your provider to send on behalf of your domain. Get the exact value from your provider (SES, SendGrid, Mailgun, etc.).',
       },
       {
-        type: 'TXT',
-        name: domain.domain,
-        value: 'v=spf1 include:_spf.dispatch.app ~all',
-        purpose: 'SPF — Authorize sending',
+        type: 'INFO',
+        name: 'DKIM Record',
+        value: `Your email provider generates DKIM keys. Add the CNAME or TXT record they give you.`,
+        purpose: 'DKIM — Signs emails cryptographically. Each provider has their own DKIM setup process.',
       },
       {
-        type: 'TXT',
-        name: `_dmarc.${domain.domain}`,
-        value: 'v=DMARC1; p=quarantine; rua=mailto:dmarc@dispatch.app',
-        purpose: 'DMARC — Policy enforcement',
+        type: 'INFO',
+        name: 'DMARC Record',
+        value: `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@${domain.domain}`,
+        purpose: 'DMARC — Tells receivers what to do with unauthenticated mail. Add as TXT record at _dmarc.' + domain.domain,
       },
       {
-        type: 'CNAME',
-        name: `bounce.${domain.domain}`,
-        value: 'bounce.dispatch.app',
-        purpose: 'Return-Path — Bounce handling',
+        type: 'INFO',
+        name: 'Where to get DNS records',
+        value: `SES: AWS Console → SES → Verified Identities. SendGrid: Settings → Sender Authentication. Mailgun: Domains → DNS Records. Postmark: Sender Signatures.`,
+        purpose: 'Each delivery server provider gives you specific DNS records to add. Check your provider dashboard.',
       },
     ]
   }

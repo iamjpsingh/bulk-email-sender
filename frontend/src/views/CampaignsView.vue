@@ -11,6 +11,9 @@ import ProgressBar from '../components/ui/ProgressBar.vue'
 import SearchInput from '../components/ui/SearchInput.vue'
 import Skeleton from '../components/ui/Skeleton.vue'
 import AlertBanner from '../components/ui/AlertBanner.vue'
+import {
+  DropdownMenuRoot, DropdownMenuTrigger, DropdownMenuPortal, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from 'radix-vue'
 import { campaignsApi, templatesApi, contactsApi } from '../lib/api'
 import type { Campaign as CampaignType } from '../lib/api'
 import { useToast } from '../composables/useToast'
@@ -304,72 +307,45 @@ watch(searchQuery, () => {
               <StatusBadge :status="c.status" type="campaign" />
             </div>
 
-            <!-- Actions Dropdown Trigger -->
-            <div class="relative shrink-0">
-              <button
-                data-menu-trigger
-                class="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-text-muted hover:bg-bg-secondary transition-colors"
-                :disabled="!!actionLoading"
-                @click.stop="toggleMenu(c.id)"
-              >
-                <Loader2 v-if="actionLoading && actionLoading.startsWith(c.id)" :size="15" class="spin" />
-                <MoreHorizontal v-else :size="15" />
-              </button>
-
-              <!-- Dropdown Panel -->
-              <div
-                v-if="openMenuId === c.id"
-                data-menu-panel
-                class="absolute right-0 top-full mt-1 z-30 min-w-40 bg-bg-secondary border border-border rounded-lg shadow-lg p-1"
-              >
-                <button
-                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
-                  @click="campaignAction(c.id, 'edit')"
-                >
-                  <Pencil :size="14" /> Edit
-                </button>
-                <button
-                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
-                  @click="campaignAction(c.id, 'clone')"
-                >
-                  <Copy :size="14" /> Clone
-                </button>
-                <button
-                  v-if="c.status === 'draft' || c.status === 'scheduled'"
-                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
-                  @click="campaignAction(c.id, 'launch')"
-                >
-                  <Rocket :size="14" /> Launch
-                </button>
-                <button
-                  v-if="c.status === 'sending'"
-                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
-                  @click="campaignAction(c.id, 'pause')"
-                >
-                  <Pause :size="14" /> Pause
-                </button>
-                <button
-                  v-if="c.status === 'sending' || c.status === 'scheduled'"
-                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
-                  @click="campaignAction(c.id, 'cancel')"
-                >
-                  <X :size="14" /> Cancel
-                </button>
-                <button
-                  v-if="c.status === 'completed' || c.status === 'cancelled'"
-                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary rounded-md hover:bg-accent/10 hover:text-text-primary transition-colors text-left"
-                  @click="campaignAction(c.id, 'archive')"
-                >
-                  <Archive :size="14" /> Archive
-                </button>
-                <div class="my-1 border-t border-border"></div>
-                <button
-                  class="flex items-center gap-2 w-full px-3 py-2 text-sm text-danger rounded-md hover:bg-danger/10 transition-colors text-left"
-                  @click="promptDelete(c.id)"
-                >
-                  <Trash2 :size="14" /> Delete
-                </button>
-              </div>
+            <!-- Actions Dropdown (radix-vue with portal — no overflow issues) -->
+            <div class="shrink-0">
+              <DropdownMenuRoot>
+                <DropdownMenuTrigger as-child>
+                  <button
+                    class="flex items-center justify-center w-8 h-8 rounded-md border border-border text-text-muted hover:text-text-primary hover:border-text-muted hover:bg-bg-secondary transition-colors"
+                    :disabled="!!actionLoading"
+                  >
+                    <Loader2 v-if="actionLoading && actionLoading.startsWith(c.id)" :size="15" class="spin" />
+                    <MoreHorizontal v-else :size="15" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuContent :side-offset="4" align="end" class="z-50 min-w-[160px] bg-surface-1 border border-border rounded-lg shadow-lg p-1 animate-in fade-in-0 zoom-in-95">
+                    <DropdownMenuItem class="flex items-center gap-2 px-3 py-2 text-sm rounded-md cursor-pointer text-text-secondary hover:bg-accent/10 hover:text-text-primary transition outline-none" @select="campaignAction(c.id, 'edit')">
+                      <Pencil :size="14" /> Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem class="flex items-center gap-2 px-3 py-2 text-sm rounded-md cursor-pointer text-text-secondary hover:bg-accent/10 hover:text-text-primary transition outline-none" @select="campaignAction(c.id, 'clone')">
+                      <Copy :size="14" /> Clone
+                    </DropdownMenuItem>
+                    <DropdownMenuItem v-if="c.status === 'draft' || c.status === 'scheduled'" class="flex items-center gap-2 px-3 py-2 text-sm rounded-md cursor-pointer text-text-secondary hover:bg-accent/10 hover:text-text-primary transition outline-none" @select="campaignAction(c.id, 'launch')">
+                      <Rocket :size="14" /> Launch
+                    </DropdownMenuItem>
+                    <DropdownMenuItem v-if="c.status === 'sending'" class="flex items-center gap-2 px-3 py-2 text-sm rounded-md cursor-pointer text-text-secondary hover:bg-accent/10 hover:text-text-primary transition outline-none" @select="campaignAction(c.id, 'pause')">
+                      <Pause :size="14" /> Pause
+                    </DropdownMenuItem>
+                    <DropdownMenuItem v-if="c.status === 'sending' || c.status === 'scheduled'" class="flex items-center gap-2 px-3 py-2 text-sm rounded-md cursor-pointer text-text-secondary hover:bg-accent/10 hover:text-text-primary transition outline-none" @select="campaignAction(c.id, 'cancel')">
+                      <X :size="14" /> Cancel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem v-if="c.status === 'completed' || c.status === 'cancelled'" class="flex items-center gap-2 px-3 py-2 text-sm rounded-md cursor-pointer text-text-secondary hover:bg-accent/10 hover:text-text-primary transition outline-none" @select="campaignAction(c.id, 'archive')">
+                      <Archive :size="14" /> Archive
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator class="h-px bg-border my-1" />
+                    <DropdownMenuItem class="flex items-center gap-2 px-3 py-2 text-sm rounded-md cursor-pointer text-danger hover:bg-danger/10 transition outline-none" @select="promptDelete(c.id)">
+                      <Trash2 :size="14" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenuPortal>
+              </DropdownMenuRoot>
             </div>
           </div>
 

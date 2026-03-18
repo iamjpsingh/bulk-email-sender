@@ -532,4 +532,93 @@ function buildUpdates(body: Record<string, any>) {
   return updates
 }
 
+// ============================================================================
+// Fetch Verified Domains from Provider API
+// ============================================================================
+
+app.post('/config/fetch-domains', requirePermission(PERMISSIONS.SMTP_MANAGE), async (c) => {
+  const body = await c.req.json() as { provider_type: string; api_key: string; api_secret?: string; api_region?: string }
+  const { provider_type, api_key, api_secret, api_region } = body
+
+  if (!provider_type || !api_key) return error(c, 'provider_type and api_key required', 400)
+
+  try {
+    let domains: string[] = []
+
+    switch (provider_type) {
+      case 'ses': {
+        if (!api_region) return error(c, 'api_region required for SES', 400)
+        // SES: ListIdentities via Query API
+        const url = `https://email.${api_region}.amazonaws.com/?Action=ListIdentities&IdentityType=Domain&Version=2010-12-01`
+        // SES requires SigV4 — use SMTP credential derivation instead
+        // For now, we can't easily call SES API without AWS SDK, so return guidance
+        domains = []
+        return success(c, {
+          domains,
+          note: 'SES domain auto-fetch requires AWS SDK. Enter your verified domain manually — check AWS Console → SES → Verified Identities.',
+        })
+      }
+
+      case 'sendgrid': {
+        const res = await fetch('https://api.sendgrid.com/v3/whitelabel/domains', {
+          headers: { Authorization: `Bearer ${api_key}` },
+        })
+        if (res.ok) {
+          const data = await res.json() as any[]
+          domains = data.filter(d => d.valid).map(d => d.domain)
+        }
+        break
+      }
+
+      case 'mailgun': {
+        const region = api_region === 'eu' ? 'https://api.eu.mailgun.net' : 'https://api.mailgun.net'
+        const res = await fetch(`${region}/v3/domains`, {
+          headers: { Authorization: `Basic ${Buffer.from(`api:${api_key}`).toString('base64')}` },
+        })
+        if (res.ok) {
+          const data = await res.json() as any
+          domains = (data.items || []).map((d: any) => d.name)
+        }
+        break
+      }
+
+      case 'postmark': {
+        const res = await fetch('https://api.postmarkapp.com/sender-signatures', {
+          headers: { 'X-Postmark-Server-Token': api_key, Accept: 'application/json' },
+        })
+        if (res.ok) {
+          const data = await res.json() as any
+          domains = (data.SenderSignatures || [])
+            .filter((s: any) => s.Confirmed)
+            .map((s: any) => s.Domain || s.EmailAddress?.split('@')[1])
+            .filter(Boolean)
+          // Deduplicate
+          domains = [...new Set(domains)]
+        }
+        break
+      }
+
+      case 'sparkpost': {
+        const res = await fetch('https://api.sparkpost.com/api/v1/sending-domains', {
+          headers: { Authorization: api_key },
+        })
+        if (res.ok) {
+          const data = await res.json() as any
+          domains = (data.results || [])
+            .filter((d: any) => d.status?.ownership_verified)
+            .map((d: any) => d.domain)
+        }
+        break
+      }
+
+      default:
+        return error(c, 'Domain fetch not supported for this provider type', 400)
+    }
+
+    return success(c, { domains })
+  } catch (e: any) {
+    return error(c, `Failed to fetch domains: ${e.message}`, 500)
+  }
+})
+
 export default app

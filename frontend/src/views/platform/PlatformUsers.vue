@@ -3,7 +3,10 @@ import { ref, computed, onMounted } from 'vue'
 import { adminApi, type PlatformUser } from '../../lib/api/admin'
 import { useToast } from '../../composables/useToast'
 import ConfirmDialog from '../../components/ui/ConfirmDialog.vue'
-import { Users, Search, Loader2, Shield, ChevronLeft, ChevronRight, Ban, CheckCircle, Trash2, MoreVertical } from 'lucide-vue-next'
+import {
+  DropdownMenuRoot, DropdownMenuTrigger, DropdownMenuPortal, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from 'radix-vue'
+import { Users, Search, Loader2, ChevronLeft, ChevronRight, Ban, CheckCircle, Trash2, MoreVertical, Mail } from 'lucide-vue-next'
 
 const toast = useToast()
 const loading = ref(true)
@@ -14,7 +17,6 @@ const limit = 20
 const searchQuery = ref('')
 const statusFilter = ref('')
 const deleteConfirm = ref<{ show: boolean; userId: string; name: string }>({ show: false, userId: '', name: '' })
-const actionMenuOpen = ref<string | null>(null)
 
 const filtered = computed(() => {
   let result = users.value
@@ -39,7 +41,6 @@ async function loadUsers() {
 }
 
 async function updateStatus(userId: string, status: string) {
-  actionMenuOpen.value = null
   try {
     await adminApi.platformUpdateUserStatus(userId, status)
     toast.success(`User ${status}`)
@@ -58,12 +59,7 @@ async function confirmDelete() {
 }
 
 function promptDelete(u: PlatformUser) {
-  actionMenuOpen.value = null
   deleteConfirm.value = { show: true, userId: u.id, name: u.name }
-}
-
-function toggleMenu(userId: string) {
-  actionMenuOpen.value = actionMenuOpen.value === userId ? null : userId
 }
 
 function nextPage() { if (page.value * limit < total.value) { page.value++; loadUsers() } }
@@ -102,7 +98,8 @@ onMounted(loadUsers)
 
     <div v-if="loading" class="flex justify-center py-12"><Loader2 :size="20" class="animate-spin text-text-muted" /></div>
 
-    <div v-else class="bg-bg-card border border-border rounded-xl overflow-hidden">
+    <!-- Users Table (no overflow-hidden, radix dropdown with portal) -->
+    <div v-else class="bg-bg-card border border-border rounded-xl">
       <table class="w-full text-sm">
         <thead>
           <tr class="bg-bg-tertiary border-b border-border">
@@ -111,7 +108,7 @@ onMounted(loadUsers)
             <th class="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Status</th>
             <th class="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Last Login</th>
             <th class="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Joined</th>
-            <th class="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider w-20">Actions</th>
+            <th class="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider w-16"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
@@ -135,33 +132,44 @@ onMounted(loadUsers)
             </td>
             <td class="px-4 py-3 text-text-muted text-xs">{{ formatDate(u.last_login_at) }}</td>
             <td class="px-4 py-3 text-text-muted text-xs">{{ formatDate(u.created_at) }}</td>
-            <td class="px-4 py-3 text-right relative">
-              <button @click="toggleMenu(u.id)" class="p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-1 transition">
-                <MoreVertical :size="14" />
-              </button>
-              <!-- Dropdown -->
-              <div v-if="actionMenuOpen === u.id" class="absolute right-4 top-10 z-10 bg-surface-1 border border-border rounded-lg shadow-lg py-1 min-w-[160px]">
-                <button
-                  v-if="u.status === 'active'"
-                  class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-amber-400 hover:bg-surface-0 transition"
-                  @click="updateStatus(u.id, 'suspended')"
-                >
-                  <Ban :size="12" /> Suspend User
-                </button>
-                <button
-                  v-if="u.status === 'suspended'"
-                  class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-green-400 hover:bg-surface-0 transition"
-                  @click="updateStatus(u.id, 'active')"
-                >
-                  <CheckCircle :size="12" /> Activate User
-                </button>
-                <button
-                  class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-red-400 hover:bg-surface-0 transition"
-                  @click="promptDelete(u)"
-                >
-                  <Trash2 :size="12" /> Delete User
-                </button>
-              </div>
+            <td class="px-4 py-3 text-right">
+              <!-- Radix Dropdown with Portal — never clipped by table overflow -->
+              <DropdownMenuRoot>
+                <DropdownMenuTrigger as-child>
+                  <button class="p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-1 transition">
+                    <MoreVertical :size="14" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuContent
+                    :side-offset="4"
+                    align="end"
+                    class="z-50 min-w-[160px] bg-surface-1 border border-border rounded-lg shadow-lg py-1 animate-in fade-in-0 zoom-in-95"
+                  >
+                    <DropdownMenuItem
+                      v-if="u.status === 'active'"
+                      class="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer text-amber-400 hover:bg-surface-0 transition outline-none"
+                      @select="updateStatus(u.id, 'suspended')"
+                    >
+                      <Ban :size="12" /> Suspend User
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      v-if="u.status === 'suspended'"
+                      class="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer text-green-400 hover:bg-surface-0 transition outline-none"
+                      @select="updateStatus(u.id, 'active')"
+                    >
+                      <CheckCircle :size="12" /> Activate User
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator class="h-px bg-border my-1" />
+                    <DropdownMenuItem
+                      class="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer text-red-400 hover:bg-surface-0 transition outline-none"
+                      @select="promptDelete(u)"
+                    >
+                      <Trash2 :size="12" /> Delete User
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenuPortal>
+              </DropdownMenuRoot>
             </td>
           </tr>
           <tr v-if="filtered.length === 0">
