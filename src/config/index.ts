@@ -51,7 +51,7 @@ export const AUTH = {
     '/api/events/stream',
     '/api/webhooks/bounce/',
     '/api/whatsapp/webhook',
-    '/api/admin/platform/settings/mailer/oauth/callback',
+    // Platform mailer OAuth now uses unified /api/auth/google/callback & /api/auth/microsoft/callback
     '/api/admin/cloudflare/callback',
     '/api/contacts/preferences/public/',
     '/api/webhooks/inbound/',
@@ -64,7 +64,7 @@ export const OAUTH = {
   GOOGLE: {
     CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-    REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || `${SERVER.BASE_URL}/auth/google/callback`,
+    REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || `${SERVER.BASE_URL}/api/auth/google/callback`,
     SCOPES: [
       'https://www.googleapis.com/auth/gmail.send',
       'https://www.googleapis.com/auth/userinfo.email',
@@ -75,7 +75,7 @@ export const OAUTH = {
   MICROSOFT: {
     CLIENT_ID: process.env.MICROSOFT_CLIENT_ID,
     CLIENT_SECRET: process.env.MICROSOFT_CLIENT_SECRET,
-    REDIRECT_URI: process.env.MICROSOFT_REDIRECT_URI || `${SERVER.BASE_URL}/auth/microsoft/callback`,
+    REDIRECT_URI: process.env.MICROSOFT_REDIRECT_URI || `${SERVER.BASE_URL}/api/auth/microsoft/callback`,
     SCOPES: ['https://graph.microsoft.com/Mail.Send', 'https://graph.microsoft.com/User.Read', 'offline_access'],
     isConfigured: () => !!(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET),
   },

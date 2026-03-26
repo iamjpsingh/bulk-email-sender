@@ -32,13 +32,13 @@ defineEmits<{
               'px-4 py-2 rounded-md text-[13px]',
               modelValue === tab.key
                 ? 'bg-accent text-white font-semibold'
-                : 'text-text-secondary hover:bg-white/[0.05] hover:text-text-primary'
+                : 'text-muted-foreground hover:bg-white/[0.05] hover:text-foreground'
             )
           : cn(
               'px-4 py-2.5 text-sm border-b-2 -mb-px',
               modelValue === tab.key
                 ? 'text-accent border-accent'
-                : 'text-text-muted border-transparent hover:text-text-primary'
+                : 'text-muted-foreground border-transparent hover:text-foreground'
             )
       )"
       @click="$emit('update:modelValue', tab.key)"
@@ -52,7 +52,7 @@ defineEmits<{
             ? 'bg-white/20 text-white'
             : modelValue === tab.key
               ? 'bg-accent/15 text-accent'
-              : 'bg-bg-tertiary text-text-muted'
+              : 'bg-muted text-muted-foreground'
         )"
       >
         {{ tab.count }}

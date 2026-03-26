@@ -12,14 +12,14 @@ defineProps<{
   <div class="flex flex-col items-center text-center py-16 px-6">
     <div
       v-if="icon"
-      class="flex items-center justify-center w-14 h-14 rounded-2xl bg-bg-tertiary mb-5"
+      class="flex items-center justify-center w-14 h-14 rounded-2xl bg-muted mb-5"
     >
-      <component :is="icon" :size="28" class="text-text-muted" />
+      <component :is="icon" :size="28" class="text-muted-foreground" />
     </div>
-    <h3 class="text-base font-semibold text-text-primary m-0">
+    <h3 class="text-base font-semibold text-foreground m-0">
       {{ title }}
     </h3>
-    <p v-if="description" class="text-sm text-text-muted max-w-sm mt-2 m-0 leading-relaxed">
+    <p v-if="description" class="text-sm text-muted-foreground max-w-sm mt-2 m-0 leading-relaxed">
       {{ description }}
     </p>
     <div v-if="$slots.actions" class="flex gap-3 mt-5">

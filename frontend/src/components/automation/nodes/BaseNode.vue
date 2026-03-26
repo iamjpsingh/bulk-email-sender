@@ -28,8 +28,8 @@ defineProps<{
         <component :is="icon" :size="14" :style="{ color }" />
       </div>
       <div class="flex-1 min-w-0">
-        <div class="text-xs font-semibold text-text-primary truncate">{{ label }}</div>
-        <div class="text-[10px] text-text-muted truncate"><slot /></div>
+        <div class="text-xs font-semibold text-foreground truncate">{{ label }}</div>
+        <div class="text-[10px] text-muted-foreground truncate"><slot /></div>
       </div>
     </div>
 

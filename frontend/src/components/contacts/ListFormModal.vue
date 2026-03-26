@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { X, Loader2 } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps<{
   show: boolean
@@ -48,13 +49,13 @@ function handleSave() {
       class="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000] backdrop-blur-[4px]"
       @click.self="emit('close')"
     >
-      <div class="bg-bg-secondary border border-border rounded-xl w-[480px] max-w-[90vw] max-h-[80vh] overflow-y-auto">
+      <div class="bg-secondary border border-border rounded-xl w-[480px] max-w-[90vw] max-h-[80vh] overflow-y-auto">
         <div class="flex justify-between items-center px-6 py-5 border-b border-border">
-          <h3 class="text-base font-semibold text-text-primary m-0">
+          <h3 class="text-base font-semibold text-foreground m-0">
             {{ mode === 'create' ? 'New Contact List' : 'Edit List' }}
           </h3>
           <button
-            class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
+            class="bg-transparent border-none cursor-pointer p-1 text-muted-foreground rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
             @click="emit('close')"
           >
             <X :size="18" />
@@ -62,41 +63,34 @@ function handleSave() {
         </div>
         <div class="p-6">
           <div class="mb-4">
-            <label class="block text-[13px] font-medium text-text-secondary mb-1.5">Name</label>
+            <label class="block text-sm font-medium text-muted-foreground mb-2">Name</label>
             <input
               v-model="form.name"
               type="text"
               :placeholder="mode === 'create' ? 'e.g. Newsletter Subscribers' : ''"
-              class="w-full px-3 py-2.5 bg-bg-primary border border-border rounded-lg text-text-primary text-sm outline-none transition-colors duration-150 focus:border-accent"
+              class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-foreground text-sm outline-none transition-colors duration-150 focus:border-accent"
             />
           </div>
           <div class="mb-4">
-            <label class="block text-[13px] font-medium text-text-secondary mb-1.5">
+            <label class="block text-sm font-medium text-muted-foreground mb-2">
               Description{{ mode === 'create' ? ' (optional)' : '' }}
             </label>
             <input
               v-model="form.description"
               type="text"
               :placeholder="mode === 'create' ? 'Brief description' : ''"
-              class="w-full px-3 py-2.5 bg-bg-primary border border-border rounded-lg text-text-primary text-sm outline-none transition-colors duration-150 focus:border-accent"
+              class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-foreground text-sm outline-none transition-colors duration-150 focus:border-accent"
             />
           </div>
         </div>
         <div class="flex justify-end gap-2 px-6 py-4 border-t border-border">
-          <button
-            class="btn-ghost inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
-            @click="emit('close')"
-          >
+          <Button variant="ghost" @click="emit('close')">
             Cancel
-          </button>
-          <button
-            class="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
-            @click="handleSave"
-            :disabled="saving"
-          >
+          </Button>
+          <Button @click="handleSave" :disabled="saving">
             <Loader2 v-if="saving" :size="14" class="animate-spin" />
             {{ mode === 'create' ? 'Create' : 'Save' }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

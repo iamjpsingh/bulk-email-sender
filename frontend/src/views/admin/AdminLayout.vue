@@ -53,13 +53,13 @@ function isActive(path: string): boolean {
               'group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150',
               isActive(item.path)
                 ? 'bg-accent/8 text-accent font-medium'
-                : 'text-text-muted hover:bg-surface-1 hover:text-text-primary'
+                : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
             )"
           >
             <component
               :is="item.icon"
               :size="16"
-              :class="isActive(item.path) ? 'text-accent' : 'text-text-muted group-hover:text-text-secondary'"
+              :class="isActive(item.path) ? 'text-accent' : 'text-muted-foreground group-hover:text-muted-foreground'"
             />
             <div class="flex-1 min-w-0">
               <div class="text-sm">{{ item.label }}</div>
@@ -79,7 +79,7 @@ function isActive(path: string): boolean {
               'flex items-center gap-2 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-all',
               isActive(item.path)
                 ? 'bg-accent/8 text-accent font-medium'
-                : 'text-text-muted hover:bg-surface-1'
+                : 'text-muted-foreground hover:bg-secondary'
             )"
           >
             <component :is="item.icon" :size="14" />

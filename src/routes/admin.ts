@@ -16,6 +16,7 @@ import { systemMailerService } from '../services/systemMailerService'
 import type { SystemMailerConfig, GmailOAuthProviderConfig, OutlookOAuthProviderConfig } from '../services/systemMailerService'
 import { webhookRegistrationService } from '../services/webhookRegistrationService'
 import { cloudflareService } from '../services/cloudflareService'
+import { oauthService } from '../services/oauthService'
 import { sendingDomainService } from '../services/sendingDomainService'
 import { db } from '../db/connection'
 import { SERVER } from '../config'
@@ -230,123 +231,18 @@ app.put('/admin/platform/settings/oauth', requirePlatformAdmin(), async (c) => {
 
 /** Initiate OAuth connect flow for platform system mailer (Gmail/Outlook) */
 app.get('/admin/platform/settings/mailer/oauth/:provider/connect', requirePlatformAdmin(), (c) => {
-  const user = requireAuth(c)
-  const provider = c.req.param('provider') as 'gmail' | 'outlook'
-
-  const oauthCreds = systemSettingsService.getJson<{ clientId: string; clientSecret: string }>(`oauth_${provider === 'gmail' ? 'google' : 'microsoft'}`)
-  if (!oauthCreds) return error(c, `${provider} OAuth credentials not configured. Save Client ID and Secret first.`, 400)
-
-  const state = Buffer.from(JSON.stringify({ userId: user.id, purpose: 'platform_mailer', provider })).toString('base64url')
-
-  if (provider === 'gmail') {
-    const params = new URLSearchParams({
-      client_id: oauthCreds.clientId,
-      redirect_uri: `${SERVER.BASE_URL}/api/admin/platform/settings/mailer/oauth/callback`,
-      response_type: 'code',
-      scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email',
-      access_type: 'offline',
-      prompt: 'consent',
-      state,
-    })
-    return success(c, { authUrl: `https://accounts.google.com/o/oauth2/v2/auth?${params}` })
-  } else {
-    const params = new URLSearchParams({
-      client_id: oauthCreds.clientId,
-      redirect_uri: `${SERVER.BASE_URL}/api/admin/platform/settings/mailer/oauth/callback`,
-      response_type: 'code',
-      scope: 'https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read offline_access',
-      state,
-    })
-    return success(c, { authUrl: `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}` })
-  }
-})
-
-/** OAuth callback for platform system mailer */
-app.get('/admin/platform/settings/mailer/oauth/callback', async (c) => {
-  const code = c.req.query('code')
-  const stateParam = c.req.query('state')
-  const oauthError = c.req.query('error')
-
-  if (oauthError || !code || !stateParam) {
-    return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?oauth_error=${oauthError || 'missing_code'}`)
-  }
-
-  let stateData: { userId: string; purpose: string; provider: string }
   try {
-    stateData = JSON.parse(Buffer.from(stateParam, 'base64url').toString())
-  } catch {
-    return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?oauth_error=invalid_state`)
-  }
+    const user = requireAuth(c)
+    const provider = c.req.param('provider') as 'gmail' | 'outlook'
 
-  const provider = stateData.provider as 'gmail' | 'outlook'
-  const oauthKey = provider === 'gmail' ? 'google' : 'microsoft'
-  const oauthCreds = systemSettingsService.getJson<{ clientId: string; clientSecret: string }>(`oauth_${oauthKey}`)
-  if (!oauthCreds) return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?oauth_error=no_credentials`)
+    // Uses the SAME redirect URI as user OAuth — no redirect_uri_mismatch
+    const authUrl = provider === 'gmail'
+      ? oauthService.getPlatformGoogleAuthUrl(user.id)
+      : oauthService.getPlatformMicrosoftAuthUrl(user.id)
 
-  const redirectUri = `${SERVER.BASE_URL}/api/admin/platform/settings/mailer/oauth/callback`
-
-  try {
-    if (provider === 'gmail') {
-      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ code, client_id: oauthCreds.clientId, client_secret: oauthCreds.clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }),
-      })
-      if (!tokenRes.ok) throw new Error('Token exchange failed')
-      const tokens = await tokenRes.json() as any
-
-      const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', { headers: { Authorization: `Bearer ${tokens.access_token}` } })
-      const userInfo = await userRes.json() as any
-
-      // Get existing mailer config or create base
-      const existing = systemMailerService.getConfig()
-      const config: SystemMailerConfig = {
-        fromName: existing?.fromName || 'Dispatch',
-        fromEmail: userInfo.email,
-        providerConfig: {
-          provider: 'gmail',
-          email: userInfo.email,
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          expiresAt: Date.now() + tokens.expires_in * 1000,
-          clientId: oauthCreds.clientId,
-          clientSecret: oauthCreds.clientSecret,
-        },
-      }
-      systemMailerService.saveConfig(config, stateData.userId)
-      return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?oauth_success=gmail&email=${encodeURIComponent(userInfo.email)}`)
-    } else {
-      const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ code, client_id: oauthCreds.clientId, client_secret: oauthCreds.clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code', scope: 'https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read offline_access' }),
-      })
-      if (!tokenRes.ok) throw new Error('Token exchange failed')
-      const tokens = await tokenRes.json() as any
-
-      const userRes = await fetch('https://graph.microsoft.com/v1.0/me', { headers: { Authorization: `Bearer ${tokens.access_token}` } })
-      const userInfo = await userRes.json() as any
-      const email = userInfo.mail || userInfo.userPrincipalName
-
-      const existing = systemMailerService.getConfig()
-      const config: SystemMailerConfig = {
-        fromName: existing?.fromName || 'Dispatch',
-        fromEmail: email,
-        providerConfig: {
-          provider: 'outlook',
-          email,
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          expiresAt: Date.now() + tokens.expires_in * 1000,
-          clientId: oauthCreds.clientId,
-          clientSecret: oauthCreds.clientSecret,
-        },
-      }
-      systemMailerService.saveConfig(config, stateData.userId)
-      return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?oauth_success=outlook&email=${encodeURIComponent(email)}`)
-    }
+    return success(c, { authUrl })
   } catch (e: any) {
-    return c.redirect(`${SERVER.FRONTEND_URL}/admin/platform-settings?oauth_error=${encodeURIComponent(e.message)}`)
+    return error(c, e.message || 'Failed to initiate OAuth', 500)
   }
 })
 

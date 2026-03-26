@@ -7,7 +7,7 @@ import { Send, Loader2, AlertCircle, CheckCircle, Users, Building2 } from 'lucid
 
 const route = useRoute()
 const router = useRouter()
-const { isAuthenticated, user, switchOrg } = useAuth()
+const { isAuthenticated, switchOrg } = useAuth()
 const token = route.params.token as string
 
 const loading = ref(true)
@@ -57,7 +57,7 @@ function goToDashboard() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-6 bg-bg-primary">
+  <div class="min-h-screen flex items-center justify-center p-6 bg-background">
     <div class="w-full max-w-[440px]">
       <!-- Logo -->
       <div class="text-center mb-10">
@@ -66,10 +66,10 @@ function goToDashboard() {
             <Send class="text-white" :size="20" />
           </div>
         </div>
-        <h1 class="text-[26px] font-bold tracking-tight text-text-primary mb-1">Team Invitation</h1>
+        <h1 class="text-[26px] font-bold tracking-tight text-foreground mb-1">Team Invitation</h1>
       </div>
 
-      <div class="bg-bg-card border border-border rounded-xl p-8">
+      <div class="bg-card border border-border rounded-xl p-8">
         <!-- Loading -->
         <div v-if="loading" class="flex items-center justify-center py-8">
           <Loader2 :size="24" class="spin text-accent" />
@@ -80,7 +80,7 @@ function goToDashboard() {
           <div class="w-12 h-12 rounded-full bg-danger/15 flex items-center justify-center mx-auto mb-4">
             <AlertCircle :size="24" class="text-danger" />
           </div>
-          <p class="text-text-primary text-sm mb-6">{{ error }}</p>
+          <p class="text-foreground text-sm mb-6">{{ error }}</p>
           <router-link to="/login" class="text-accent text-sm font-medium hover:underline">
             Go to Sign In
           </router-link>
@@ -91,8 +91,8 @@ function goToDashboard() {
           <div class="w-12 h-12 rounded-full bg-success/15 flex items-center justify-center mx-auto mb-4">
             <CheckCircle :size="24" class="text-success" />
           </div>
-          <p class="text-text-primary text-sm mb-2">You've joined <strong>{{ invitation?.orgName }}</strong></p>
-          <p class="text-text-muted text-xs mb-6">Role: {{ invitation?.role }}</p>
+          <p class="text-foreground text-sm mb-2">You've joined <strong>{{ invitation?.orgName }}</strong></p>
+          <p class="text-muted-foreground text-xs mb-6">Role: {{ invitation?.role }}</p>
           <button
             class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white text-sm font-semibold rounded-lg hover:brightness-110 transition-all"
             @click="goToDashboard"
@@ -108,11 +108,11 @@ function goToDashboard() {
               <Building2 :size="28" class="text-accent" />
             </div>
             <div class="text-center">
-              <p class="text-text-muted text-sm">You've been invited to join</p>
-              <h2 class="text-xl font-bold text-text-primary mt-1">{{ invitation.orgName }}</h2>
+              <p class="text-muted-foreground text-sm">You've been invited to join</p>
+              <h2 class="text-xl font-bold text-foreground mt-1">{{ invitation.orgName }}</h2>
               <div class="flex items-center justify-center gap-2 mt-2">
                 <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-accent/15 text-accent capitalize">{{ invitation.role }}</span>
-                <span class="text-text-muted text-xs">by {{ invitation.inviterName }}</span>
+                <span class="text-muted-foreground text-xs">by {{ invitation.inviterName }}</span>
               </div>
             </div>
           </div>
@@ -122,8 +122,8 @@ function goToDashboard() {
             <span>{{ error }}</span>
           </div>
 
-          <div v-if="!isAuthenticated" class="bg-surface-2 rounded-lg p-4 mb-4">
-            <p class="text-text-muted text-sm text-center">
+          <div v-if="!isAuthenticated" class="bg-card rounded-lg p-4 mb-4">
+            <p class="text-muted-foreground text-sm text-center">
               Please sign in with <strong>{{ invitation.email }}</strong> to accept this invitation.
             </p>
           </div>

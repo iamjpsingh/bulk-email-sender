@@ -3,6 +3,12 @@ import { ref, onMounted } from 'vue'
 import { adminApi } from '../../lib/api/admin'
 import type { OrgMember } from '../../lib/api/admin'
 import { useToast } from '../../composables/useToast'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import Modal from '../../components/ui/Modal.vue'
 import ConfirmDialog from '../../components/ui/ConfirmDialog.vue'
 import EmptyState from '../../components/ui/EmptyState.vue'
@@ -22,12 +28,12 @@ const editRoleModal = ref<{ show: boolean; userId: string; name: string; current
 
 const roleOptions = ['readonly', 'member', 'manager', 'admin', 'owner']
 
-function roleBadgeClass(role: string): string {
-  const map: Record<string, string> = {
-    owner: 'badge-accent', admin: 'badge-warning', manager: 'badge-info',
-    member: 'badge-default', readonly: 'badge-muted',
+function roleBadgeVariant(role: string): 'default' | 'success' | 'warning' | 'danger' | 'info' | 'outline' {
+  const map: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'outline'> = {
+    owner: 'default', admin: 'warning', manager: 'info',
+    member: 'outline', readonly: 'outline',
   }
-  return map[role] || 'badge-default'
+  return map[role] || 'outline'
 }
 
 function formatDate(d: string): string {
@@ -109,101 +115,113 @@ onMounted(loadMembers)
 
     <template v-else>
       <div class="flex justify-between items-center mb-4">
-        <p class="text-sm text-text-muted">{{ members.length }} member{{ members.length !== 1 ? 's' : '' }}</p>
-        <button class="btn-primary btn-sm" @click="showAddMember = true">
+        <p class="text-sm text-muted-foreground">{{ members.length }} member{{ members.length !== 1 ? 's' : '' }}</p>
+        <Button size="sm" @click="showAddMember = true">
           <UserPlus :size="15" /> Add Member
-        </button>
+        </Button>
       </div>
 
-      <div v-if="members.length === 0" class="bg-bg-card border border-border rounded-xl">
+      <div v-if="members.length === 0" class="bg-card border border-border rounded-xl">
         <EmptyState :icon="Users" title="No members" description="Add your first team member" />
       </div>
 
-      <div v-else class="bg-bg-card border border-border rounded-xl overflow-hidden">
-        <table class="data-table w-full">
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Email</th>
-              <th scope="col">Role</th>
-              <th scope="col">Status</th>
-              <th scope="col">Joined</th>
-              <th scope="col" class="w-20"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="m in members" :key="m.id">
-              <td class="font-medium text-text-primary">{{ m.name || '-' }}</td>
-              <td class="text-text-muted text-sm">{{ m.email }}</td>
-              <td>
-                <span :class="['badge-sm', roleBadgeClass(m.role)]">{{ m.role }}</span>
-              </td>
-              <td>
-                <span :class="['badge-sm', m.status === 'active' ? 'badge-success' : 'badge-warning']">
+      <div v-else class="bg-card border border-border rounded-xl overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Joined</TableHead>
+              <TableHead class="w-20"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="m in members" :key="m.id">
+              <TableCell class="font-medium text-foreground">{{ m.name || '-' }}</TableCell>
+              <TableCell class="text-muted-foreground text-sm">{{ m.email }}</TableCell>
+              <TableCell>
+                <Badge :variant="roleBadgeVariant(m.role)">{{ m.role }}</Badge>
+              </TableCell>
+              <TableCell>
+                <Badge :variant="m.status === 'active' ? 'success' : 'warning'">
                   {{ m.status }}
-                </span>
-              </td>
-              <td class="text-text-muted text-sm">{{ formatDate(m.joined_at) }}</td>
-              <td>
+                </Badge>
+              </TableCell>
+              <TableCell class="text-muted-foreground text-sm">{{ formatDate(m.joined_at) }}</TableCell>
+              <TableCell>
                 <div class="flex items-center gap-1">
-                  <button class="btn-ghost btn-sm" @click="promptEditRole(m)" title="Change role">
+                  <Button variant="ghost" size="sm" @click="promptEditRole(m)" title="Change role">
                     <Pencil :size="14" />
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     v-if="m.role !== 'owner'"
-                    class="btn-ghost btn-sm text-danger"
+                    variant="ghost"
+                    size="sm"
+                    class="text-danger"
                     @click="promptRemoveMember(m.user_id)"
                     title="Remove member"
                   >
                     <UserMinus :size="14" />
-                  </button>
+                  </Button>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </div>
 
       <!-- Add Member Modal -->
       <Modal :show="showAddMember" title="Add Member" size="sm" @close="showAddMember = false">
         <form id="add-member-form" @submit.prevent="addMember">
-          <div class="form-group">
-            <label class="form-label">Email Address</label>
-            <input v-model="addMemberForm.email" type="email" class="form-input" placeholder="user@example.com" required />
-            <p class="text-xs text-text-muted mt-1">User must already have an account</p>
+          <div class="flex flex-col gap-2">
+            <Label>Email Address</Label>
+            <Input v-model="addMemberForm.email" type="email" placeholder="user@example.com" required />
+            <p class="text-xs text-muted-foreground mt-1">User must already have an account</p>
           </div>
-          <div class="form-group">
-            <label class="form-label">Role</label>
-            <select v-model="addMemberForm.role" class="form-select">
-              <option v-for="r in roleOptions.filter(r => r !== 'owner')" :key="r" :value="r">{{ r }}</option>
-            </select>
+          <div class="flex flex-col gap-2">
+            <Label>Role</Label>
+            <Select v-model="addMemberForm.role">
+              <SelectTrigger>
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="r in roleOptions.filter(r => r !== 'owner')" :key="r" :value="r">{{ r }}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </form>
         <template #footer>
-          <button class="btn-ghost" @click="showAddMember = false">Cancel</button>
-          <button type="submit" form="add-member-form" class="btn-primary" :disabled="addingMember">
+          <Button variant="ghost" @click="showAddMember = false">Cancel</Button>
+          <Button type="submit" form="add-member-form" :disabled="addingMember">
             <Loader2 v-if="addingMember" :size="16" class="spin" />
             Add Member
-          </button>
+          </Button>
         </template>
       </Modal>
 
       <!-- Edit Role Modal -->
       <Modal :show="editRoleModal.show" title="Change Role" size="sm" @close="editRoleModal.show = false">
-        <p class="text-sm text-text-muted mb-4">
-          Change role for <strong class="text-text-primary">{{ editRoleModal.name }}</strong>
+        <p class="text-sm text-muted-foreground mb-4">
+          Change role for <strong class="text-foreground">{{ editRoleModal.name }}</strong>
         </p>
-        <div class="form-group">
-          <label class="form-label">Role</label>
-          <select v-model="editRoleModal.newRole" class="form-select">
-            <option v-for="r in roleOptions" :key="r" :value="r">{{ r }}</option>
-          </select>
+        <div class="mb-5">
+          <Label>Role</Label>
+          <Select v-model="editRoleModal.newRole">
+            <SelectTrigger>
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="r in roleOptions" :key="r" :value="r">{{ r }}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <template #footer>
-          <button class="btn-ghost" @click="editRoleModal.show = false">Cancel</button>
-          <button class="btn-primary" @click="confirmEditRole" :disabled="editRoleModal.newRole === editRoleModal.currentRole">
+          <Button variant="ghost" @click="editRoleModal.show = false">Cancel</Button>
+          <Button @click="confirmEditRole" :disabled="editRoleModal.newRole === editRoleModal.currentRole">
             Update Role
-          </button>
+          </Button>
         </template>
       </Modal>
 

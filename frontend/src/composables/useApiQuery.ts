@@ -10,7 +10,7 @@
  *   )
  */
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/vue-query'
-import type { MaybeRef } from 'vue'
+import type { MaybeRef, Ref, ComputedRef } from 'vue'
 import { computed, unref } from 'vue'
 import { useToast } from './useToast'
 
@@ -18,16 +18,16 @@ import { useToast } from './useToast'
 // useApiQuery — cached data fetching with auto loading/error
 // ============================================================================
 
-interface QueryOptions<T> {
+interface QueryOptions {
   enabled?: MaybeRef<boolean>
   staleTime?: number
   refetchOnMount?: boolean | 'always'
 }
 
 export function useApiQuery<T>(
-  key: QueryKey,
+  key: QueryKey | Ref<QueryKey> | ComputedRef<QueryKey>,
   fetcher: () => Promise<T>,
-  options?: QueryOptions<T>
+  options?: QueryOptions
 ) {
   const toast = useToast()
 

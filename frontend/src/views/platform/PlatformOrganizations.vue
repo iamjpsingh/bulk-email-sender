@@ -2,9 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { adminApi, type Organization } from '../../lib/api/admin'
 import { useToast } from '../../composables/useToast'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import ConfirmDialog from '../../components/ui/ConfirmDialog.vue'
 import Modal from '../../components/ui/Modal.vue'
-import { Building2, Search, Loader2, Users, ChevronLeft, ChevronRight, Ban, CheckCircle, Trash2, Archive, Eye, Mail, Calendar, Shield } from 'lucide-vue-next'
+import { Building2, Search, Loader2, Users, ChevronLeft, ChevronRight, Ban, CheckCircle, Trash2, Archive } from 'lucide-vue-next'
 
 const toast = useToast()
 const loading = ref(true)
@@ -41,7 +44,6 @@ async function loadOrgs() {
 }
 
 async function updateStatus(orgId: string, status: string) {
-  actionMenuOpen.value = null
   try {
     await adminApi.platformUpdateOrgStatus(orgId, status)
     toast.success(`Organization ${status}`)
@@ -83,32 +85,37 @@ onMounted(loadOrgs)
   <div>
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-text-primary">Organizations</h1>
-        <p class="text-sm text-text-muted mt-1">{{ total }} organization{{ total !== 1 ? 's' : '' }} on the platform</p>
+        <h1 class="text-2xl font-bold text-foreground">Organizations</h1>
+        <p class="text-sm text-muted-foreground mt-1">{{ total }} organization{{ total !== 1 ? 's' : '' }} on the platform</p>
       </div>
     </div>
 
     <!-- Filters -->
     <div class="flex items-center gap-3 mb-4">
       <div class="relative flex-1 max-w-md">
-        <Search :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-        <input v-model="searchQuery" type="text" class="form-input pl-10" placeholder="Search organizations..." />
+        <Search :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input v-model="searchQuery" type="text" class="pl-10" placeholder="Search organizations..." />
       </div>
-      <select v-model="statusFilter" class="form-input w-36">
-        <option value="">All Status</option>
-        <option value="active">Active</option>
-        <option value="suspended">Suspended</option>
-        <option value="archived">Archived</option>
-      </select>
+      <Select v-model="statusFilter">
+        <SelectTrigger class="w-36">
+          <SelectValue placeholder="All Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Status</SelectItem>
+          <SelectItem value="active">Active</SelectItem>
+          <SelectItem value="suspended">Suspended</SelectItem>
+          <SelectItem value="archived">Archived</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
 
-    <div v-if="loading" class="flex justify-center py-12"><Loader2 :size="20" class="animate-spin text-text-muted" /></div>
+    <div v-if="loading" class="flex justify-center py-12"><Loader2 :size="20" class="animate-spin text-muted-foreground" /></div>
 
     <div v-else class="space-y-2">
       <!-- Org Cards (not table — avoids overflow issues) -->
       <div
         v-for="org in filtered" :key="org.id"
-        class="bg-bg-card border border-border rounded-xl p-4 flex items-center gap-4 cursor-pointer transition hover:border-accent/30"
+        class="bg-card border border-border rounded-xl p-4 flex items-center gap-4 cursor-pointer transition hover:border-accent/30"
         @click="viewOrg(org)"
       >
         <!-- Icon + Name -->
@@ -117,15 +124,15 @@ onMounted(loadOrgs)
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-0.5">
-            <span class="text-sm font-semibold text-text-primary">{{ org.name }}</span>
+            <span class="text-sm font-semibold text-foreground">{{ org.name }}</span>
             <span :class="[
               'px-2 py-0.5 rounded-full text-[10px] font-medium',
               org.status === 'active' ? 'bg-green-500/15 text-green-400' :
               org.status === 'suspended' ? 'bg-red-500/15 text-red-400' :
-              'bg-surface-2 text-text-muted'
+              'bg-card text-muted-foreground'
             ]">{{ org.status }}</span>
           </div>
-          <div class="flex items-center gap-4 text-xs text-text-muted">
+          <div class="flex items-center gap-4 text-xs text-muted-foreground">
             <span class="font-mono">@{{ org.slug }}</span>
             <span class="flex items-center gap-1"><Users :size="11" /> {{ org.memberCount || 0 }} members</span>
             <span>{{ formatDate(org.created_at) }}</span>
@@ -146,7 +153,7 @@ onMounted(loadOrgs)
           ><Ban :size="12" class="inline mr-0.5" /> Suspend</button>
           <button
             v-if="org.status === 'active'"
-            class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-surface-1 text-text-muted hover:bg-surface-2 transition"
+            class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-secondary text-muted-foreground hover:bg-card transition"
             @click="updateStatus(org.id, 'archived')"
           ><Archive :size="12" class="inline mr-0.5" /> Archive</button>
           <button
@@ -156,15 +163,15 @@ onMounted(loadOrgs)
         </div>
       </div>
 
-      <div v-if="filtered.length === 0" class="bg-bg-card border border-border rounded-xl px-4 py-12 text-center text-text-muted">
+      <div v-if="filtered.length === 0" class="bg-card border border-border rounded-xl px-4 py-12 text-center text-muted-foreground">
         No organizations found
       </div>
 
       <div v-if="total > limit" class="flex items-center justify-between px-4 py-3 border-t border-border">
-        <span class="text-xs text-text-muted">Page {{ page }} of {{ Math.ceil(total / limit) }}</span>
+        <span class="text-xs text-muted-foreground">Page {{ page }} of {{ Math.ceil(total / limit) }}</span>
         <div class="flex gap-1">
-          <button class="btn-ghost text-xs px-2 py-1" :disabled="page <= 1" @click="prevPage"><ChevronLeft :size="14" /></button>
-          <button class="btn-ghost text-xs px-2 py-1" :disabled="page * limit >= total" @click="nextPage"><ChevronRight :size="14" /></button>
+          <Button variant="ghost" size="sm" :disabled="page <= 1" @click="prevPage"><ChevronLeft :size="14" /></Button>
+          <Button variant="ghost" size="sm" :disabled="page * limit >= total" @click="nextPage"><ChevronRight :size="14" /></Button>
         </div>
       </div>
     </div>
@@ -185,55 +192,55 @@ onMounted(loadOrgs)
         <div class="space-y-5">
           <!-- Org Info -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div class="bg-surface-0 rounded-lg p-3">
-              <div class="text-[10px] text-text-muted uppercase tracking-wider mb-1">Slug</div>
-              <div class="text-sm font-medium text-text-primary font-mono">@{{ selectedOrg.slug }}</div>
+            <div class="bg-background rounded-lg p-3">
+              <div class="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Slug</div>
+              <div class="text-sm font-medium text-foreground font-mono">@{{ selectedOrg.slug }}</div>
             </div>
-            <div class="bg-surface-0 rounded-lg p-3">
-              <div class="text-[10px] text-text-muted uppercase tracking-wider mb-1">Status</div>
+            <div class="bg-background rounded-lg p-3">
+              <div class="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Status</div>
               <span :class="[
                 'px-2 py-0.5 rounded-full text-[11px] font-medium',
                 selectedOrg.status === 'active' ? 'bg-green-500/15 text-green-400' :
                 selectedOrg.status === 'suspended' ? 'bg-red-500/15 text-red-400' :
-                'bg-surface-2 text-text-muted'
+                'bg-card text-muted-foreground'
               ]">{{ selectedOrg.status }}</span>
             </div>
-            <div class="bg-surface-0 rounded-lg p-3">
-              <div class="text-[10px] text-text-muted uppercase tracking-wider mb-1">Members</div>
-              <div class="text-sm font-medium text-text-primary">{{ selectedOrg.memberCount || 0 }}</div>
+            <div class="bg-background rounded-lg p-3">
+              <div class="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Members</div>
+              <div class="text-sm font-medium text-foreground">{{ selectedOrg.memberCount || 0 }}</div>
             </div>
-            <div class="bg-surface-0 rounded-lg p-3">
-              <div class="text-[10px] text-text-muted uppercase tracking-wider mb-1">Created</div>
-              <div class="text-sm font-medium text-text-primary">{{ formatDate(selectedOrg.created_at) }}</div>
+            <div class="bg-background rounded-lg p-3">
+              <div class="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Created</div>
+              <div class="text-sm font-medium text-foreground">{{ formatDate(selectedOrg.created_at) }}</div>
             </div>
           </div>
 
           <!-- Quick Actions -->
           <div class="flex gap-2 flex-wrap">
-            <button
+            <Button
               v-if="selectedOrg.status !== 'active'"
-              class="btn-primary text-xs px-3 py-1.5"
+              size="sm"
               @click="updateStatus(selectedOrg.id, 'active'); selectedOrg.status = 'active'"
-            ><CheckCircle :size="12" /> Activate</button>
-            <button
+            ><CheckCircle :size="12" /> Activate</Button>
+            <Button
               v-if="selectedOrg.status === 'active'"
-              class="btn-secondary text-xs px-3 py-1.5 text-amber-400"
+              variant="secondary" size="sm" class="text-amber-400"
               @click="updateStatus(selectedOrg.id, 'suspended'); selectedOrg.status = 'suspended' as any"
-            ><Ban :size="12" /> Suspend</button>
-            <button
+            ><Ban :size="12" /> Suspend</Button>
+            <Button
               v-if="selectedOrg.status === 'active'"
-              class="btn-secondary text-xs px-3 py-1.5"
+              variant="secondary" size="sm"
               @click="updateStatus(selectedOrg.id, 'archived'); selectedOrg.status = 'archived' as any"
-            ><Archive :size="12" /> Archive</button>
-            <button
-              class="btn-ghost text-xs px-3 py-1.5 text-red-400"
+            ><Archive :size="12" /> Archive</Button>
+            <Button
+              variant="ghost" size="sm" class="text-red-400"
               @click="showOrgDetail = false; promptDelete(selectedOrg)"
-            ><Trash2 :size="12" /> Delete</button>
+            ><Trash2 :size="12" /> Delete</Button>
           </div>
 
           <!-- Org Details -->
-          <div class="text-xs text-text-muted">
-            <p>Organization ID: <code class="text-text-secondary font-mono">{{ selectedOrg.id }}</code></p>
+          <div class="text-xs text-muted-foreground">
+            <p>Organization ID: <code class="text-muted-foreground font-mono">{{ selectedOrg.id }}</code></p>
           </div>
         </div>
       </template>

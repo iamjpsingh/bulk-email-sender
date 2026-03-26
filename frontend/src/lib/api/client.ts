@@ -47,7 +47,7 @@ export interface AuthContext {
 export interface SMTPConfig {
   id: string
   name: string
-  provider_type: 'smtp' | 'google' | 'microsoft'
+  provider_type: 'smtp' | 'google' | 'microsoft' | 'ses' | 'sendgrid' | 'mailgun' | 'postmark' | 'sparkpost'
   host?: string
   port?: number
   secure?: boolean
@@ -57,6 +57,9 @@ export interface SMTPConfig {
   is_default: boolean
   oauth_email?: string
   created_at?: string
+  api_key?: string
+  api_region?: string
+  api_domain?: string
 }
 
 export interface EmailLog {
@@ -137,6 +140,7 @@ export interface QueueJobSummary {
   created_at: string
   started_at: string | null
   last_error: string | null
+  updated_at?: string
 }
 
 export interface QueueStats {

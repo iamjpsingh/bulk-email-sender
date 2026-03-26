@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import PageHeader from '../../components/ui/PageHeader.vue'
 import { cn } from '../../lib/utils'
@@ -10,11 +11,16 @@ import {
 
 const route = useRoute()
 
-const navItems = [
-  { path: '/settings/delivery-servers', label: 'Delivery Servers', icon: Server, description: 'Email providers, domains & sending' },
-  { path: '/settings/api-keys', label: 'API Keys', icon: Hash, description: 'Developer API access' },
-  { path: '/settings/webhooks', label: 'Webhooks', icon: Webhook, description: 'Event notifications' },
-]
+// Detect if we're under /platform/settings or /settings
+const basePath = computed(() => {
+  return route.path.startsWith('/platform') ? '/platform/settings' : '/settings'
+})
+
+const navItems = computed(() => [
+  { path: `${basePath.value}/delivery-servers`, label: 'Delivery Servers', icon: Server },
+  { path: `${basePath.value}/api-keys`, label: 'API Keys', icon: Hash },
+  { path: `${basePath.value}/webhooks`, label: 'Webhooks', icon: Webhook },
+])
 
 function isActive(path: string): boolean {
   return route.path === path || route.path.startsWith(path + '/')
@@ -37,13 +43,13 @@ function isActive(path: string): boolean {
               'group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150',
               isActive(item.path)
                 ? 'bg-accent/8 text-accent font-medium'
-                : 'text-text-muted hover:bg-surface-1 hover:text-text-primary'
+                : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
             )"
           >
             <component
               :is="item.icon"
               :size="16"
-              :class="isActive(item.path) ? 'text-accent' : 'text-text-muted group-hover:text-text-secondary'"
+              :class="isActive(item.path) ? 'text-accent' : 'text-muted-foreground group-hover:text-muted-foreground'"
             />
             <div class="flex-1 min-w-0">
               <div class="text-sm">{{ item.label }}</div>
@@ -63,7 +69,7 @@ function isActive(path: string): boolean {
               'flex items-center gap-2 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-all',
               isActive(item.path)
                 ? 'bg-accent/8 text-accent font-medium'
-                : 'text-text-muted hover:bg-surface-1'
+                : 'text-muted-foreground hover:bg-secondary'
             )"
           >
             <component :is="item.icon" :size="14" />

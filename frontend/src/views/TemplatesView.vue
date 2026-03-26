@@ -12,6 +12,11 @@ import { useToast } from '../composables/useToast'
 import HtmlCodeEditor from '../components/compose/HtmlCodeEditor.vue'
 import EmailBuilder from '../components/editor/EmailBuilder.vue'
 import Modal from '../components/ui/Modal.vue'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FileText, Plus, Pencil, Trash2, Copy, Loader2, Inbox, Send, Paintbrush, Code2 } from 'lucide-vue-next'
 
 const toast = useToast()
@@ -251,7 +256,7 @@ fetchStarters()
   <div>
     <PageHeader title="Templates" subtitle="Create and manage reusable email templates">
       <template #actions>
-        <button class="btn-primary" @click="openNewTemplate"><Plus :size="16" /> New Template</button>
+        <Button @click="openNewTemplate"><Plus :size="16" /> New Template</Button>
       </template>
     </PageHeader>
 
@@ -259,19 +264,16 @@ fetchStarters()
     <div class="flex flex-col gap-4 mb-6">
       <SearchInput v-model="searchQuery" placeholder="Search templates..." />
       <div class="flex gap-1.5 flex-wrap">
-        <button
+        <Button
           v-for="cat in categories"
           :key="cat"
-          class="px-3.5 py-1.5 text-[13px] font-medium font-sans border rounded-lg cursor-pointer transition-all duration-150"
-          :class="
-            activeCategory === cat
-              ? 'bg-accent text-white border-accent'
-              : 'bg-transparent text-text-secondary border-border hover:border-text-muted hover:text-text-primary'
-          "
+          :variant="activeCategory === cat ? 'default' : 'outline'"
+          size="sm"
+          class="text-[13px]"
           @click="activeCategory = cat"
         >
           {{ categoryLabel(cat) }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -281,16 +283,16 @@ fetchStarters()
     </div>
 
     <!-- Empty -->
-    <div v-else-if="filteredTemplates.length === 0 && !loading" class="bg-bg-card border border-border rounded-xl">
+    <div v-else-if="filteredTemplates.length === 0 && !loading" class="bg-card border border-border rounded-xl">
       <EmptyState
         :icon="Inbox"
         title="No templates found"
         :description="searchQuery || activeCategory !== 'all' ? 'Try adjusting your filters' : 'Create your first template to get started'"
       >
         <template v-if="!searchQuery && activeCategory === 'all'" #actions>
-          <button class="btn-primary" @click="openNewTemplate">
+          <Button @click="openNewTemplate">
             <Plus :size="16" /> Create Template
-          </button>
+          </Button>
         </template>
       </EmptyState>
     </div>
@@ -300,29 +302,29 @@ fetchStarters()
       <div
         v-for="tpl in filteredTemplates"
         :key="tpl.id"
-        class="bg-bg-card border border-border rounded-xl p-5 flex flex-col gap-2 transition-all duration-150 hover:border-border-hover hover:shadow-sm"
+        class="bg-card border border-border rounded-xl p-5 flex flex-col gap-2 transition-all duration-150 hover:border-primary/25 hover:shadow-sm"
       >
         <div class="flex justify-between items-center gap-3">
-          <h3 class="text-sm font-semibold m-0 truncate text-text-primary">{{ tpl.name }}</h3>
-          <span class="badge-info shrink-0">{{ categoryLabel(tpl.category) }}</span>
+          <h3 class="text-sm font-semibold m-0 truncate text-foreground">{{ tpl.name }}</h3>
+          <Badge variant="default" class="shrink-0 text-xs">{{ categoryLabel(tpl.category) }}</Badge>
         </div>
-        <p class="text-sm text-text-secondary m-0 truncate">{{ tpl.subject || 'No subject' }}</p>
-        <p v-if="tpl.description" class="text-text-muted text-sm m-0 truncate">{{ tpl.description }}</p>
+        <p class="text-sm text-muted-foreground m-0 truncate">{{ tpl.subject || 'No subject' }}</p>
+        <p v-if="tpl.description" class="text-muted-foreground text-sm m-0 truncate">{{ tpl.description }}</p>
         <div class="flex justify-between items-center mt-auto pt-3 border-t border-border">
-          <span class="text-text-muted text-[13px]">{{ formatDate(tpl.updated_at) }}</span>
+          <span class="text-muted-foreground text-[13px]">{{ formatDate(tpl.updated_at) }}</span>
           <div class="flex gap-0.5">
-            <button class="btn-ghost text-sm px-2 py-1" title="Edit" @click="openEditTemplate(tpl)">
+            <Button variant="ghost" size="sm" title="Edit" @click="openEditTemplate(tpl)">
               <Pencil :size="14" />
-            </button>
-            <button class="btn-ghost text-sm px-2 py-1" title="Duplicate" @click="duplicateTemplate(tpl)">
+            </Button>
+            <Button variant="ghost" size="sm" title="Duplicate" @click="duplicateTemplate(tpl)">
               <Copy :size="14" />
-            </button>
-            <button class="btn-ghost text-sm px-2 py-1" title="Send Test" @click="openTestSend(tpl)">
+            </Button>
+            <Button variant="ghost" size="sm" title="Send Test" @click="openTestSend(tpl)">
               <Send :size="14" />
-            </button>
-            <button class="btn-ghost text-sm px-2 py-1 text-danger" title="Delete" @click="promptDelete(tpl.id)">
+            </Button>
+            <Button variant="ghost" size="sm" class="text-danger" title="Delete" @click="promptDelete(tpl.id)">
               <Trash2 :size="14" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -331,19 +333,19 @@ fetchStarters()
     <!-- Starter Templates -->
     <section v-if="starters.length > 0" class="mt-8 mb-8">
       <div class="mb-4">
-        <h2 class="flex items-center gap-2.5 text-base font-semibold text-text-primary mb-1">
+        <h2 class="flex items-center gap-2.5 text-base font-semibold text-foreground mb-1">
           <FileText :size="18" class="text-accent" /> Starter Templates
         </h2>
-        <p class="text-text-muted text-sm">Clone a pre-built template to get started quickly</p>
+        <p class="text-muted-foreground text-sm">Clone a pre-built template to get started quickly</p>
       </div>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-        <div v-for="s in starters" :key="s.id" class="bg-bg-card border border-border rounded-xl p-4 flex flex-col gap-2.5">
+        <div v-for="s in starters" :key="s.id" class="bg-card border border-border rounded-xl p-4 flex flex-col gap-2.5">
           <div class="flex justify-between items-center gap-2">
-            <h4 class="text-sm font-semibold m-0 truncate text-text-primary">{{ s.name }}</h4>
-            <span class="badge-info shrink-0">{{ categoryLabel(s.category) }}</span>
+            <h4 class="text-sm font-semibold m-0 truncate text-foreground">{{ s.name }}</h4>
+            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-indigo-500/15 text-indigo-400 shrink-0">{{ categoryLabel(s.category) }}</span>
           </div>
-          <p class="text-text-muted text-sm">{{ s.description }}</p>
-          <button class="btn-secondary text-sm px-3 py-1.5 self-start" @click="cloneStarter(s)"><Copy :size="14" /> Clone</button>
+          <p class="text-muted-foreground text-sm">{{ s.description }}</p>
+          <Button variant="secondary" size="sm" class="self-start" @click="cloneStarter(s)"><Copy :size="14" /> Clone</Button>
         </div>
       </div>
     </section>
@@ -360,21 +362,21 @@ fetchStarters()
     <!-- Test Send Modal -->
     <Modal :show="showTestSendModal" title="Send Test Email" @close="showTestSendModal = false">
       <div class="flex flex-col gap-4">
-        <div>
-          <label class="form-label">Recipient Email</label>
-          <input v-model="testSendForm.to" type="email" class="form-input" placeholder="Leave blank to send to yourself" />
+        <div class="flex flex-col gap-2">
+          <Label>Recipient Email</Label>
+          <Input v-model="testSendForm.to" type="email" placeholder="Leave blank to send to yourself" />
         </div>
-        <div>
-          <label class="form-label">Subject Line</label>
-          <input v-model="testSendForm.subject" type="text" class="form-input" />
+        <div class="flex flex-col gap-2">
+          <Label>Subject Line</Label>
+          <Input v-model="testSendForm.subject" type="text" />
         </div>
         <div class="flex justify-end gap-3 pt-2">
-          <button class="btn-ghost" @click="showTestSendModal = false">Cancel</button>
-          <button class="btn-primary" @click="sendTestEmail" :disabled="testSending">
+          <Button variant="ghost" @click="showTestSendModal = false">Cancel</Button>
+          <Button @click="sendTestEmail" :disabled="testSending">
             <Loader2 v-if="testSending" :size="16" class="spin" />
             <Send v-else :size="16" />
             Send Test
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>
@@ -387,42 +389,49 @@ fetchStarters()
         <!-- Top fields row -->
         <div class="p-5 pb-0 shrink-0">
           <div class="grid grid-cols-[1fr_1fr_auto] max-md:grid-cols-1 gap-3 mb-3">
-            <div>
-              <label class="form-label">Name *</label>
-              <input v-model="form.name" type="text" class="form-input" placeholder="Template name" required />
+            <div class="flex flex-col gap-2">
+              <Label>Name *</Label>
+              <Input v-model="form.name" type="text" placeholder="Template name" required />
             </div>
-            <div>
-              <label class="form-label">Subject Line *</label>
-              <input v-model="form.subject" type="text" class="form-input" placeholder="Email subject" required />
+            <div class="flex flex-col gap-2">
+              <Label>Subject Line *</Label>
+              <Input v-model="form.subject" type="text" placeholder="Email subject" required />
             </div>
-            <div>
-              <label class="form-label">Category</label>
-              <select v-model="form.category" class="form-select">
-                <option v-for="cat in categories.filter((c) => c !== 'all')" :key="cat" :value="cat">
-                  {{ categoryLabel(cat) }}
-                </option>
-              </select>
+            <div class="flex flex-col gap-2">
+              <Label>Category</Label>
+              <Select v-model="form.category">
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="cat in categories.filter((c) => c !== 'all')" :key="cat" :value="cat">
+                    {{ categoryLabel(cat) }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label">Description</label>
-            <input v-model="form.description" type="text" class="form-input" placeholder="Brief description (optional)" />
+          <div class="flex flex-col gap-2 mb-3">
+            <Label>Description</Label>
+            <Input v-model="form.description" type="text" placeholder="Brief description (optional)" />
           </div>
         </div>
 
         <!-- Editor mode toggle + content -->
         <div class="flex-1 px-5 pb-0 min-h-0 flex flex-col">
           <div class="flex items-center gap-2 mb-1.5">
-            <label class="form-label mb-0">Content</label>
+            <Label class="mb-0">Content</Label>
             <div class="flex gap-1 ml-auto">
-              <button
-                :class="['px-2 py-1 rounded text-[11px] font-medium transition', editorMode === 'code' ? 'bg-accent text-white' : 'bg-surface-2 text-text-muted hover:text-text-secondary']"
+              <Button
+                size="sm"
+                :variant="editorMode === 'code' ? 'default' : 'secondary'"
+                class="h-6 px-2 text-[11px]"
                 @click="editorMode = 'code'"
-              ><Code2 :size="11" class="inline mr-0.5" /> Code</button>
-              <button
-                :class="['px-2 py-1 rounded text-[11px] font-medium transition', editorMode === 'visual' ? 'bg-accent text-white' : 'bg-surface-2 text-text-muted hover:text-text-secondary']"
+              ><Code2 :size="11" /> Code</Button>
+              <Button
+                size="sm"
+                :variant="editorMode === 'visual' ? 'default' : 'secondary'"
+                class="h-6 px-2 text-[11px]"
                 @click="editorMode = 'visual'"
-              ><Paintbrush :size="11" class="inline mr-0.5" /> Visual</button>
+              ><Paintbrush :size="11" /> Visual</Button>
             </div>
           </div>
           <HtmlCodeEditor
@@ -442,18 +451,18 @@ fetchStarters()
 
         <!-- Footer actions -->
         <div class="flex justify-end gap-3 px-5 py-4 border-t border-border shrink-0">
-          <button class="btn-ghost" @click="closeEditor">Cancel</button>
-          <button class="btn-primary" @click="saveTemplate" :disabled="saving || !form.name || !form.subject">
+          <Button variant="ghost" @click="closeEditor">Cancel</Button>
+          <Button @click="saveTemplate" :disabled="saving || !form.name || !form.subject">
             <Loader2 v-if="saving" :size="16" class="spin" />
             {{ editingId ? 'Update' : 'Create' }}
-          </button>
+          </Button>
         </div>
       </div>
 
       <!-- Right: Live Preview (auto-updates) -->
       <div class="w-[40%] max-md:w-full max-md:h-[300px] flex flex-col overflow-hidden border-l border-border">
         <div class="px-5 py-3 border-b border-border shrink-0">
-          <span class="text-text-muted text-sm font-medium">Live Preview</span>
+          <span class="text-muted-foreground text-sm font-medium">Live Preview</span>
         </div>
         <div class="flex-1 overflow-hidden bg-white">
           <iframe
@@ -462,9 +471,9 @@ fetchStarters()
             sandbox="allow-same-origin"
             class="w-full h-full border-none"
           ></iframe>
-          <div v-else class="flex flex-col items-center justify-center h-full gap-3 bg-bg-secondary">
-            <FileText :size="32" class="text-text-muted" />
-            <p class="text-text-muted text-sm">Write HTML to see a live preview</p>
+          <div v-else class="flex flex-col items-center justify-center h-full gap-3 bg-secondary">
+            <FileText :size="32" class="text-muted-foreground" />
+            <p class="text-muted-foreground text-sm">Write HTML to see a live preview</p>
           </div>
         </div>
       </div>

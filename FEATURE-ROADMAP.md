@@ -2,9 +2,9 @@
 
 What's built, what's next, and where we're going.
 
-**Last updated**: 2026-03-18
-**Current version**: v4.0 (feature-complete)
-**Completion**: ~95% of v4.0, starting v4.2 production polish
+**Last updated**: 2026-03-24
+**Current version**: v4.2 (feature-complete + production polish)
+**Frontend**: Vue 3 + shadcn-vue + Tailwind CSS v4
 
 ---
 
@@ -33,8 +33,8 @@ CRUD, lists, Excel/CSV import, bulk ops, custom fields, tags, engagement scoring
 ### Campaigns (8/8)
 Create/edit, detail view with click heatmap, reports, A/B testing + auto-winner, RSS digest, calendar with drag-and-drop rescheduling
 
-### Templates & Email Builder (8/9)
-Template library, Quill editor, template variables, GrapesJS visual builder (13 blocks), MJML compilation, smart content blocks, email preview modes (desktop/tablet/mobile), multi-language variants. **Remaining**: reusable sections UI component (backend done)
+### Templates & Email Builder (9/9)
+Template library, Quill editor, template variables, GrapesJS visual builder (13 blocks), MJML compilation, smart content blocks, email preview modes (desktop/tablet/mobile), multi-language variants, reusable sections
 
 ### Automation (10/10)
 CRUD, 7 trigger types, condition evaluation (9 operators), Vue Flow visual editor (15 node types), node config panel, enrollment tracking, background execution, minimap + controls, goal-based exit
@@ -99,16 +99,7 @@ Sidebar shows only Platform + Settings (no org items), org switcher hidden, rout
 
 ---
 
-## Packages Installed
+## Stack
 
-| Package | Where | Purpose |
-|---------|-------|---------|
-| `@vue-flow/core` | frontend | Visual automation builder |
-| `@vue-flow/minimap` | frontend | Automation flow minimap |
-| `@vue-flow/controls` | frontend | Automation flow controls |
-| `grapesjs` | frontend | Visual email builder |
-| `grapesjs-mjml` | frontend | MJML support |
-| `grapesjs-preset-newsletter` | frontend | Newsletter blocks |
-| `mjml` | backend | MJML → HTML compilation |
-
-**Stack**: Bun, Hono, Vue 3, Tailwind, TanStack Query, Vue Flow, GrapesJS, MJML, Nodemailer, Cloudflare Workers + D1.
+**Backend**: Bun, Hono, Nodemailer, bun:sqlite, MJML, Cloudflare Workers + D1
+**Frontend**: Vue 3, Tailwind CSS v4, shadcn-vue, TanStack Vue Query, Vue Flow, GrapesJS, Lucide Icons

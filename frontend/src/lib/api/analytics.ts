@@ -244,17 +244,34 @@ export const webhooksApi = {
     const res = await api.get<{ webhooks: any[] }>('/webhooks')
     return res.data?.webhooks || []
   },
+  get: async (id: string) => {
+    const res = await api.get<{ webhook: any }>(`/webhooks/${id}`)
+    return res.data?.webhook
+  },
   create: async (input: { name: string; url: string; events: string[] }) => {
     const res = await api.post('/webhooks', input)
+    if (!res.success) throw new Error(res.message || 'Failed')
+    return res.data
+  },
+  update: async (id: string, input: { name?: string; url?: string; events?: string[] }) => {
+    const res = await api.put(`/webhooks/${id}`, input)
     if (!res.success) throw new Error(res.message || 'Failed')
     return res.data
   },
   delete: async (id: string) => {
     await api.delete(`/webhooks/${id}`)
   },
+  toggle: async (id: string, enabled: boolean) => {
+    const res = await api.post(`/webhooks/${id}/toggle`, { enabled })
+    return res.data
+  },
   test: async (id: string) => {
     const res = await api.post<{ success: boolean }>(`/webhooks/${id}/test`)
     return res.data
+  },
+  getLogs: async (id: string, limit = 20, offset = 0) => {
+    const res = await api.get<{ logs: any[]; total: number }>(`/webhooks/${id}/logs?limit=${limit}&offset=${offset}`)
+    return res.data || { logs: [], total: 0 }
   },
 }
 
@@ -267,13 +284,21 @@ export const apiKeysApi = {
     const res = await api.get<{ keys: any[] }>('/api-keys')
     return res.data?.keys || []
   },
-  create: async (input: { name: string; scopes?: string[] }) => {
+  create: async (input: { name: string; scopes?: string[]; expires_at?: string }) => {
     const res = await api.post<any>('/api-keys', input)
     if (!res.success) throw new Error(res.message || 'Failed')
     return res.data
   },
   delete: async (id: string) => {
     await api.delete(`/api-keys/${id}`)
+  },
+  toggle: async (id: string, enabled: boolean) => {
+    const res = await api.post(`/api-keys/${id}/toggle`, { enabled })
+    return res.data
+  },
+  updateScopes: async (id: string, scopes: string[]) => {
+    const res = await api.put(`/api-keys/${id}/scopes`, { scopes })
+    return res.data
   },
 }
 

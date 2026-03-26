@@ -1,12 +1,12 @@
 # Email Tracking Setup
 
-Track email opens and clicks using Cloudflare Workers + D1.
+Track email opens, clicks, and unsubscribes using Cloudflare Workers + D1.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Your Bun App (localhost:3000)                                  │
+│  Dispatch App (Backend)                                         │
 │                                                                 │
 │  1. Send email → Register with Worker → Get tracking_id        │
 │  2. Inject pixel: <img src="worker.dev/o/{tracking_id}">       │
@@ -20,6 +20,7 @@ Track email opens and clicks using Cloudflare Workers + D1.
 │                                                                 │
 │  /o/:id     → Return 1x1 pixel, record open in D1              │
 │  /c/:id     → Record click in D1, redirect to original URL     │
+│  /u/:id     → One-click unsubscribe                            │
 │  /api/email → Register new email, return tracking_id           │
 │  /api/stats → Return stats for user/campaign                   │
 │  /api/logs  → Return filtered logs with pagination             │
@@ -31,20 +32,31 @@ Track email opens and clicks using Cloudflare Workers + D1.
 │                                                                 │
 │  campaigns       - Campaign info and aggregate stats           │
 │  emails          - Individual email records with tracking_id   │
-│  tracking_events - Detailed open/click events                  │
+│  tracking_events - Opens, clicks, unsubscribes with metadata   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Setup (5 minutes)
+## Option A: Deploy via UI (Recommended)
+
+The easiest way. Platform admin connects Cloudflare and deploys Workers from the app.
+
+1. Login as **platform admin**
+2. Go to **Settings → Tracking**
+3. Click **Connect Cloudflare** — OAuth flow authenticates your account
+4. Select a **zone** (domain) to deploy to
+5. Click **Deploy** — Worker + D1 database are created automatically
+6. Done — tracking is active for all organizations
+
+The UI also shows per-zone analytics (opens, clicks, unsubscribes) and lets you undeploy.
+
+## Option B: Manual CLI Deploy
+
+For self-hosting or if you prefer manual control.
 
 ### 1. Install Wrangler
 
 ```bash
-# Using bun
 bun add -g wrangler
-
-# Or npm
-npm install -g wrangler
 ```
 
 ### 2. Login to Cloudflare
@@ -60,13 +72,13 @@ cd tracking-worker
 wrangler d1 create dispatch
 ```
 
-Copy the `database_id` from output and paste in `wrangler.toml`:
+Copy the `database_id` from output into `wrangler.toml`:
 
 ```toml
 [[d1_databases]]
 binding = "DB"
 database_name = "dispatch"
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # ← Paste here
+database_id = "your-database-id-here"
 ```
 
 ### 4. Initialize Database
@@ -78,7 +90,7 @@ wrangler d1 execute dispatch --file=schema.sql
 ### 5. Deploy Worker
 
 ```bash
-bun install  # or npm install
+bun install
 wrangler deploy
 ```
 
@@ -89,7 +101,7 @@ You'll get a URL like: `https://dispatch-tracker.your-subdomain.workers.dev`
 Add to `.env`:
 
 ```env
-TRACKING_WORKER_URL=https://dispatch-tracker.thedevimapro.workers.dev
+TRACKING_WORKER_URL=https://dispatch-tracker.your-subdomain.workers.dev
 ```
 
 ### 7. Restart App
@@ -98,85 +110,47 @@ TRACKING_WORKER_URL=https://dispatch-tracker.thedevimapro.workers.dev
 bun run dev
 ```
 
-You should see:
-```
-📊 Tracking:
-   ✅ Cloudflare Worker
-```
-
 ## How It Works
 
-### When Sending Email
-
-1. Your app calls Worker API: `POST /api/email`
+### Sending Email
+1. App calls Worker API: `POST /api/email` to register the email
 2. Worker creates record in D1, returns `tracking_id`
-3. Your app injects tracking pixel and wraps links:
+3. App injects tracking pixel and wraps links in the email HTML
 
-```html
-<!-- Tracking pixel -->
-<img src="https://worker.dev/o/abc123" width="1" height="1" />
+### Open Tracking
+1. Recipient's email client loads the 1x1 pixel
+2. Worker records open event with timestamp, device, country, user agent
+3. Returns transparent GIF
 
-<!-- Wrapped link -->
-<a href="https://worker.dev/c/abc123?url=https%3A%2F%2Fexample.com">Click</a>
-```
-
-### When Recipient Opens Email
-
-1. Email client loads pixel from Worker
-2. Worker records open event in D1 with:
-   - Timestamp
-   - Device type (mobile/desktop/tablet)
-   - Country/city (from Cloudflare headers)
-   - User agent
-3. Returns 1x1 transparent GIF
-
-### When Recipient Clicks Link
-
-1. Click goes to Worker
+### Click Tracking
+1. Recipient clicks a tracked link
 2. Worker records click event in D1
 3. Redirects to original URL
 
-### Reports Page
-
-1. Frontend calls `/report/logs` on your app
-2. Your app fetches from Worker: `GET /api/logs?user_id=...`
-3. Worker queries D1 and returns filtered results
+### Unsubscribe
+1. Recipient clicks unsubscribe link (`/u/:trackingId`)
+2. Worker records unsubscribe event, shows confirmation page
+3. Contact is suppressed from future sends
 
 ## Worker API
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/o/:trackingId` | GET | Track open (returns pixel) |
-| `/c/:trackingId?url=...` | GET | Track click (redirects) |
+| `/c/:trackingId?url=...` | GET | Track click (redirect) |
+| `/u/:trackingId` | GET | One-click unsubscribe |
 | `/api/email` | POST | Register email for tracking |
 | `/api/stats?user_id=...` | GET | Get user/campaign stats |
 | `/api/logs?user_id=...` | GET | Get filtered logs |
 | `/health` | GET | Health check |
 
-### Filter Options for `/api/logs`
+## Without Tracking
 
-- `user_id` (required)
-- `status` - sent, opened, clicked, failed
-- `send_type` - direct, batch, scheduled
-- `provider` - smtp, google, microsoft
-- `campaign_id`
-- `search` - search in email, name, subject
-- `start_date`, `end_date`
-- `page`, `limit`
-
-## Local Development
-
-```bash
-cd tracking-worker
-wrangler dev
-```
-
-This runs Worker locally at `http://localhost:8787`
-
-For local testing:
-```env
-TRACKING_WORKER_URL=http://localhost:8787
-```
+The app works without tracking — emails send normally, local logs are kept. Tracking adds:
+- Open/click/unsubscribe tracking via Cloudflare Worker
+- Persistent logs in D1
+- Geo/device analytics
+- Advanced filtering and stats
 
 ## Costs
 
@@ -188,33 +162,14 @@ More than enough for most email campaigns.
 
 ## Troubleshooting
 
-### "Tracking Worker not configured"
-
-Check `.env` has:
-```env
-TRACKING_WORKER_URL=https://your-worker.workers.dev
-```
-
 ### Worker not responding
-
 ```bash
 cd tracking-worker
 wrangler tail  # View live logs
 ```
 
 ### Database errors
-
 ```bash
-# Check database
 wrangler d1 execute dispatch --command "SELECT COUNT(*) FROM emails"
-
-# Re-run schema
-wrangler d1 execute dispatch --file=schema.sql
+wrangler d1 execute dispatch --file=schema.sql  # Re-run schema
 ```
-
-## Without Tracking
-
-The app works without tracking - emails send normally, local logs are kept. Tracking just adds:
-- Open/click tracking via Worker
-- Persistent logs in D1
-- Advanced filtering and stats

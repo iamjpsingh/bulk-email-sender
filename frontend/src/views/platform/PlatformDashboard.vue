@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { adminApi } from '../../lib/api/admin'
 import StatCard from '../../components/ui/StatCard.vue'
-import { Building2, Users, Mail, Activity, Server, AlertTriangle, Loader2 } from 'lucide-vue-next'
+import { Building2, Users, Mail, Activity, Loader2 } from 'lucide-vue-next'
 
 const loading = ref(true)
 const stats = ref({ orgs: 0, users: 0, totalOrgs: 0, totalUsers: 0 })
@@ -45,11 +45,11 @@ onMounted(loadData)
 <template>
   <div>
     <div class="mb-8">
-      <h1 class="text-2xl font-bold text-text-primary">Platform Dashboard</h1>
-      <p class="text-sm text-text-muted mt-1">System overview and health monitoring</p>
+      <h1 class="text-2xl font-bold text-foreground">Platform Dashboard</h1>
+      <p class="text-sm text-muted-foreground mt-1">System overview and health monitoring</p>
     </div>
 
-    <div v-if="loading" class="flex justify-center py-20"><Loader2 :size="24" class="animate-spin text-text-muted" /></div>
+    <div v-if="loading" class="flex justify-center py-20"><Loader2 :size="24" class="animate-spin text-muted-foreground" /></div>
 
     <template v-else>
       <!-- Stats -->
@@ -62,38 +62,38 @@ onMounted(loadData)
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Recent Organizations -->
-        <div class="bg-bg-card border border-border rounded-xl">
+        <div class="bg-card border border-border rounded-xl">
           <div class="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-text-primary">Recent Organizations</h2>
+            <h2 class="text-sm font-semibold text-foreground">Recent Organizations</h2>
             <router-link to="/platform/organizations" class="text-xs text-accent hover:text-accent/80">View All</router-link>
           </div>
           <div class="divide-y divide-border">
             <div v-for="org in recentOrgs" :key="org.id" class="px-5 py-3 flex items-center justify-between">
               <div>
-                <div class="text-sm font-medium text-text-primary">{{ org.name }}</div>
-                <div class="text-xs text-text-muted">@{{ org.slug }} — {{ org.status }}</div>
+                <div class="text-sm font-medium text-foreground">{{ org.name }}</div>
+                <div class="text-xs text-muted-foreground">@{{ org.slug }} — {{ org.status }}</div>
               </div>
-              <div class="text-xs text-text-muted">{{ formatDate(org.created_at) }}</div>
+              <div class="text-xs text-muted-foreground">{{ formatDate(org.created_at) }}</div>
             </div>
-            <div v-if="recentOrgs.length === 0" class="px-5 py-8 text-center text-sm text-text-muted">No organizations yet</div>
+            <div v-if="recentOrgs.length === 0" class="px-5 py-8 text-center text-sm text-muted-foreground">No organizations yet</div>
           </div>
         </div>
 
         <!-- Recent Users -->
-        <div class="bg-bg-card border border-border rounded-xl">
+        <div class="bg-card border border-border rounded-xl">
           <div class="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-text-primary">Recent Users</h2>
+            <h2 class="text-sm font-semibold text-foreground">Recent Users</h2>
             <router-link to="/platform/users" class="text-xs text-accent hover:text-accent/80">View All</router-link>
           </div>
           <div class="divide-y divide-border">
             <div v-for="u in recentUsers" :key="u.id" class="px-5 py-3 flex items-center justify-between">
               <div>
-                <div class="text-sm font-medium text-text-primary">{{ u.name }}</div>
-                <div class="text-xs text-text-muted">{{ u.email }}</div>
+                <div class="text-sm font-medium text-foreground">{{ u.name }}</div>
+                <div class="text-xs text-muted-foreground">{{ u.email }}</div>
               </div>
-              <div class="text-xs text-text-muted">{{ u.status }}</div>
+              <div class="text-xs text-muted-foreground">{{ u.status }}</div>
             </div>
-            <div v-if="recentUsers.length === 0" class="px-5 py-8 text-center text-sm text-text-muted">No users yet</div>
+            <div v-if="recentUsers.length === 0" class="px-5 py-8 text-center text-sm text-muted-foreground">No users yet</div>
           </div>
         </div>
       </div>

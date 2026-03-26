@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import PageHeader from '../components/ui/PageHeader.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
@@ -12,7 +17,6 @@ import { useToast } from '../composables/useToast'
 import HtmlCodeEditor from '../components/compose/HtmlCodeEditor.vue'
 import {
   Plus,
-  Pencil,
   Trash2,
   Eye,
   Globe,
@@ -22,7 +26,6 @@ import {
   BarChart3,
   FileText,
   Copy,
-  ExternalLink,
 } from 'lucide-vue-next'
 
 const toast = useToast()
@@ -178,23 +181,6 @@ function chooseTemplate(tpl: PageTemplate | null) {
   showEditor.value = true
 }
 
-function openEditPage(page: LandingPage) {
-  form.value = {
-    title: page.title,
-    slug: page.slug,
-    template: page.template,
-    html_content: page.html_content,
-    css_content: page.css_content,
-    meta_description: page.meta_description || '',
-    meta_image: page.meta_image || '',
-    form_id: page.form_id || '',
-    tracking_enabled: !!page.tracking_enabled,
-  }
-  editingId.value = page.id
-  editorTab.value = 'content'
-  showEditor.value = true
-}
-
 function closeEditor() {
   showEditor.value = false
   editingId.value = null
@@ -222,7 +208,7 @@ fetchForms()
   <div>
     <PageHeader title="Landing Pages" subtitle="Create and publish landing pages for campaigns">
       <template #actions>
-        <button class="btn-primary" @click="openNewPage"><Plus :size="16" /> New Page</button>
+        <Button @click="openNewPage"><Plus :size="16" /> New Page</Button>
       </template>
     </PageHeader>
 
@@ -232,14 +218,14 @@ fetchForms()
     </div>
 
     <!-- Empty -->
-    <div v-else-if="pages.length === 0" class="bg-bg-card border border-border rounded-xl">
+    <div v-else-if="pages.length === 0" class="bg-card border border-border rounded-xl">
       <EmptyState
         :icon="Inbox"
         title="No landing pages"
         description="Create a landing page for your campaigns"
       >
         <template #actions>
-          <button class="btn-primary" @click="openNewPage"><Plus :size="16" /> Create Page</button>
+          <Button @click="openNewPage"><Plus :size="16" /> Create Page</Button>
         </template>
       </EmptyState>
     </div>
@@ -249,67 +235,68 @@ fetchForms()
       <div
         v-for="page in pages"
         :key="page.id"
-        class="bg-bg-card border border-border rounded-xl p-5 flex flex-col gap-3 transition-all duration-150 hover:border-border-hover"
+        class="bg-card border border-border rounded-xl p-5 flex flex-col gap-3 transition-all duration-150 hover:border-primary/25"
       >
         <div class="flex justify-between items-start gap-3">
           <div class="min-w-0">
-            <h3 class="text-sm font-semibold text-text-primary truncate m-0">{{ page.title }}</h3>
-            <p class="text-xs text-text-muted mt-1 m-0 font-mono">/p/{{ page.slug }}</p>
+            <h3 class="text-sm font-semibold text-foreground truncate m-0">{{ page.title }}</h3>
+            <p class="text-xs text-muted-foreground mt-1 m-0 font-mono">/p/{{ page.slug }}</p>
           </div>
           <span
             :class="[
               'shrink-0 px-2.5 py-0.5 text-xs font-semibold rounded-full',
               page.published
                 ? 'bg-success/15 text-success'
-                : 'bg-surface-3 text-text-muted'
+                : 'bg-muted text-muted-foreground'
             ]"
           >
             {{ page.published ? 'Published' : 'Draft' }}
           </span>
         </div>
 
-        <div class="flex gap-4 text-xs text-text-secondary flex-wrap">
+        <div class="flex gap-4 text-xs text-muted-foreground flex-wrap">
           <span class="flex items-center gap-1"><BarChart3 :size="12" /> {{ page.visit_count }} visits</span>
           <span>{{ page.template }}</span>
           <span>{{ formatDate(page.updated_at) }}</span>
         </div>
 
         <!-- Published URL bar -->
-        <div v-if="page.published" class="flex items-center gap-2 bg-surface-3/50 rounded-md px-3 py-1.5">
-          <span class="text-xs text-text-muted truncate flex-1 font-mono">/p/{{ page.slug }}</span>
-          <button class="btn-ghost px-1 py-0.5" title="Copy URL" @click="copyUrl('/p/' + page.slug)">
+        <div v-if="page.published" class="flex items-center gap-2 bg-muted/50 rounded-md px-3 py-1.5">
+          <span class="text-xs text-muted-foreground truncate flex-1 font-mono">/p/{{ page.slug }}</span>
+          <Button variant="ghost" size="sm" title="Copy URL" @click="copyUrl('/p/' + page.slug)">
             <Copy :size="11" />
-          </button>
+          </Button>
         </div>
 
         <div class="flex justify-between items-center pt-3 border-t border-border mt-auto">
+          <router-link
+            :to="`/pages/${page.id}`"
+            class="text-xs font-medium text-accent hover:underline"
+          >
+            View Details →
+          </router-link>
           <div class="flex gap-1">
-            <button class="btn-ghost text-sm px-2 py-1" title="Edit" @click="openEditPage(page)">
-              <Pencil :size="14" />
-            </button>
-            <button class="btn-ghost text-sm px-2 py-1" title="Preview" @click="openPreview(page)">
+            <Button variant="ghost" size="sm" title="Preview" @click="openPreview(page)">
               <Eye :size="14" />
-            </button>
-            <button
+            </Button>
+            <Button
               v-if="!page.published"
-              class="btn-ghost text-sm px-2 py-1 text-success"
-              title="Publish"
+              variant="ghost" size="sm" class="text-success" title="Publish"
               @click="publishPage(page)"
             >
               <Globe :size="14" />
-            </button>
-            <button
+            </Button>
+            <Button
               v-else
-              class="btn-ghost text-sm px-2 py-1 text-warning"
-              title="Unpublish"
+              variant="ghost" size="sm" class="text-warning" title="Unpublish"
               @click="unpublishPage(page)"
             >
               <GlobeLock :size="14" />
-            </button>
+            </Button>
+            <Button variant="ghost" size="sm" class="text-danger" title="Delete" @click="deleteConfirm = { show: true, id: page.id }">
+              <Trash2 :size="14" />
+            </Button>
           </div>
-          <button class="btn-ghost text-sm px-2 py-1 text-danger" title="Delete" @click="deleteConfirm = { show: true, id: page.id }">
-            <Trash2 :size="14" />
-          </button>
         </div>
       </div>
     </div>
@@ -328,22 +315,22 @@ fetchForms()
   <Modal :show="showTemplateChooser" title="Choose a Template" size="lg" @close="showTemplateChooser = false">
     <div class="grid grid-cols-2 max-md:grid-cols-1 gap-4">
       <div
-        class="bg-surface-2 border border-border rounded-xl p-5 flex flex-col items-center gap-3 cursor-pointer hover:border-accent transition-colors"
+        class="bg-card border border-border rounded-xl p-5 flex flex-col items-center gap-3 cursor-pointer hover:border-accent transition-colors"
         @click="chooseTemplate(null)"
       >
-        <FileText :size="32" class="text-text-muted" />
-        <span class="text-sm font-semibold text-text-primary">Blank Page</span>
-        <span class="text-xs text-text-muted text-center">Start from scratch</span>
+        <FileText :size="32" class="text-muted-foreground" />
+        <span class="text-sm font-semibold text-foreground">Blank Page</span>
+        <span class="text-xs text-muted-foreground text-center">Start from scratch</span>
       </div>
       <div
         v-for="tpl in templates"
         :key="tpl.id"
-        class="bg-surface-2 border border-border rounded-xl p-5 flex flex-col items-center gap-3 cursor-pointer hover:border-accent transition-colors"
+        class="bg-card border border-border rounded-xl p-5 flex flex-col items-center gap-3 cursor-pointer hover:border-accent transition-colors"
         @click="chooseTemplate(tpl)"
       >
         <FileText :size="32" class="text-accent" />
-        <span class="text-sm font-semibold text-text-primary">{{ tpl.name }}</span>
-        <span class="text-xs text-text-muted text-center">Pre-built template</span>
+        <span class="text-sm font-semibold text-foreground">{{ tpl.name }}</span>
+        <span class="text-xs text-muted-foreground text-center">Pre-built template</span>
       </div>
     </div>
   </Modal>
@@ -354,46 +341,49 @@ fetchForms()
       <!-- Top fields -->
       <div class="p-5 pb-0 shrink-0">
         <div class="grid grid-cols-[1fr_1fr_auto] max-md:grid-cols-1 gap-3 mb-3">
-          <div>
-            <label class="form-label">Page Title *</label>
-            <input v-model="form.title" type="text" class="form-input" placeholder="My Landing Page" @blur="!editingId && !form.slug && generateSlug()" />
+          <div class="flex flex-col gap-2">
+            <Label>Page Title *</Label>
+            <Input v-model="form.title" type="text" placeholder="My Landing Page" @blur="!editingId && !form.slug && generateSlug()" />
           </div>
-          <div>
-            <label class="form-label">Slug *</label>
+          <div class="flex flex-col gap-2">
+            <Label>Slug *</Label>
             <div class="flex items-center gap-1">
-              <span class="text-text-muted text-sm">/p/</span>
-              <input v-model="form.slug" type="text" class="form-input flex-1" placeholder="my-page" />
+              <span class="text-muted-foreground text-sm">/p/</span>
+              <Input v-model="form.slug" type="text" class="flex-1" placeholder="my-page" />
             </div>
           </div>
-          <div>
-            <label class="form-label">Linked Form</label>
-            <select v-model="form.form_id" class="form-select">
-              <option value="">None</option>
-              <option v-for="f in forms" :key="f.id" :value="f.id">{{ f.name }}</option>
-            </select>
+          <div class="flex flex-col gap-2">
+            <Label>Linked Form</Label>
+            <Select v-model="form.form_id">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">None</SelectItem>
+                <SelectItem v-for="f in forms" :key="f.id" :value="f.id">{{ f.name }}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div class="grid grid-cols-2 max-md:grid-cols-1 gap-3">
-          <div>
-            <label class="form-label">Meta Description</label>
-            <input v-model="form.meta_description" type="text" class="form-input" placeholder="SEO description" />
+          <div class="flex flex-col gap-2">
+            <Label>Meta Description</Label>
+            <Input v-model="form.meta_description" type="text" placeholder="SEO description" />
           </div>
-          <div>
-            <label class="form-label">Social Image URL</label>
-            <input v-model="form.meta_image" type="url" class="form-input" placeholder="https://..." />
+          <div class="flex flex-col gap-2">
+            <Label>Social Image URL</Label>
+            <Input v-model="form.meta_image" type="url" placeholder="https://..." />
           </div>
         </div>
 
         <!-- Tab switcher for content/style -->
         <div class="flex gap-1 mt-4">
           <button
-            :class="['px-3 py-1.5 text-xs font-medium rounded-md transition-colors', editorTab === 'content' ? 'bg-accent text-white' : 'bg-surface-3 text-text-secondary hover:text-text-primary']"
+            :class="['px-3 py-1.5 text-xs font-medium rounded-md transition-colors', editorTab === 'content' ? 'bg-accent text-white' : 'bg-muted text-muted-foreground hover:text-foreground']"
             @click="editorTab = 'content'"
           >
             HTML
           </button>
           <button
-            :class="['px-3 py-1.5 text-xs font-medium rounded-md transition-colors', editorTab === 'style' ? 'bg-accent text-white' : 'bg-surface-3 text-text-secondary hover:text-text-primary']"
+            :class="['px-3 py-1.5 text-xs font-medium rounded-md transition-colors', editorTab === 'style' ? 'bg-accent text-white' : 'bg-muted text-muted-foreground hover:text-foreground']"
             @click="editorTab = 'style'"
           >
             CSS
@@ -420,18 +410,15 @@ fetchForms()
       <!-- Footer -->
       <div class="flex justify-between items-center px-5 py-4 border-t border-border shrink-0">
         <div class="flex items-center gap-3">
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="form.tracking_enabled" class="sr-only peer" />
-            <div class="w-9 h-5 bg-surface-3 rounded-full peer peer-checked:bg-accent transition-colors after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-          </label>
-          <span class="text-xs text-text-muted">Track visits</span>
+          <Switch v-model="form.tracking_enabled" />
+          <span class="text-xs text-muted-foreground">Track visits</span>
         </div>
         <div class="flex gap-3">
-          <button class="btn-ghost" @click="closeEditor">Cancel</button>
-          <button class="btn-primary" @click="savePage" :disabled="saving || !form.title || !form.slug">
+          <Button variant="ghost" @click="closeEditor">Cancel</Button>
+          <Button @click="savePage" :disabled="saving || !form.title || !form.slug">
             <Loader2 v-if="saving" :size="16" class="spin" />
             {{ editingId ? 'Update' : 'Create' }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

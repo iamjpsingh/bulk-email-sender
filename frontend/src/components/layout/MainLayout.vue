@@ -1,20 +1,30 @@
 <script setup lang="ts">
 import { computed, provide, ref } from 'vue'
-import { RouterView, useRoute, useRouter } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import { useAuth } from '../../stores/auth'
 import { useSidebar } from '../../composables/useSidebar'
+import { useTheme } from '../../composables/useTheme'
 import { cn } from '../../lib/utils'
 import AppSidebar from './AppSidebar.vue'
 import CommandPalette from '../command/CommandPalette.vue'
 import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
+import {
   Search,
-  ChevronRight,
+  Sun,
+  Moon,
 } from 'lucide-vue-next'
 
 const route = useRoute()
-const router = useRouter()
 const { user } = useAuth()
 const { collapsed } = useSidebar()
+const { theme, toggleTheme } = useTheme()
 
 const showCommandPalette = ref(false)
 provide('commandPalette', { open: () => { showCommandPalette.value = true } })
@@ -61,7 +71,7 @@ if (typeof window !== 'undefined') {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-bg-primary">
+  <div class="flex min-h-screen bg-background">
     <!-- Skip link for accessibility -->
     <a
       href="#main-content"
@@ -94,30 +104,28 @@ if (typeof window !== 'undefined') {
           'sticky top-0 z-30 shrink-0',
           'flex items-center justify-between',
           'h-14 px-6',
-          'bg-bg-primary border-b border-border'
+          'bg-background border-b border-border'
         )"
       >
         <!-- Left: Breadcrumbs -->
-        <nav class="flex items-center gap-1 min-w-0" aria-label="Breadcrumb">
-          <span class="text-[13px] font-medium text-text-muted hidden md:inline">Dispatch</span>
-
-          <template v-for="(crumb, index) in breadcrumbs" :key="index">
-            <ChevronRight :size="14" class="text-text-muted/50 shrink-0 hidden md:block" />
-            <router-link
-              v-if="crumb.path"
-              :to="crumb.path"
-              class="text-[13px] font-medium text-text-muted hover:text-text-primary transition-colors duration-fast truncate"
-            >
-              {{ crumb.label }}
-            </router-link>
-            <span
-              v-else
-              class="text-[13px] font-semibold text-text-primary truncate"
-            >
-              {{ crumb.label }}
-            </span>
-          </template>
-        </nav>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem class="hidden md:block">
+              <BreadcrumbLink as-child>
+                <router-link to="/" class="text-muted-foreground hover:text-foreground">Dispatch</router-link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <template v-for="(crumb, index) in breadcrumbs" :key="index">
+              <BreadcrumbSeparator class="hidden md:block" />
+              <BreadcrumbItem>
+                <BreadcrumbLink v-if="crumb.path" as-child>
+                  <router-link :to="crumb.path">{{ crumb.label }}</router-link>
+                </BreadcrumbLink>
+                <BreadcrumbPage v-else>{{ crumb.label }}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </template>
+          </BreadcrumbList>
+        </Breadcrumb>
 
         <!-- Right: Search + User -->
         <div class="flex items-center gap-3">
@@ -126,9 +134,9 @@ if (typeof window !== 'undefined') {
             :class="cn(
               'hidden sm:flex items-center gap-2',
               'h-8 pl-3 pr-2 rounded-lg',
-              'bg-surface-1 border border-border',
-              'text-text-muted text-[13px]',
-              'hover:border-border-hover hover:text-text-secondary',
+              'bg-secondary border border-border',
+              'text-muted-foreground text-[13px]',
+              'hover:border-primary/25 hover:text-muted-foreground',
               'transition-all duration-fast cursor-pointer'
             )"
             @click="showCommandPalette = true"
@@ -139,8 +147,8 @@ if (typeof window !== 'undefined') {
               :class="cn(
                 'hidden lg:flex items-center gap-0.5',
                 'h-5 px-1.5 rounded',
-                'bg-bg-primary/60 border border-border',
-                'text-[10px] font-mono font-medium text-text-muted'
+                'bg-background/60 border border-border',
+                'text-[10px] font-mono font-medium text-muted-foreground'
               )"
             >
               <span class="text-[11px]">&#8984;</span>K
@@ -152,13 +160,29 @@ if (typeof window !== 'undefined') {
             :class="cn(
               'sm:hidden flex items-center justify-center',
               'w-8 h-8 rounded-lg',
-              'text-text-muted hover:text-text-primary',
-              'hover:bg-surface-1',
+              'text-muted-foreground hover:text-foreground',
+              'hover:bg-secondary',
               'transition-colors duration-fast cursor-pointer'
             )"
             @click="showCommandPalette = true"
           >
             <Search :size="16" />
+          </button>
+
+          <!-- Theme toggle -->
+          <button
+            @click="toggleTheme"
+            :class="cn(
+              'flex items-center justify-center',
+              'w-8 h-8 rounded-lg',
+              'text-muted-foreground hover:text-foreground',
+              'hover:bg-muted',
+              'transition-colors cursor-pointer'
+            )"
+            :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+          >
+            <Sun v-if="theme === 'dark'" :size="16" />
+            <Moon v-else :size="16" />
           </button>
 
           <!-- Separator -->
@@ -170,7 +194,7 @@ if (typeof window !== 'undefined') {
             :class="cn(
               'flex items-center gap-2 rounded-lg',
               'h-8 px-1.5',
-              'hover:bg-surface-1',
+              'hover:bg-secondary',
               'transition-colors duration-fast cursor-pointer'
             )"
           >
@@ -184,7 +208,7 @@ if (typeof window !== 'undefined') {
             >
               {{ userInitial }}
             </div>
-            <span class="hidden md:block text-[13px] font-medium text-text-secondary max-w-[120px] truncate">
+            <span class="hidden md:block text-[13px] font-medium text-muted-foreground max-w-[120px] truncate">
               {{ user.name || 'User' }}
             </span>
           </button>

@@ -67,7 +67,7 @@ const groupedResults = computed(() => {
   const groups: Record<string, typeof navItems> = {}
   for (const item of filtered.value) {
     if (!groups[item.section]) groups[item.section] = []
-    groups[item.section].push(item)
+    groups[item.section]!.push(item)
   }
   return groups
 })
@@ -131,20 +131,20 @@ function handleKeydown(e: KeyboardEvent) {
 
         <!-- Palette -->
         <div
-          class="relative w-full max-w-[560px] mx-4 bg-bg-card border border-border rounded-xl shadow-2xl overflow-hidden"
+          class="relative w-full max-w-[560px] mx-4 bg-card border border-border rounded-xl shadow-2xl overflow-hidden"
           @keydown="handleKeydown"
         >
           <!-- Search input -->
           <div class="flex items-center gap-3 px-4 border-b border-border">
-            <Search :size="18" class="text-text-muted shrink-0" />
+            <Search :size="18" class="text-muted-foreground shrink-0" />
             <input
               ref="inputRef"
               v-model="query"
               type="text"
-              class="flex-1 h-12 bg-transparent text-[15px] text-text-primary placeholder-text-muted outline-none border-none"
+              class="flex-1 h-12 bg-transparent text-[15px] text-foreground placeholder-text-muted outline-none border-none"
               placeholder="Type a command or search..."
             />
-            <kbd class="hidden sm:flex items-center h-5 px-1.5 rounded bg-bg-tertiary border border-border text-[10px] font-mono text-text-muted">
+            <kbd class="hidden sm:flex items-center h-5 px-1.5 rounded bg-muted border border-border text-[10px] font-mono text-muted-foreground">
               ESC
             </kbd>
           </div>
@@ -152,14 +152,14 @@ function handleKeydown(e: KeyboardEvent) {
           <!-- Results -->
           <div class="max-h-[360px] overflow-y-auto py-2">
             <template v-if="flatResults.length === 0">
-              <div class="px-4 py-8 text-center text-sm text-text-muted">
+              <div class="px-4 py-8 text-center text-sm text-muted-foreground">
                 No results for "{{ query }}"
               </div>
             </template>
 
             <template v-for="(items, section) in groupedResults" :key="section">
               <div class="px-3 pt-2 pb-1">
-                <span class="text-[11px] font-semibold uppercase tracking-wider text-text-muted px-1">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
                   {{ section }}
                 </span>
               </div>
@@ -170,7 +170,7 @@ function handleKeydown(e: KeyboardEvent) {
                   'flex items-center gap-3 mx-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors',
                   flatResults.indexOf(item) === selectedIndex
                     ? 'bg-accent/10 text-accent'
-                    : 'text-text-secondary hover:bg-surface-1'
+                    : 'text-muted-foreground hover:bg-secondary'
                 ]"
                 @click="navigate(item.path)"
                 @mouseenter="selectedIndex = flatResults.indexOf(item)"
@@ -178,7 +178,7 @@ function handleKeydown(e: KeyboardEvent) {
                 <component
                   :is="item.icon"
                   :size="16"
-                  :class="flatResults.indexOf(item) === selectedIndex ? 'text-accent' : 'text-text-muted'"
+                  :class="flatResults.indexOf(item) === selectedIndex ? 'text-accent' : 'text-muted-foreground'"
                 />
                 <span class="flex-1 text-sm font-medium">{{ item.label }}</span>
                 <ArrowRight
@@ -191,17 +191,17 @@ function handleKeydown(e: KeyboardEvent) {
           </div>
 
           <!-- Footer -->
-          <div class="flex items-center gap-4 px-4 py-2.5 border-t border-border bg-bg-tertiary/50">
-            <div class="flex items-center gap-1.5 text-[11px] text-text-muted">
-              <kbd class="px-1 py-0.5 rounded bg-bg-primary border border-border font-mono text-[10px]">&uarr;&darr;</kbd>
+          <div class="flex items-center gap-4 px-4 py-2.5 border-t border-border bg-muted/50">
+            <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <kbd class="px-1 py-0.5 rounded bg-background border border-border font-mono text-[10px]">&uarr;&darr;</kbd>
               Navigate
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] text-text-muted">
-              <kbd class="px-1 py-0.5 rounded bg-bg-primary border border-border font-mono text-[10px]">&crarr;</kbd>
+            <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <kbd class="px-1 py-0.5 rounded bg-background border border-border font-mono text-[10px]">&crarr;</kbd>
               Open
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] text-text-muted">
-              <kbd class="px-1 py-0.5 rounded bg-bg-primary border border-border font-mono text-[10px]">esc</kbd>
+            <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <kbd class="px-1 py-0.5 rounded bg-background border border-border font-mono text-[10px]">esc</kbd>
               Close
             </div>
           </div>

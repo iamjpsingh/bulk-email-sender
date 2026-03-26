@@ -2,6 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { authApi } from '../lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Send, Loader2, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -50,7 +53,7 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-6 bg-bg-primary">
+  <div class="min-h-screen flex items-center justify-center p-6 bg-background">
     <div class="w-full max-w-[400px]">
       <!-- Logo -->
       <div class="text-center mb-10">
@@ -59,10 +62,10 @@ async function handleSubmit() {
             <Send class="text-white" :size="20" />
           </div>
         </div>
-        <h1 class="text-[26px] font-bold tracking-tight text-text-primary mb-1">Set New Password</h1>
+        <h1 class="text-[26px] font-bold tracking-tight text-foreground mb-1">Set New Password</h1>
       </div>
 
-      <div class="bg-bg-card border border-border rounded-xl p-8">
+      <div class="bg-card border border-border rounded-xl p-8">
         <!-- Loading validation -->
         <div v-if="validating" class="flex items-center justify-center py-8">
           <Loader2 :size="24" class="spin text-accent" />
@@ -73,8 +76,8 @@ async function handleSubmit() {
           <div class="w-12 h-12 rounded-full bg-danger/15 flex items-center justify-center mx-auto mb-4">
             <AlertCircle :size="24" class="text-danger" />
           </div>
-          <p class="text-text-primary text-sm mb-2">Invalid or expired reset link</p>
-          <p class="text-text-muted text-xs mb-6">Please request a new password reset.</p>
+          <p class="text-foreground text-sm mb-2">Invalid or expired reset link</p>
+          <p class="text-muted-foreground text-xs mb-6">Please request a new password reset.</p>
           <router-link to="/forgot-password" class="text-accent text-sm font-medium hover:underline">
             Request new reset link
           </router-link>
@@ -85,27 +88,27 @@ async function handleSubmit() {
           <div class="w-12 h-12 rounded-full bg-success/15 flex items-center justify-center mx-auto mb-4">
             <CheckCircle :size="24" class="text-success" />
           </div>
-          <p class="text-text-primary text-sm mb-6">Your password has been reset successfully.</p>
+          <p class="text-foreground text-sm mb-6">Your password has been reset successfully.</p>
           <router-link to="/login" class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white text-sm font-semibold rounded-lg hover:brightness-110 transition-all">
             Sign In
           </router-link>
         </div>
 
         <!-- Form -->
-        <form v-else @submit.prevent="handleSubmit" class="flex flex-col gap-1">
-          <div v-if="error" class="flex items-start gap-2.5 py-3 px-3.5 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm mb-4" role="alert">
+        <form v-else @submit.prevent="handleSubmit" class="flex flex-col gap-5">
+          <div v-if="error" class="flex items-start gap-2.5 py-3 px-3.5 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm" role="alert">
             <AlertCircle :size="16" class="shrink-0 mt-0.5" />
             <span>{{ error }}</span>
           </div>
 
-          <div class="form-group">
-            <label class="form-label" for="new-password">New Password</label>
+          <div class="flex flex-col gap-2">
+            <Label for="new-password">New Password</Label>
             <div class="relative">
-              <input
+              <Input
                 id="new-password"
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
-                class="form-input pr-11"
+                class="pr-11"
                 placeholder="••••••••"
                 minlength="8"
                 autocomplete="new-password"
@@ -113,7 +116,7 @@ async function handleSubmit() {
               />
               <button
                 type="button"
-                class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-secondary transition-colors rounded-md"
+                class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors rounded-md"
                 @click="showPassword = !showPassword"
                 tabindex="-1"
               >
@@ -123,13 +126,12 @@ async function handleSubmit() {
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label" for="confirm-password">Confirm Password</label>
-            <input
+          <div class="flex flex-col gap-2">
+            <Label for="confirm-password">Confirm Password</Label>
+            <Input
               id="confirm-password"
               v-model="confirmPassword"
               :type="showPassword ? 'text' : 'password'"
-              class="form-input"
               placeholder="••••••••"
               minlength="8"
               autocomplete="new-password"
@@ -137,14 +139,14 @@ async function handleSubmit() {
             />
           </div>
 
-          <button
+          <Button
             type="submit"
-            class="flex items-center justify-center gap-2 w-full h-11 mt-2 bg-accent text-white text-sm font-semibold rounded-lg transition-all duration-150 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+            class="w-full h-11"
             :disabled="loading || !password || !confirmPassword"
           >
             <Loader2 v-if="loading" :size="18" class="spin" />
             <span v-else>Reset Password</span>
-          </button>
+          </Button>
         </form>
       </div>
     </div>

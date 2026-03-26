@@ -26,7 +26,7 @@ const colors: Record<string, string> = {
 <template>
   <div
     :class="cn(
-      'relative w-full bg-bg-tertiary rounded-full overflow-hidden',
+      'relative w-full bg-muted rounded-full overflow-hidden',
       sizes[size || 'md'],
     )"
   >

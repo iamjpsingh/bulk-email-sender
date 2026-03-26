@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import grapesjs, { type Editor } from 'grapesjs'
 import 'grapesjs/dist/css/grapes.min.css'
-import { Code2, Eye, Smartphone, Monitor, Tablet, Save, Loader2 } from 'lucide-vue-next'
+import { Code2, Smartphone, Monitor, Tablet, Save, Loader2 } from 'lucide-vue-next'
 
 const props = defineProps<{
   content?: string
@@ -237,16 +237,16 @@ defineExpose({
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-surface-0 rounded-xl border border-border overflow-hidden">
+  <div class="flex flex-col h-full bg-background rounded-xl border border-border overflow-hidden">
     <!-- Toolbar -->
-    <div class="flex items-center justify-between px-3 py-2 border-b border-border bg-surface-1 shrink-0">
+    <div class="flex items-center justify-between px-3 py-2 border-b border-border bg-secondary shrink-0">
       <div class="flex items-center gap-1">
         <button
-          :class="['px-2.5 py-1.5 rounded text-xs font-medium transition', viewMode === 'editor' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-secondary']"
+          :class="['px-2.5 py-1.5 rounded text-xs font-medium transition', viewMode === 'editor' ? 'bg-accent text-white' : 'text-muted-foreground hover:text-muted-foreground']"
           @click="switchToEditor"
         >Visual</button>
         <button
-          :class="['px-2.5 py-1.5 rounded text-xs font-medium transition', viewMode === 'code' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-secondary']"
+          :class="['px-2.5 py-1.5 rounded text-xs font-medium transition', viewMode === 'code' ? 'bg-accent text-white' : 'text-muted-foreground hover:text-muted-foreground']"
           @click="switchToCode"
         >
           <Code2 :size="12" class="inline mr-1" />Code
@@ -255,15 +255,15 @@ defineExpose({
 
       <div class="flex items-center gap-1">
         <button
-          :class="['p-1.5 rounded transition', previewDevice === 'desktop' ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-text-secondary']"
+          :class="['p-1.5 rounded transition', previewDevice === 'desktop' ? 'text-accent bg-accent/10' : 'text-muted-foreground hover:text-muted-foreground']"
           @click="setDevice('desktop')" title="Desktop"
         ><Monitor :size="14" /></button>
         <button
-          :class="['p-1.5 rounded transition', previewDevice === 'tablet' ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-text-secondary']"
+          :class="['p-1.5 rounded transition', previewDevice === 'tablet' ? 'text-accent bg-accent/10' : 'text-muted-foreground hover:text-muted-foreground']"
           @click="setDevice('tablet')" title="Tablet"
         ><Tablet :size="14" /></button>
         <button
-          :class="['p-1.5 rounded transition', previewDevice === 'mobile' ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-text-secondary']"
+          :class="['p-1.5 rounded transition', previewDevice === 'mobile' ? 'text-accent bg-accent/10' : 'text-muted-foreground hover:text-muted-foreground']"
           @click="setDevice('mobile')" title="Mobile"
         ><Smartphone :size="14" /></button>
       </div>
@@ -288,7 +288,7 @@ defineExpose({
       <div v-if="viewMode === 'code'" class="w-full h-full">
         <textarea
           v-model="codeContent"
-          class="w-full h-full bg-surface-0 text-text-primary font-mono text-sm p-4 border-none outline-none resize-none"
+          class="w-full h-full bg-background text-foreground font-mono text-sm p-4 border-none outline-none resize-none"
           spellcheck="false"
         />
       </div>
@@ -298,25 +298,25 @@ defineExpose({
 
 <style>
 /* GrapesJS theme overrides for dark mode */
-.gjs-one-bg { background-color: var(--color-surface-1) !important; }
-.gjs-two-color { color: var(--color-text-primary) !important; }
-.gjs-three-bg { background-color: var(--color-surface-2) !important; }
+.gjs-one-bg { background-color: var(--color-secondary) !important; }
+.gjs-two-color { color: var(--color-foreground) !important; }
+.gjs-three-bg { background-color: var(--color-card) !important; }
 .gjs-four-color, .gjs-four-color-h:hover { color: var(--color-accent) !important; }
 
-.gjs-block { color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: 6px; }
+.gjs-block { color: var(--color-muted-foreground); border: 1px solid var(--color-border); border-radius: 6px; }
 .gjs-block:hover { border-color: var(--color-accent); }
-.gjs-block__media { color: var(--color-text-muted); }
+.gjs-block__media { color: var(--color-muted-foreground); }
 
-.gjs-pn-panel { background: var(--color-surface-1); border-color: var(--color-border); }
-.gjs-pn-views-container { background: var(--color-surface-1); border-left: 1px solid var(--color-border); }
+.gjs-pn-panel { background: var(--color-secondary); border-color: var(--color-border); }
+.gjs-pn-views-container { background: var(--color-secondary); border-left: 1px solid var(--color-border); }
 .gjs-pn-views { border-bottom: 1px solid var(--color-border); }
 
-.gjs-clm-tags .gjs-sm-sector .gjs-sm-sector-title { background: var(--color-surface-2); color: var(--color-text-secondary); }
-.gjs-sm-sector-title { background: var(--color-surface-2) !important; color: var(--color-text-secondary) !important; }
+.gjs-clm-tags .gjs-sm-sector .gjs-sm-sector-title { background: var(--color-card); color: var(--color-muted-foreground); }
+.gjs-sm-sector-title { background: var(--color-card) !important; color: var(--color-muted-foreground) !important; }
 
-.gjs-field { background: var(--color-surface-0); border-color: var(--color-border); color: var(--color-text-primary); }
-.gjs-field input, .gjs-field select, .gjs-field textarea { color: var(--color-text-primary); }
+.gjs-field { background: var(--color-background); border-color: var(--color-border); color: var(--color-foreground); }
+.gjs-field input, .gjs-field select, .gjs-field textarea { color: var(--color-foreground); }
 
-.gjs-cv-canvas { background: var(--color-surface-0); }
+.gjs-cv-canvas { background: var(--color-background); }
 .gjs-frame-wrapper { background: white; } /* Keep email canvas white */
 </style>

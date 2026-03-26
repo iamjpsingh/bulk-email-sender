@@ -39,6 +39,7 @@ function getMicrosoftOAuth() {
 }
 
 export type EmailProvider = 'google' | 'microsoft' | 'smtp'
+export type OAuthPurpose = 'user_oauth' | 'platform_mailer'
 
 export interface OAuthTokens {
   access_token: string
@@ -54,7 +55,7 @@ const MICROSOFT_AUTH_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0
 const MICROSOFT_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
 
 class OAuthService {
-  private stateStore: Map<string, { userId: string; provider: EmailProvider; timestamp: number }> = new Map()
+  private stateStore: Map<string, { userId: string; provider: EmailProvider; purpose: OAuthPurpose; timestamp: number }> = new Map()
 
   constructor() {
     // Clean up expired states every 10 minutes
@@ -68,11 +69,12 @@ class OAuthService {
   /**
    * Generate secure state parameter for OAuth flow
    */
-  generateState(userId: string, provider: EmailProvider): string {
+  generateState(userId: string, provider: EmailProvider, purpose: OAuthPurpose = 'user_oauth'): string {
     const state = randomBytes(32).toString('hex')
     this.stateStore.set(state, {
       userId,
       provider,
+      purpose,
       timestamp: Date.now(),
     })
     return state
@@ -81,7 +83,7 @@ class OAuthService {
   /**
    * Validate and consume state
    */
-  validateState(state: string): { userId: string; provider: EmailProvider } | null {
+  validateState(state: string): { userId: string; provider: EmailProvider; purpose: OAuthPurpose } | null {
     const data = this.stateStore.get(state)
     if (!data) return null
 
@@ -92,7 +94,7 @@ class OAuthService {
     }
 
     this.stateStore.delete(state)
-    return { userId: data.userId, provider: data.provider }
+    return { userId: data.userId, provider: data.provider, purpose: data.purpose }
   }
 
   private cleanExpiredStates(): void {
@@ -151,6 +153,46 @@ class OAuthService {
       state,
     })
 
+    return `${MICROSOFT_AUTH_URL}?${params.toString()}`
+  }
+
+  /**
+   * Get Google OAuth URL for platform system mailer
+   * Uses the SAME redirect URI as user OAuth to avoid redirect_uri_mismatch
+   */
+  getPlatformGoogleAuthUrl(userId: string): string {
+    const { CLIENT_ID, REDIRECT_URI } = getGoogleOAuth()
+    if (!CLIENT_ID) throw new Error('Google OAuth not configured — save Client ID and Secret first')
+
+    const state = this.generateState(userId, 'google', 'platform_mailer')
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      response_type: 'code',
+      scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email',
+      access_type: 'offline',
+      prompt: 'consent',
+      state,
+    })
+    return `${GOOGLE_AUTH_URL}?${params.toString()}`
+  }
+
+  /**
+   * Get Microsoft OAuth URL for platform system mailer
+   * Uses the SAME redirect URI as user OAuth to avoid redirect_uri_mismatch
+   */
+  getPlatformMicrosoftAuthUrl(userId: string): string {
+    const { CLIENT_ID, REDIRECT_URI } = getMicrosoftOAuth()
+    if (!CLIENT_ID) throw new Error('Microsoft OAuth not configured — save Client ID and Secret first')
+
+    const state = this.generateState(userId, 'microsoft', 'platform_mailer')
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      response_type: 'code',
+      scope: 'https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read offline_access',
+      state,
+    })
     return `${MICROSOFT_AUTH_URL}?${params.toString()}`
   }
 

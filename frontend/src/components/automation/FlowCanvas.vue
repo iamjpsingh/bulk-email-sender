@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, nextTick } from 'vue'
 import { VueFlow, useVueFlow, type Node, type Edge, type Connection, MarkerType } from '@vue-flow/core'
 import { MiniMap } from '@vue-flow/minimap'
 import { Controls } from '@vue-flow/controls'
@@ -9,7 +9,7 @@ import '@vue-flow/minimap/dist/style.css'
 import '@vue-flow/controls/dist/style.css'
 import BaseNode from './nodes/BaseNode.vue'
 import { NODE_TYPES, NODE_PALETTE, type NodeTypeName } from './nodes'
-import { Plus, Save, Loader2, GripVertical } from 'lucide-vue-next'
+import { Plus, Save, Loader2 } from 'lucide-vue-next'
 
 const props = defineProps<{
   automationId: string
@@ -115,12 +115,12 @@ defineExpose({ deleteNode, addFlowNode, fitView })
 </script>
 
 <template>
-  <div class="relative w-full h-full min-h-[500px] bg-surface-0 rounded-xl border border-border overflow-hidden">
+  <div class="relative w-full h-full min-h-[500px] bg-background rounded-xl border border-border overflow-hidden">
     <!-- Toolbar -->
     <div class="absolute top-3 left-3 z-10 flex items-center gap-2">
       <button
         @click="showPalette = !showPalette"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-1 border border-border rounded-lg text-xs font-medium text-text-secondary hover:border-accent hover:text-accent transition shadow-sm"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-secondary border border-border rounded-lg text-xs font-medium text-muted-foreground hover:border-accent hover:text-accent transition shadow-sm"
       >
         <Plus :size="14" /> Add Node
       </button>
@@ -135,22 +135,22 @@ defineExpose({ deleteNode, addFlowNode, fitView })
       </button>
       <button
         @click="fitView({ padding: 0.2 })"
-        class="px-2.5 py-1.5 bg-surface-1 border border-border rounded-lg text-xs text-text-muted hover:text-text-secondary transition shadow-sm"
+        class="px-2.5 py-1.5 bg-secondary border border-border rounded-lg text-xs text-muted-foreground hover:text-muted-foreground transition shadow-sm"
       >
         Fit
       </button>
     </div>
 
     <!-- Node Palette -->
-    <div v-if="showPalette" class="absolute top-12 left-3 z-20 bg-surface-1 border border-border rounded-xl shadow-lg p-3 w-56">
+    <div v-if="showPalette" class="absolute top-12 left-3 z-20 bg-secondary border border-border rounded-xl shadow-lg p-3 w-56">
       <div v-for="group in NODE_PALETTE" :key="group.category" class="mb-3 last:mb-0">
-        <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1.5">{{ group.category }}</div>
+        <div class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{{ group.category }}</div>
         <div class="flex flex-wrap gap-1.5">
           <button
             v-for="type in group.items"
             :key="type"
             @click="addFlowNode(type as NodeTypeName)"
-            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-surface-0 border border-border rounded-lg text-[11px] font-medium text-text-secondary hover:border-accent/40 hover:text-accent transition"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] font-medium text-muted-foreground hover:border-accent/40 hover:text-accent transition"
           >
             <component :is="NODE_TYPES[type as NodeTypeName].icon" :size="12" :style="{ color: NODE_TYPES[type as NodeTypeName].color }" />
             {{ NODE_TYPES[type as NodeTypeName].label }}
@@ -206,9 +206,9 @@ defineExpose({ deleteNode, addFlowNode, fitView })
       <MiniMap
         :pannable="true"
         :zoomable="true"
-        class="!bg-surface-1 !border-border"
+        class="!bg-secondary !border-border"
       />
-      <Controls class="!bg-surface-1 !border-border !shadow-sm" />
+      <Controls class="!bg-secondary !border-border !shadow-sm" />
     </VueFlow>
   </div>
 </template>
@@ -216,9 +216,9 @@ defineExpose({ deleteNode, addFlowNode, fitView })
 <style>
 /* Override Vue Flow theme for dark mode compatibility */
 .vue-flow {
-  --vf-node-bg: var(--color-surface-1);
-  --vf-node-text: var(--color-text-primary);
-  --vf-handle: var(--color-text-muted);
+  --vf-node-bg: var(--color-secondary);
+  --vf-node-text: var(--color-foreground);
+  --vf-handle: var(--color-muted-foreground);
   --vf-box-shadow: none;
 }
 .vue-flow__minimap {
@@ -230,11 +230,11 @@ defineExpose({ deleteNode, addFlowNode, fitView })
   overflow: hidden;
 }
 .vue-flow__controls button {
-  background: var(--color-surface-1);
-  color: var(--color-text-secondary);
+  background: var(--color-secondary);
+  color: var(--color-muted-foreground);
   border-color: var(--color-border);
 }
 .vue-flow__controls button:hover {
-  background: var(--color-surface-2);
+  background: var(--color-card);
 }
 </style>

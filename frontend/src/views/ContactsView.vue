@@ -33,6 +33,7 @@ import {
 import type { Contact, ContactInput, ContactList, DuplicateGroup } from '../lib/api'
 import { contactsApi } from '../lib/api'
 import Modal from '../components/ui/Modal.vue'
+import { Button } from '@/components/ui/button'
 import {
   Plus,
   Pencil,
@@ -296,7 +297,7 @@ async function mergeDuplicate(group: DuplicateGroup) {
   mergingId.value = group.email
   try {
     const [primaryId, ...mergeIds] = group.ids
-    await contactsApi.mergeContacts(primaryId, mergeIds)
+    await contactsApi.mergeContacts(primaryId ?? '', mergeIds)
     toast.success(`Merged ${mergeIds.length} duplicate(s) for ${group.email}`)
     duplicates.value = duplicates.value.filter(d => d.email !== group.email)
   } catch (e: any) {
@@ -324,23 +325,23 @@ function toggleSelectAll() {
     <div class="relative">
       <PageHeader title="Contacts">
         <template #actions>
-          <button class="btn-ghost" @click="findDuplicates">
+          <Button variant="ghost" @click="findDuplicates">
             <GitMerge :size="16" /> Duplicates
-          </button>
-          <button class="btn-ghost" @click="showValidateModal = true">
+          </Button>
+          <Button variant="ghost" @click="showValidateModal = true">
             <Shield :size="16" /> Validate
-          </button>
-          <button class="btn-primary" @click="showNewListModal = true">
+          </Button>
+          <Button @click="showNewListModal = true">
             <Plus :size="16" /> New List
-          </button>
+          </Button>
         </template>
       </PageHeader>
 
       <div class="flex max-md:flex-col gap-6 min-h-[calc(100vh-160px)]">
         <!-- Sidebar: Lists -->
-        <div class="w-[260px] max-md:w-full shrink-0 bg-bg-card border border-border rounded-xl">
+        <div class="w-[260px] max-md:w-full shrink-0 bg-card border border-border rounded-xl">
           <div class="px-4 py-3.5 border-b border-border">
-            <h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Lists</h3>
+            <h3 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lists</h3>
           </div>
           <div v-if="listsLoading" class="p-3 flex flex-col gap-2">
             <Skeleton variant="text" :count="4" height="40px" />
@@ -354,7 +355,7 @@ function toggleSelectAll() {
               :class="
                 activeListId === list.id
                   ? 'bg-accent/10 text-accent'
-                  : 'text-text-primary hover:bg-bg-tertiary'
+                  : 'text-foreground hover:bg-muted'
               "
               @click="activeListId = list.id"
             >
@@ -365,25 +366,17 @@ function toggleSelectAll() {
                   :class="
                     activeListId === list.id
                       ? 'bg-accent/20 text-accent'
-                      : 'bg-bg-tertiary text-text-muted'
+                      : 'bg-muted text-muted-foreground'
                   "
                 >{{ list.contact_count }}</span>
               </div>
               <div class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                <button
-                  class="bg-transparent border-none cursor-pointer p-1.5 text-text-muted rounded-md hover:bg-bg-tertiary hover:text-text-primary transition-all duration-150"
-                  @click.stop="openEditList(list)"
-                  title="Edit"
-                >
+                <Button variant="ghost" size="sm" class="h-7 w-7 p-0" @click.stop="openEditList(list)" title="Edit">
                   <Pencil :size="13" />
-                </button>
-                <button
-                  class="bg-transparent border-none cursor-pointer p-1.5 text-text-muted rounded-md hover:bg-red-500/10 hover:text-red-500 transition-all duration-150"
-                  @click.stop="handleDeleteList(list)"
-                  title="Delete"
-                >
+                </Button>
+                <Button variant="ghost" size="sm" class="h-7 w-7 p-0 hover:text-red-500 hover:bg-red-500/10" @click.stop="handleDeleteList(list)" title="Delete">
                   <Trash2 :size="13" />
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -406,24 +399,15 @@ function toggleSelectAll() {
             >
               <span class="font-semibold text-accent">{{ selectedIds.length }} selected</span>
               <div class="flex gap-1.5">
-                <button
-                  class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium"
-                  @click="showBulkTagModal = true"
-                >
+                <Button variant="ghost" size="sm" @click="showBulkTagModal = true">
                   <Tag :size="14" /> Tag
-                </button>
-                <button
-                  class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium"
-                  @click="showBulkMoveModal = true"
-                >
+                </Button>
+                <Button variant="ghost" size="sm" @click="showBulkMoveModal = true">
                   <FolderInput :size="14" /> Move
-                </button>
-                <button
-                  class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-red-500 hover:bg-red-500/[0.08]"
-                  @click="handleBulkDelete"
-                >
+                </Button>
+                <Button variant="ghost" size="sm" class="text-red-500 hover:bg-red-500/[0.08]" @click="handleBulkDelete">
                   <Trash2 :size="14" /> Delete
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -534,13 +518,15 @@ function toggleSelectAll() {
       <!-- Contact Detail Modal (Profile / Activity / Preferences) -->
       <Modal :show="showTimelineModal" :title="timelineContactName" size="lg" @close="showTimelineModal = false">
         <div class="flex gap-1 mb-4 border-b border-border">
-          <button
+          <Button
             v-for="tab in [{ key: 'profile', label: 'Profile' }, { key: 'activity', label: 'Activity' }, { key: 'preferences', label: 'Preferences' }]"
             :key="tab.key"
-            class="px-3 py-2 text-xs font-medium transition-all border-b-2"
-            :class="timelineTab === tab.key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-secondary'"
+            variant="ghost"
+            size="sm"
+            class="rounded-none border-b-2 text-xs"
+            :class="timelineTab === tab.key ? 'border-accent text-accent' : 'border-transparent text-muted-foreground'"
             @click="timelineTab = tab.key as any"
-          >{{ tab.label }}</button>
+          >{{ tab.label }}</Button>
         </div>
         <RecipientProfile v-if="timelineTab === 'profile' && timelineContactId" :contact-id="timelineContactId" />
         <ContactTimeline v-if="timelineTab === 'activity' && timelineContactId" :contact-id="timelineContactId" />
@@ -552,32 +538,33 @@ function toggleSelectAll() {
         <div v-if="duplicatesLoading" class="flex justify-center py-12">
           <Loader2 :size="24" class="spin text-accent" />
         </div>
-        <div v-else-if="duplicates.length === 0" class="py-12 text-center text-text-muted text-sm">
+        <div v-else-if="duplicates.length === 0" class="py-12 text-center text-muted-foreground text-sm">
           No duplicates found
         </div>
         <div v-else class="flex flex-col gap-3 max-h-[60vh] overflow-y-auto">
           <div
             v-for="group in duplicates"
             :key="group.email"
-            class="bg-surface-2 rounded-lg p-4"
+            class="bg-card rounded-lg p-4"
           >
             <div class="flex justify-between items-center mb-2">
               <div>
-                <span class="text-sm font-semibold text-text-primary">{{ group.email }}</span>
-                <span class="text-xs text-text-muted ml-2">{{ group.count }} copies</span>
+                <span class="text-sm font-semibold text-foreground">{{ group.email }}</span>
+                <span class="text-xs text-muted-foreground ml-2">{{ group.count }} copies</span>
               </div>
-              <button
-                class="btn-secondary text-xs px-3 py-1.5"
+              <Button
+                variant="secondary"
+                size="sm"
                 :disabled="mergingId === group.email"
                 @click="mergeDuplicate(group)"
               >
                 <Loader2 v-if="mergingId === group.email" :size="12" class="spin" />
                 <GitMerge v-else :size="12" />
                 Merge
-              </button>
+              </Button>
             </div>
           </div>
-          <p class="text-xs text-text-muted mt-2 m-0">
+          <p class="text-xs text-muted-foreground mt-2 m-0">
             Merging keeps the newest data and combines tags. The primary contact is preserved.
           </p>
         </div>

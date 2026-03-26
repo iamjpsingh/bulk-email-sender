@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Search } from 'lucide-vue-next'
+import { Input } from '@/components/ui/input'
 
 defineProps<{
   modelValue: string
@@ -14,13 +15,13 @@ defineEmits<{
 
 <template>
   <div class="relative">
-    <Search :size="18" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-    <input
+    <Search :size="18" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+    <Input
       type="text"
-      class="form-input pl-[42px]"
-      :value="modelValue"
+      class="pl-[42px]"
+      :model-value="modelValue"
       :placeholder="placeholder || 'Search...'"
-      @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+      @update:model-value="$emit('update:modelValue', String($event))"
       @keyup.enter="$emit('search')"
     />
   </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { analyticsApi, type LinkClickData } from '../../lib/api'
 import { Loader2, ExternalLink, MousePointer } from 'lucide-vue-next'
 
@@ -11,7 +11,7 @@ const props = defineProps<{
 const loading = ref(true)
 const links = ref<LinkClickData[]>([])
 const error = ref('')
-const showOverlay = ref(true)
+
 
 const totalClicks = computed(() => links.value.reduce((sum, l) => sum + l.click_count, 0))
 const maxClicks = computed(() => Math.max(...links.value.map(l => l.click_count), 1))
@@ -55,22 +55,22 @@ onMounted(loadData)
 </script>
 
 <template>
-  <div class="bg-bg-card border border-border rounded-xl overflow-hidden">
+  <div class="bg-card border border-border rounded-xl overflow-hidden">
     <div class="px-5 py-4 border-b border-border flex items-center justify-between">
       <div class="flex items-center gap-2">
         <MousePointer :size="16" class="text-accent" />
-        <h3 class="text-sm font-semibold text-text-primary">Click Heatmap</h3>
-        <span v-if="!loading" class="text-xs text-text-muted">({{ totalClicks.toLocaleString() }} total clicks)</span>
+        <h3 class="text-sm font-semibold text-foreground">Click Heatmap</h3>
+        <span v-if="!loading" class="text-xs text-muted-foreground">({{ totalClicks.toLocaleString() }} total clicks)</span>
       </div>
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <Loader2 :size="20" class="animate-spin text-text-muted" />
+      <Loader2 :size="20" class="animate-spin text-muted-foreground" />
     </div>
 
-    <div v-else-if="error" class="px-5 py-8 text-center text-sm text-text-muted">{{ error }}</div>
+    <div v-else-if="error" class="px-5 py-8 text-center text-sm text-muted-foreground">{{ error }}</div>
 
-    <div v-else-if="links.length === 0" class="px-5 py-8 text-center text-sm text-text-muted">No click data available</div>
+    <div v-else-if="links.length === 0" class="px-5 py-8 text-center text-sm text-muted-foreground">No click data available</div>
 
     <div v-else class="p-5">
       <!-- Heatmap bar chart -->
@@ -81,18 +81,18 @@ onMounted(loadData)
               :href="link.url"
               target="_blank"
               rel="noopener noreferrer"
-              class="text-xs text-text-secondary hover:text-accent transition truncate flex-1 flex items-center gap-1"
+              class="text-xs text-muted-foreground hover:text-accent transition truncate flex-1 flex items-center gap-1"
               :title="link.url"
             >
               {{ shortenUrl(link.url) }}
               <ExternalLink :size="10" class="shrink-0 opacity-0 group-hover:opacity-100 transition" />
             </a>
             <div class="flex items-center gap-3 shrink-0 text-xs">
-              <span class="text-text-muted">{{ link.unique_clicks }} unique</span>
-              <span class="font-semibold text-text-primary w-12 text-right">{{ link.click_count }}</span>
+              <span class="text-muted-foreground">{{ link.unique_clicks }} unique</span>
+              <span class="font-semibold text-foreground w-12 text-right">{{ link.click_count }}</span>
             </div>
           </div>
-          <div class="h-6 bg-surface-0 rounded-md overflow-hidden relative">
+          <div class="h-6 bg-background rounded-md overflow-hidden relative">
             <div
               class="h-full rounded-md transition-all duration-500 flex items-center px-2"
               :style="{ width: barWidth(link.click_count), backgroundColor: heatColor(link.click_count) }"
@@ -107,14 +107,14 @@ onMounted(loadData)
 
       <!-- Legend -->
       <div class="flex items-center gap-3 mt-5 pt-4 border-t border-border justify-center">
-        <span class="text-[10px] text-text-muted">Cool</span>
+        <span class="text-[10px] text-muted-foreground">Cool</span>
         <div class="flex gap-0.5">
           <span class="w-6 h-3 rounded-sm" style="background: rgba(59, 130, 246, 0.7)"></span>
           <span class="w-6 h-3 rounded-sm" style="background: rgba(234, 179, 8, 0.75)"></span>
           <span class="w-6 h-3 rounded-sm" style="background: rgba(249, 115, 22, 0.8)"></span>
           <span class="w-6 h-3 rounded-sm" style="background: rgba(239, 68, 68, 0.85)"></span>
         </div>
-        <span class="text-[10px] text-text-muted">Hot</span>
+        <span class="text-[10px] text-muted-foreground">Hot</span>
       </div>
     </div>
   </div>

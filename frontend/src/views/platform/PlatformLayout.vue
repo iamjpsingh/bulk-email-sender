@@ -2,16 +2,18 @@
 import { computed } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../../stores/auth'
+import { useTheme } from '../../composables/useTheme'
 import { cn } from '../../lib/utils'
 import {
-  LayoutDashboard, PenSquare, Send as SendIcon, FileText, Users, Zap, MessageCircle,
+  LayoutDashboard, PenSquare, Send as SendIcon, FileText, Users, Zap,
   FormInput, Globe, Calendar, BarChart2, BarChart3, Settings, Building2, Activity,
-  LogOut, Shield, Search,
+  LogOut, Shield, Sun, Moon,
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const { user, logout } = useAuth()
+const { theme, toggleTheme } = useTheme()
 
 // Same features as org users — platform admin is a solo user with all features
 const mainNav = [
@@ -57,7 +59,7 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-bg-primary">
+  <div class="flex min-h-screen bg-background">
     <!-- Sidebar -->
     <aside class="w-60 bg-sidebar border-r border-border flex flex-col shrink-0">
       <!-- Header -->
@@ -66,7 +68,7 @@ async function handleLogout() {
           <Shield :size="14" class="text-amber-400" />
         </div>
         <div>
-          <div class="text-sm font-semibold text-text-primary">Dispatch</div>
+          <div class="text-sm font-semibold text-foreground">Dispatch</div>
           <div class="text-[10px] text-amber-400 font-medium">Platform Admin</div>
         </div>
       </div>
@@ -83,17 +85,17 @@ async function handleLogout() {
               'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
               isActive(item.path)
                 ? 'bg-accent/10 text-accent'
-                : 'text-text-muted hover:bg-white/[0.04] hover:text-text-primary'
+                : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
             )"
           >
-            <component :is="item.icon" :size="16" :class="isActive(item.path) ? 'text-accent' : 'text-text-muted group-hover:text-text-secondary'" />
+            <component :is="item.icon" :size="16" :class="isActive(item.path) ? 'text-accent' : 'text-muted-foreground group-hover:text-muted-foreground'" />
             {{ item.label }}
           </router-link>
         </div>
 
         <!-- Tools divider -->
         <div class="my-2 mx-3 border-t border-border"></div>
-        <div class="px-3 mb-1"><span class="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Tools</span></div>
+        <div class="px-3 mb-1"><span class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tools</span></div>
         <div class="flex flex-col gap-0.5">
           <router-link
             v-for="item in toolsNav"
@@ -103,10 +105,10 @@ async function handleLogout() {
               'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
               isActive(item.path)
                 ? 'bg-accent/10 text-accent'
-                : 'text-text-muted hover:bg-white/[0.04] hover:text-text-primary'
+                : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
             )"
           >
-            <component :is="item.icon" :size="16" :class="isActive(item.path) ? 'text-accent' : 'text-text-muted group-hover:text-text-secondary'" />
+            <component :is="item.icon" :size="16" :class="isActive(item.path) ? 'text-accent' : 'text-muted-foreground group-hover:text-muted-foreground'" />
             {{ item.label }}
           </router-link>
         </div>
@@ -122,10 +124,10 @@ async function handleLogout() {
               'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
               isActive(item.path)
                 ? 'bg-accent/10 text-accent'
-                : 'text-text-muted hover:bg-white/[0.04] hover:text-text-primary'
+                : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
             )"
           >
-            <component :is="item.icon" :size="16" :class="isActive(item.path) ? 'text-accent' : 'text-text-muted group-hover:text-text-secondary'" />
+            <component :is="item.icon" :size="16" :class="isActive(item.path) ? 'text-accent' : 'text-muted-foreground group-hover:text-muted-foreground'" />
             {{ item.label }}
           </router-link>
         </div>
@@ -142,10 +144,10 @@ async function handleLogout() {
               'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
               isActive(item.path)
                 ? 'bg-amber-500/10 text-amber-400'
-                : 'text-text-muted hover:bg-white/[0.04] hover:text-text-primary'
+                : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
             )"
           >
-            <component :is="item.icon" :size="16" :class="isActive(item.path) ? 'text-amber-400' : 'text-text-muted group-hover:text-text-secondary'" />
+            <component :is="item.icon" :size="16" :class="isActive(item.path) ? 'text-amber-400' : 'text-muted-foreground group-hover:text-muted-foreground'" />
             {{ item.label }}
           </router-link>
         </div>
@@ -158,10 +160,14 @@ async function handleLogout() {
             {{ userInitial }}
           </div>
           <div class="flex-1 min-w-0">
-            <div class="text-xs font-medium text-text-secondary truncate">{{ user?.name || 'Admin' }}</div>
-            <div class="text-[10px] text-text-muted truncate">{{ user?.email }}</div>
+            <div class="text-xs font-medium text-muted-foreground truncate">{{ user?.name || 'Admin' }}</div>
+            <div class="text-[10px] text-muted-foreground truncate">{{ user?.email }}</div>
           </div>
-          <button @click="handleLogout" class="p-1.5 rounded-md text-text-muted hover:text-red-400 hover:bg-red-500/10 transition" title="Logout">
+          <button @click="toggleTheme" class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition" :title="theme === 'dark' ? 'Light mode' : 'Dark mode'">
+            <Sun v-if="theme === 'dark'" :size="14" />
+            <Moon v-else :size="14" />
+          </button>
+          <button @click="handleLogout" class="p-1.5 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition" title="Logout">
             <LogOut :size="14" />
           </button>
         </div>

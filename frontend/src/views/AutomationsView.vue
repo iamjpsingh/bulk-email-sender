@@ -1,19 +1,22 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import PageHeader from '../components/ui/PageHeader.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import Modal from '../components/ui/Modal.vue'
-import StatusBadge from '../components/ui/StatusBadge.vue'
+import SlidePanel from '../components/ui/SlidePanel.vue'
 import Skeleton from '../components/ui/Skeleton.vue'
-import StatCard from '../components/ui/StatCard.vue'
 import FlowCanvas from '../components/automation/FlowCanvas.vue'
-import NodeConfigPanel from '../components/automation/NodeConfigPanel.vue'
 import { automationsApi } from '../lib/api'
 import { useToast } from '../composables/useToast'
 import {
-  Workflow, Plus, Trash2, Play, Pause, Square, Loader2, Inbox, Users, CheckCircle, AlertTriangle, Activity, ArrowLeft,
+  Plus, Trash2, Play, Pause, Square, Loader2, Inbox, Users,
+  Clock, Zap, Pencil,
 } from 'lucide-vue-next'
 
 const toast = useToast()
@@ -32,67 +35,36 @@ interface Automation {
   created_at: string
   updated_at: string
 }
-interface AutomationStats { enrolled: number; completed: number; active: number; failed: number }
 
 const automations = ref<Automation[]>([])
 const loading = ref(false)
-const selectedId = ref<string | null>(null)
-const stats = ref<AutomationStats>({ enrolled: 0, completed: 0, active: 0, failed: 0 })
 const showCreateModal = ref(false)
 const createForm = ref({ name: '', description: '', trigger_type: 'manual', entry_list_id: '' })
 const creating = ref(false)
 const deleteConfirm = ref<{ show: boolean; id: string }>({ show: false, id: '' })
-const editingNodeId = ref<string | null>(null)
+const actionLoading = ref<string | null>(null)
+
+// Flow editor
+const showFlowEditor = ref(false)
+const editingAutomation = ref<Automation | null>(null)
+// @ts-expect-error templateRef used by Vue runtime
 const flowCanvasRef = ref<InstanceType<typeof FlowCanvas> | null>(null)
-
-const selected = computed(() => automations.value.find((a) => a.id === selectedId.value) || null)
-
-// Parse flow_json into Vue Flow nodes/edges
-const flowNodes = computed<Node[]>(() => {
-  if (!selected.value?.flow_json) return []
-  try {
-    const flow = JSON.parse(selected.value.flow_json)
-    return flow.nodes || []
-  } catch { return [] }
-})
-
-const flowEdges = computed<Edge[]>(() => {
-  if (!selected.value?.flow_json) return []
-  try {
-    const flow = JSON.parse(selected.value.flow_json)
-    return flow.edges || []
-  } catch { return [] }
-})
-
-// Get the node being edited in config panel
-const editingNode = computed(() => {
-  if (!editingNodeId.value || !flowCanvasRef.value) return null
-  // Access from the VueFlow internal state
-  return null // Will be handled via events
-})
 
 const triggerLabels: Record<string, string> = {
   list_join: 'List Join', tag_added: 'Tag Added', score_change: 'Score Change',
   date_field: 'Date Field', form_submit: 'Form Submit', manual: 'Manual', api: 'API',
 }
 
+const statusStyles: Record<string, { class: string; label: string }> = {
+  active: { class: 'bg-success/15 text-success', label: 'Active' },
+  paused: { class: 'bg-warning/15 text-warning', label: 'Paused' },
+  draft: { class: 'bg-muted text-muted-foreground', label: 'Draft' },
+}
+
 async function fetchAutomations() {
   loading.value = true
   try { automations.value = (await automationsApi.list()) as any[] } catch { automations.value = [] }
   finally { loading.value = false }
-}
-
-async function selectAutomation(id: string) {
-  selectedId.value = id
-  editingNodeId.value = null
-  try {
-    const detail = (await automationsApi.get(id)) as Automation
-    const idx = automations.value.findIndex((a) => a.id === id)
-    if (idx >= 0) automations.value[idx] = detail
-    stats.value = (await automationsApi.getStats(id)) || { enrolled: 0, completed: 0, active: 0, failed: 0 }
-  } catch {
-    stats.value = { enrolled: 0, completed: 0, active: 0, failed: 0 }
-  }
 }
 
 async function handleCreate() {
@@ -102,20 +74,21 @@ async function handleCreate() {
     automations.value.push(created)
     showCreateModal.value = false
     createForm.value = { name: '', description: '', trigger_type: 'manual', entry_list_id: '' }
-    selectedId.value = created.id
+    toast.success('Automation created')
   } catch (e: any) { toast.error(`Failed: ${e.message}`) }
   finally { creating.value = false }
 }
 
 async function handleAction(id: string, action: 'activate' | 'pause' | 'deactivate') {
+  actionLoading.value = `${id}-${action}`
   try {
     const actionMap: Record<string, (id: string) => Promise<void>> = {
       activate: automationsApi.activate, pause: automationsApi.pause, deactivate: automationsApi.deactivate,
     }
     await actionMap[action]!(id)
-    await selectAutomation(id)
     await fetchAutomations()
   } catch (e: any) { toast.error(`Action failed: ${e.message}`) }
+  finally { actionLoading.value = null }
 }
 
 function promptDelete(id: string) { deleteConfirm.value = { show: true, id } }
@@ -126,38 +99,48 @@ async function confirmDelete() {
   try {
     await automationsApi.delete(id)
     automations.value = automations.value.filter((a) => a.id !== id)
-    if (selectedId.value === id) selectedId.value = null
+    toast.success('Automation deleted')
   } catch (e: any) { toast.error(`Failed: ${e.message}`) }
 }
 
+function openFlowEditor(a: Automation) {
+  editingAutomation.value = a
+  showFlowEditor.value = true
+}
+
+function closeFlowEditor() {
+  showFlowEditor.value = false
+  editingAutomation.value = null
+}
+
+function getFlowNodes(a: Automation): Node[] {
+  if (!a.flow_json) return []
+  try { return JSON.parse(a.flow_json).nodes || [] } catch { return [] }
+}
+
+function getFlowEdges(a: Automation): Edge[] {
+  if (!a.flow_json) return []
+  try { return JSON.parse(a.flow_json).edges || [] } catch { return [] }
+}
+
 async function handleFlowSave(nodes: Node[], edges: Edge[]) {
-  if (!selected.value) return
+  if (!editingAutomation.value) return
   try {
-    await automationsApi.update(selected.value.id, {
-      name: selected.value.name,
-      description: selected.value.description,
-      trigger_type: selected.value.trigger_type,
+    await automationsApi.update(editingAutomation.value.id, {
+      name: editingAutomation.value.name,
+      description: editingAutomation.value.description,
+      trigger_type: editingAutomation.value.trigger_type,
       flow_json: JSON.stringify({ nodes, edges }),
     })
-    // Update local
-    const idx = automations.value.findIndex(a => a.id === selected.value!.id)
-    if (idx >= 0) automations.value[idx].flow_json = JSON.stringify({ nodes, edges })
+    const idx = automations.value.findIndex(a => a.id === editingAutomation.value!.id)
+    if (idx >= 0 && automations.value[idx]) automations.value[idx].flow_json = JSON.stringify({ nodes, edges })
     toast.success('Flow saved')
   } catch (e: any) { toast.error(`Save failed: ${e.message}`) }
 }
 
-function handleNodeSelect(nodeId: string | null) {
-  editingNodeId.value = nodeId
-}
-
-function handleNodeUpdate(nodeId: string, data: Record<string, any>) {
-  // The FlowCanvas handles its own state via VueFlow reactivity
-  // This just triggers re-render if needed
-}
-
-function handleNodeDelete(nodeId: string) {
-  flowCanvasRef.value?.deleteNode(nodeId)
-  editingNodeId.value = null
+function formatDate(d: string) {
+  if (!d) return ''
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 fetchAutomations()
@@ -167,126 +150,165 @@ fetchAutomations()
   <div>
     <PageHeader title="Automations" subtitle="Build automated email workflows with drag-and-drop">
       <template #actions>
-        <button class="btn-primary" @click="showCreateModal = true"><Plus :size="16" /> New Automation</button>
+        <Button @click="showCreateModal = true"><Plus :size="16" /> New Automation</Button>
       </template>
     </PageHeader>
 
-    <div class="flex gap-6 items-start max-[900px]:flex-col">
-      <!-- Sidebar: Automation List -->
-      <div class="w-[280px] min-w-[280px] max-[900px]:w-full max-[900px]:min-w-0 bg-bg-card border border-border rounded-xl overflow-hidden shrink-0">
-        <div v-if="loading"><Skeleton variant="text" :count="5" height="56px" /></div>
-        <EmptyState v-else-if="automations.length === 0" :icon="Inbox" title="No automations yet" />
-        <div v-else class="flex flex-col max-h-[calc(100vh-220px)] overflow-y-auto">
-          <div
-            v-for="a in automations" :key="a.id"
-            class="px-4 py-3 cursor-pointer border-b border-border transition-all last:border-b-0"
-            :class="selectedId === a.id ? 'bg-accent/8 border-l-[3px] border-l-accent' : 'hover:bg-bg-tertiary'"
-            @click="selectAutomation(a.id)"
-          >
-            <div class="flex justify-between items-center mb-1">
-              <span class="font-semibold text-sm text-text-primary truncate">{{ a.name }}</span>
-              <StatusBadge :status="a.status" type="automation" />
-            </div>
-            <div class="flex items-center gap-2 text-xs">
-              <span class="text-accent/80">{{ triggerLabels[a.trigger_type] || a.trigger_type }}</span>
-              <span class="text-text-muted">{{ a.enrolled_count }} enrolled</span>
-            </div>
+    <!-- Loading -->
+    <div v-if="loading" class="grid grid-cols-[repeat(auto-fill,minmax(380px,1fr))] gap-4">
+      <Skeleton variant="card" :count="4" />
+    </div>
+
+    <!-- Empty -->
+    <div v-else-if="automations.length === 0" class="bg-card border border-border rounded-xl">
+      <EmptyState
+        :icon="Inbox"
+        title="No automations yet"
+        description="Create your first automation to start building email workflows"
+      >
+        <template #actions>
+          <Button @click="showCreateModal = true"><Plus :size="16" /> Create Automation</Button>
+        </template>
+      </EmptyState>
+    </div>
+
+    <!-- Automations Grid -->
+    <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(380px,1fr))] max-md:grid-cols-1 gap-4">
+      <div
+        v-for="a in automations"
+        :key="a.id"
+        class="bg-card border border-border rounded-xl p-5 flex flex-col gap-3 transition-all duration-150 hover:border-primary/25 hover:shadow-sm"
+      >
+        <!-- Header: Name + Status -->
+        <div class="flex justify-between items-start gap-3">
+          <div class="min-w-0">
+            <h3 class="text-sm font-semibold text-foreground truncate m-0">{{ a.name }}</h3>
+            <p v-if="a.description" class="text-xs text-muted-foreground mt-1 m-0 truncate">{{ a.description }}</p>
           </div>
+          <span
+            class="shrink-0 px-2.5 py-0.5 text-[11px] font-semibold rounded-full"
+            :class="(statusStyles[a.status] ?? statusStyles.draft)?.class"
+          >{{ (statusStyles[a.status] ?? statusStyles.draft)?.label }}</span>
+        </div>
+
+        <!-- Meta -->
+        <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span class="inline-flex items-center gap-1.5">
+            <Zap :size="12" class="text-accent" />
+            {{ triggerLabels[a.trigger_type] || a.trigger_type }}
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <Users :size="12" />
+            {{ a.enrolled_count }} enrolled
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <Clock :size="12" />
+            {{ formatDate(a.created_at) }}
+          </span>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-between items-center pt-3 border-t border-border mt-auto">
+          <div class="flex gap-1">
+            <Button variant="ghost" size="sm" title="Edit Flow" @click="openFlowEditor(a)">
+              <Pencil :size="14" />
+            </Button>
+            <Button
+              v-if="a.status !== 'active'"
+              variant="ghost" size="sm" title="Activate"
+              :disabled="!!actionLoading"
+              @click="handleAction(a.id, 'activate')"
+            >
+              <Loader2 v-if="actionLoading === `${a.id}-activate`" :size="14" class="animate-spin" />
+              <Play v-else :size="14" class="text-success" />
+            </Button>
+            <Button
+              v-if="a.status === 'active'"
+              variant="ghost" size="sm" title="Pause"
+              :disabled="!!actionLoading"
+              @click="handleAction(a.id, 'pause')"
+            >
+              <Loader2 v-if="actionLoading === `${a.id}-pause`" :size="14" class="animate-spin" />
+              <Pause v-else :size="14" class="text-warning" />
+            </Button>
+            <Button
+              v-if="a.status !== 'draft'"
+              variant="ghost" size="sm" title="Deactivate"
+              :disabled="!!actionLoading"
+              @click="handleAction(a.id, 'deactivate')"
+            >
+              <Square :size="14" />
+            </Button>
+          </div>
+          <Button variant="ghost" size="sm" class="text-danger" title="Delete" @click="promptDelete(a.id)">
+            <Trash2 :size="14" />
+          </Button>
         </div>
       </div>
-
-      <!-- Main: Flow Canvas or Empty State -->
-      <div class="flex-1 min-w-0 flex flex-col gap-4" v-if="selected">
-        <!-- Header -->
-        <div class="bg-bg-card border border-border rounded-xl p-4 flex justify-between items-center gap-4">
-          <div class="flex-1 min-w-0">
-            <h2 class="text-base font-semibold text-text-primary truncate">{{ selected.name }}</h2>
-            <p class="text-xs text-text-muted">{{ selected.description || 'No description' }} — {{ triggerLabels[selected.trigger_type] }} trigger</p>
-          </div>
-          <div class="flex gap-2 shrink-0">
-            <button v-if="selected.status !== 'active'" class="btn-primary text-xs px-3 py-1.5" @click="handleAction(selected.id, 'activate')">
-              <Play :size="14" /> Activate
-            </button>
-            <button v-if="selected.status === 'active'" class="btn-secondary text-xs px-3 py-1.5" @click="handleAction(selected.id, 'pause')">
-              <Pause :size="14" /> Pause
-            </button>
-            <button v-if="selected.status !== 'draft'" class="btn-secondary text-xs px-3 py-1.5" @click="handleAction(selected.id, 'deactivate')">
-              <Square :size="14" /> Stop
-            </button>
-            <button class="btn-ghost text-xs px-2 py-1.5 text-red-400 hover:text-red-300" @click="promptDelete(selected.id)">
-              <Trash2 :size="14" />
-            </button>
-          </div>
-        </div>
-
-        <!-- Stats (active only) -->
-        <div v-if="selected.status === 'active'" class="grid grid-cols-4 max-[900px]:grid-cols-2 gap-3">
-          <StatCard :icon="Users" :value="stats.enrolled" label="Enrolled" />
-          <StatCard :icon="Activity" :value="stats.active" label="Active" color="accent" />
-          <StatCard :icon="CheckCircle" :value="stats.completed" label="Completed" color="success" />
-          <StatCard :icon="AlertTriangle" :value="stats.failed" label="Failed" color="danger" />
-        </div>
-
-        <!-- Flow Canvas + Config Panel -->
-        <div class="flex gap-4 items-start">
-          <div class="flex-1 min-w-0 h-[560px]">
-            <FlowCanvas
-              ref="flowCanvasRef"
-              :key="selected.id"
-              :automation-id="selected.id"
-              :trigger-type="selected.trigger_type"
-              :initial-nodes="flowNodes"
-              :initial-edges="flowEdges"
-              @save="handleFlowSave"
-              @node-select="handleNodeSelect"
-            />
-          </div>
-
-          <!-- Config Panel (shows when a node is selected) -->
-          <!-- We pass the node data from the editing state -->
-        </div>
-      </div>
-
-      <EmptyState v-else :icon="Workflow" title="No automation selected" description="Select an automation from the list or create a new one" class="flex-1 min-w-0 min-h-[400px]" />
     </div>
 
     <!-- Create Modal -->
     <Modal :show="showCreateModal" title="New Automation" size="md" @close="showCreateModal = false">
-      <div class="form-group">
-        <label class="form-label">Name</label>
-        <input class="form-input" v-model="createForm.name" placeholder="Welcome sequence..." />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Description</label>
-        <input class="form-input" v-model="createForm.description" placeholder="Optional description" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Trigger Type</label>
-        <select class="form-select" v-model="createForm.trigger_type">
-          <option value="list_join">List Join</option>
-          <option value="tag_added">Tag Added</option>
-          <option value="score_change">Score Change</option>
-          <option value="form_submit">Form Submit</option>
-          <option value="manual">Manual</option>
-          <option value="api">API</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Entry List ID <span class="text-text-muted">(optional)</span></label>
-        <input class="form-input" v-model="createForm.entry_list_id" placeholder="Contact list to enroll from" />
+      <div class="space-y-5">
+        <div class="flex flex-col gap-2">
+          <Label>Name *</Label>
+          <Input v-model="createForm.name" placeholder="e.g. Welcome Sequence" />
+        </div>
+        <div class="flex flex-col gap-2">
+          <Label>Description</Label>
+          <Input v-model="createForm.description" placeholder="Optional description" />
+        </div>
+        <div class="flex flex-col gap-2">
+          <Label>Trigger Type</Label>
+          <Select v-model="createForm.trigger_type">
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="list_join">List Join</SelectItem>
+              <SelectItem value="tag_added">Tag Added</SelectItem>
+              <SelectItem value="score_change">Score Change</SelectItem>
+              <SelectItem value="form_submit">Form Submit</SelectItem>
+              <SelectItem value="manual">Manual</SelectItem>
+              <SelectItem value="api">API</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div class="flex flex-col gap-2">
+          <Label>Entry List ID <span class="text-muted-foreground font-normal">(optional)</span></Label>
+          <Input v-model="createForm.entry_list_id" placeholder="Contact list to enroll from" />
+        </div>
       </div>
       <template #footer>
-        <button class="btn-ghost" @click="showCreateModal = false">Cancel</button>
-        <button class="btn-primary" :disabled="!createForm.name || creating" @click="handleCreate">
+        <Button variant="ghost" @click="showCreateModal = false">Cancel</Button>
+        <Button :disabled="!createForm.name || creating" @click="handleCreate">
           <Loader2 v-if="creating" :size="16" class="animate-spin" /> Create
-        </button>
+        </Button>
       </template>
     </Modal>
+
+    <!-- Flow Editor SlidePanel -->
+    <SlidePanel
+      :show="showFlowEditor"
+      :title="editingAutomation ? `Edit Flow — ${editingAutomation.name}` : 'Flow Editor'"
+      size="xl"
+      @close="closeFlowEditor"
+    >
+      <div v-if="editingAutomation" class="-m-6 h-[calc(100%+48px)]">
+        <FlowCanvas
+          ref="flowCanvasRef"
+          :key="editingAutomation.id"
+          :automation-id="editingAutomation.id"
+          :trigger-type="editingAutomation.trigger_type"
+          :initial-nodes="getFlowNodes(editingAutomation)"
+          :initial-edges="getFlowEdges(editingAutomation)"
+          @save="handleFlowSave"
+        />
+      </div>
+    </SlidePanel>
 
     <ConfirmDialog
       :show="deleteConfirm.show"
       title="Delete Automation"
-      message="Delete this automation? This cannot be undone."
+      message="Delete this automation? All enrolled contacts will be removed. This cannot be undone."
       confirmText="Delete"
       variant="danger"
       @confirm="confirmDelete"

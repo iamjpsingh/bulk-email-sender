@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import DateTimeInput from '../ui/DateTimeInput.vue'
 import { Zap, Clock } from 'lucide-vue-next'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 
 const useBatch = defineModel<boolean>('useBatch', { required: true })
 const batchSize = defineModel<number>('batchSize', { required: true })
@@ -13,51 +16,51 @@ const notifyEmail = defineModel<string>('notifyEmail', { required: true })
 
 <template>
   <!-- Batch settings -->
-  <div class="bg-bg-card border border-border rounded-xl p-5">
-    <h3 class="text-sm font-semibold mb-4 flex items-center gap-2 text-text-primary">
+  <div class="bg-card border border-border rounded-xl p-5">
+    <h3 class="text-sm font-semibold mb-4 flex items-center gap-2 text-foreground">
       <Zap :size="16" class="text-accent" />
       Batch Settings
     </h3>
-    <label class="form-checkbox">
-      <input type="checkbox" v-model="useBatch" />
-      <span>Enable batch sending</span>
+    <label class="flex items-center gap-2 cursor-pointer">
+      <Checkbox v-model="useBatch" />
+      <span class="text-sm text-muted-foreground">Enable batch sending</span>
     </label>
 
     <div v-if="useBatch" class="mt-4 pt-4 border-t border-border">
-      <div class="form-group">
-        <label class="form-label">Batch Size</label>
-        <input v-model.number="batchSize" type="number" class="form-input" min="1" max="100" />
+      <div class="flex flex-col gap-2">
+        <Label>Batch Size</Label>
+        <Input :model-value="batchSize" @update:model-value="batchSize = Number($event)" type="number" min="1" max="100" />
       </div>
-      <div class="form-group">
-        <label class="form-label">Batch Delay (seconds)</label>
-        <input v-model.number="batchDelay" type="number" class="form-input" min="1" />
+      <div class="flex flex-col gap-2">
+        <Label>Batch Delay (seconds)</Label>
+        <Input :model-value="batchDelay" @update:model-value="batchDelay = Number($event)" type="number" min="1" />
       </div>
-      <div class="form-group">
-        <label class="form-label">Email Delay (seconds)</label>
-        <input v-model.number="emailDelay" type="number" class="form-input" min="1" />
+      <div class="flex flex-col gap-2">
+        <Label>Email Delay (seconds)</Label>
+        <Input :model-value="emailDelay" @update:model-value="emailDelay = Number($event)" type="number" min="1" />
       </div>
     </div>
   </div>
 
   <!-- Schedule settings -->
-  <div class="bg-bg-card border border-border rounded-xl p-5">
-    <h3 class="text-sm font-semibold mb-4 flex items-center gap-2 text-text-primary">
+  <div class="bg-card border border-border rounded-xl p-5">
+    <h3 class="text-sm font-semibold mb-4 flex items-center gap-2 text-foreground">
       <Clock :size="16" class="text-accent" />
       Schedule Settings
     </h3>
-    <label class="form-checkbox">
-      <input type="checkbox" v-model="useSchedule" />
-      <span>Schedule for later</span>
+    <label class="flex items-center gap-2 cursor-pointer">
+      <Checkbox v-model="useSchedule" />
+      <span class="text-sm text-muted-foreground">Schedule for later</span>
     </label>
 
     <div v-if="useSchedule" class="mt-4 pt-4 border-t border-border">
-      <div class="form-group">
-        <label class="form-label">Scheduled Time</label>
+      <div class="flex flex-col gap-2">
+        <Label>Scheduled Time</Label>
         <DateTimeInput v-model="scheduledTime" placeholder="Select date and time" />
       </div>
-      <div class="form-group">
-        <label class="form-label">Notification Email (optional)</label>
-        <input v-model="notifyEmail" type="email" class="form-input" placeholder="notify@example.com" />
+      <div class="flex flex-col gap-2">
+        <Label>Notification Email (optional)</Label>
+        <Input v-model="notifyEmail" type="email" placeholder="notify@example.com" />
       </div>
     </div>
   </div>

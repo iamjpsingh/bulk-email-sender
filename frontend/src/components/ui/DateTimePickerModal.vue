@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import Modal from './Modal.vue'
+import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Clock } from 'lucide-vue-next'
 
 interface Props {
@@ -176,15 +177,15 @@ function togglePeriod() {
         <div class="flex items-center justify-between mb-5">
           <button
             type="button"
-            class="flex items-center justify-center w-9 h-9 border-none bg-transparent text-text-secondary rounded-lg cursor-pointer transition-all hover:bg-accent/10 hover:text-accent"
+            class="flex items-center justify-center w-9 h-9 border-none bg-transparent text-muted-foreground rounded-lg cursor-pointer transition-all hover:bg-accent/10 hover:text-accent"
             @click="previousMonth"
           >
             <ChevronLeft :size="18" />
           </button>
-          <h3 class="text-base font-semibold text-text-primary m-0">{{ monthName }}</h3>
+          <h3 class="text-base font-semibold text-foreground m-0">{{ monthName }}</h3>
           <button
             type="button"
-            class="flex items-center justify-center w-9 h-9 border-none bg-transparent text-text-secondary rounded-lg cursor-pointer transition-all hover:bg-accent/10 hover:text-accent"
+            class="flex items-center justify-center w-9 h-9 border-none bg-transparent text-muted-foreground rounded-lg cursor-pointer transition-all hover:bg-accent/10 hover:text-accent"
             @click="nextMonth"
           >
             <ChevronRight :size="18" />
@@ -196,7 +197,7 @@ function togglePeriod() {
             <div
               v-for="day in ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']"
               :key="day"
-              class="text-center text-[11px] font-semibold text-text-muted uppercase tracking-wider py-2"
+              class="text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2"
             >
               {{ day }}
             </div>
@@ -207,7 +208,7 @@ function togglePeriod() {
               v-for="(day, index) in daysInMonth"
               :key="index"
               type="button"
-              class="flex items-center justify-center w-9 h-9 border-none bg-transparent text-text-secondary rounded-lg cursor-pointer text-sm font-medium transition-all"
+              class="flex items-center justify-center w-9 h-9 border-none bg-transparent text-muted-foreground rounded-lg cursor-pointer text-sm font-medium transition-all"
               :class="{
                 'hover:bg-accent/10 hover:text-accent': day && !isSelected(day),
                 'bg-accent/15 text-accent font-semibold border border-accent/30': day && isToday(day) && !isSelected(day),
@@ -225,7 +226,7 @@ function togglePeriod() {
 
       <!-- Time Section -->
       <div class="pt-5 border-t border-border">
-        <div class="flex items-center gap-2 text-sm font-semibold text-text-primary mb-4">
+        <div class="flex items-center gap-2 text-sm font-semibold text-foreground mb-4">
           <Clock :size="16" />
           <span>Time</span>
         </div>
@@ -234,31 +235,31 @@ function togglePeriod() {
           <!-- Hour -->
           <div class="flex flex-col items-center gap-2">
             <button
-              class="w-8 h-8 border-none bg-bg-secondary text-text-primary rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
+              class="w-8 h-8 border-none bg-secondary text-foreground rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
               @click="incrementHour"
             >+</button>
-            <div class="w-12 h-12 flex items-center justify-center bg-bg-secondary border border-border rounded-lg text-lg font-semibold text-text-primary font-mono">
+            <div class="w-12 h-12 flex items-center justify-center bg-secondary border border-border rounded-lg text-lg font-semibold text-foreground font-mono">
               {{ selectedHour.toString().padStart(2, '0') }}
             </div>
             <button
-              class="w-8 h-8 border-none bg-bg-secondary text-text-primary rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
+              class="w-8 h-8 border-none bg-secondary text-foreground rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
               @click="decrementHour"
             >-</button>
           </div>
 
-          <div class="text-2xl font-semibold text-text-primary mx-2">:</div>
+          <div class="text-2xl font-semibold text-foreground mx-2">:</div>
 
           <!-- Minute -->
           <div class="flex flex-col items-center gap-2">
             <button
-              class="w-8 h-8 border-none bg-bg-secondary text-text-primary rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
+              class="w-8 h-8 border-none bg-secondary text-foreground rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
               @click="incrementMinute"
             >+</button>
-            <div class="w-12 h-12 flex items-center justify-center bg-bg-secondary border border-border rounded-lg text-lg font-semibold text-text-primary font-mono">
+            <div class="w-12 h-12 flex items-center justify-center bg-secondary border border-border rounded-lg text-lg font-semibold text-foreground font-mono">
               {{ selectedMinute.toString().padStart(2, '0') }}
             </div>
             <button
-              class="w-8 h-8 border-none bg-bg-secondary text-text-primary rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
+              class="w-8 h-8 border-none bg-secondary text-foreground rounded-lg cursor-pointer text-base font-semibold transition-all hover:bg-accent hover:text-white"
               @click="decrementMinute"
             >-</button>
           </div>
@@ -266,7 +267,7 @@ function togglePeriod() {
           <!-- AM/PM -->
           <div class="flex flex-col items-center gap-2">
             <button
-              class="w-12 h-12 border border-border bg-bg-secondary text-text-primary rounded-lg cursor-pointer text-sm font-semibold transition-all hover:bg-accent hover:text-white hover:border-accent"
+              class="w-12 h-12 border border-border bg-secondary text-foreground rounded-lg cursor-pointer text-sm font-semibold transition-all hover:bg-accent hover:text-white hover:border-accent"
               @click="togglePeriod"
             >
               {{ selectedPeriod }}
@@ -282,9 +283,9 @@ function togglePeriod() {
 
     <!-- Footer Actions -->
     <template #footer>
-      <button class="btn-ghost" @click="clearDateTime">Clear</button>
-      <button class="btn-secondary" @click="setToNow">Now</button>
-      <button class="btn-primary" @click="handleConfirm" :disabled="!selectedDate">Confirm</button>
+      <Button variant="ghost" @click="clearDateTime">Clear</Button>
+      <Button variant="secondary" @click="setToNow">Now</Button>
+      <Button @click="handleConfirm" :disabled="!selectedDate">Confirm</Button>
     </template>
   </Modal>
 </template>

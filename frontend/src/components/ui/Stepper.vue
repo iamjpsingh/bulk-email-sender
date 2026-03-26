@@ -74,8 +74,8 @@ function isClickable(idx: number): boolean {
   justify-content: center;
   font-size: 12px;
   font-weight: 600;
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-muted);
+  background: var(--color-muted);
+  color: var(--color-muted-foreground);
   border: 2px solid var(--color-border);
   flex-shrink: 0;
   transition: all 0.2s ease;
@@ -93,15 +93,15 @@ function isClickable(idx: number): boolean {
 .stepper__label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--color-muted-foreground);
   white-space: nowrap;
 }
 .stepper__step--active .stepper__label {
-  color: var(--color-text-primary);
+  color: var(--color-foreground);
   font-weight: 600;
 }
 .stepper__step--completed .stepper__label {
-  color: var(--color-text-secondary);
+  color: var(--color-muted-foreground);
 }
 .stepper__connector {
   flex: 1;

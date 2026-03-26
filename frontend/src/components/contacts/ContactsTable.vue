@@ -28,58 +28,58 @@ function parseTags(tagsJson: string): string[] {
 </script>
 
 <template>
-  <div v-if="loading" class="flex flex-col items-center justify-center gap-3 py-12 px-4 text-text-muted text-center">
+  <div v-if="loading" class="flex flex-col items-center justify-center gap-3 py-12 px-4 text-muted-foreground text-center">
     <Loader2 :size="24" class="animate-spin" /><span>Loading contacts...</span>
   </div>
   <div
     v-else-if="!contacts.length"
-    class="flex flex-col items-center justify-center gap-3 py-12 px-4 text-text-muted text-center"
+    class="flex flex-col items-center justify-center gap-3 py-12 px-4 text-muted-foreground text-center"
   >
     <Mail :size="40" />
     <p class="m-0">No contacts in this list</p>
-    <p class="text-text-muted text-[13px] m-0">Add contacts manually or import from a file</p>
+    <p class="text-muted-foreground text-[13px] m-0">Add contacts manually or import from a file</p>
   </div>
   <div v-else class="overflow-x-auto border border-border rounded-xl">
     <table class="w-full border-collapse">
       <thead>
         <tr>
           <th
-            class="w-10 px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-bg-secondary text-text-secondary border-b border-border"
+            class="w-10 px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-secondary text-muted-foreground border-b border-border"
           >
             <button
-              class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
+              class="bg-transparent border-none cursor-pointer p-1 text-muted-foreground rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
               @click="emit('toggle-select-all')"
             >
               <CheckSquare v-if="allSelected" :size="16" /><Square v-else :size="16" />
             </button>
           </th>
           <th
-            class="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-bg-secondary text-text-secondary border-b border-border"
+            class="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-secondary text-muted-foreground border-b border-border"
           >
             Email
           </th>
           <th
-            class="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-bg-secondary text-text-secondary border-b border-border"
+            class="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-secondary text-muted-foreground border-b border-border"
           >
             Name
           </th>
           <th
-            class="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-bg-secondary text-text-secondary border-b border-border"
+            class="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-secondary text-muted-foreground border-b border-border"
           >
             Company
           </th>
           <th
-            class="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-bg-secondary text-text-secondary border-b border-border"
+            class="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-secondary text-muted-foreground border-b border-border"
           >
             Status
           </th>
           <th
-            class="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-bg-secondary text-text-secondary border-b border-border"
+            class="px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.04em] bg-secondary text-muted-foreground border-b border-border"
           >
             Tags
           </th>
           <th
-            class="w-[60px] px-3.5 py-2.5 text-center text-xs font-semibold uppercase tracking-[0.04em] bg-bg-secondary text-text-secondary border-b border-border"
+            class="w-[60px] px-3.5 py-2.5 text-center text-xs font-semibold uppercase tracking-[0.04em] bg-secondary text-muted-foreground border-b border-border"
           >
             Actions
           </th>
@@ -94,7 +94,7 @@ function parseTags(tagsJson: string): string[] {
         >
           <td class="w-10 px-3.5 py-2.5 text-left text-[13px]">
             <button
-              class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
+              class="bg-transparent border-none cursor-pointer p-1 text-muted-foreground rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
               @click="emit('toggle-select', contact.id)"
             >
               <CheckSquare v-if="selectedIds.includes(contact.id)" :size="16" /><Square v-else :size="16" />
@@ -120,22 +120,22 @@ function parseTags(tagsJson: string): string[] {
             <span
               v-for="tag in parseTags(contact.tags)"
               :key="tag"
-              class="inline-block px-2 py-0.5 rounded-lg text-[11px] bg-bg-tertiary text-text-secondary mr-1"
+              class="inline-block px-2 py-0.5 rounded-lg text-[11px] bg-muted text-muted-foreground mr-1"
               >{{ tag }}</span
             >
-            <span v-if="!parseTags(contact.tags).length" class="text-text-muted text-[13px]">-</span>
+            <span v-if="!parseTags(contact.tags).length" class="text-muted-foreground text-[13px]">-</span>
           </td>
           <td class="w-[80px] px-3.5 py-2.5 text-center text-[13px]">
             <div class="flex items-center justify-center gap-1">
               <button
-                class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
+                class="bg-transparent border-none cursor-pointer p-1 text-muted-foreground rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
                 @click="emit('timeline', contact)"
                 title="Activity"
               >
                 <Clock :size="14" />
               </button>
               <button
-                class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
+                class="bg-transparent border-none cursor-pointer p-1 text-muted-foreground rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
                 @click="emit('edit', contact)"
                 title="Edit"
               >

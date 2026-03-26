@@ -10,6 +10,11 @@ import Modal from '../components/ui/Modal.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import Skeleton from '../components/ui/Skeleton.vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Building2, Users, UsersRound, Shield, ScrollText,
   Plus, Pencil, Trash2, UserPlus, UserMinus, Loader2,
@@ -262,13 +267,13 @@ const roleOptions = ['readonly', 'member', 'manager', 'admin', 'owner']
 
 function roleBadgeClass(role: string): string {
   const map: Record<string, string> = {
-    owner: 'badge-accent',
-    admin: 'badge-warning',
-    manager: 'badge-info',
-    member: 'badge-default',
-    readonly: 'badge-muted',
+    owner: 'bg-indigo-500/15 text-indigo-400',
+    admin: 'bg-amber-500/15 text-amber-500',
+    manager: 'bg-blue-500/15 text-blue-400',
+    member: 'bg-muted text-muted-foreground',
+    readonly: 'bg-muted text-muted-foreground',
   }
-  return map[role] || 'badge-default'
+  return map[role] || 'bg-muted text-muted-foreground'
 }
 
 function formatDate(d: string): string {
@@ -312,33 +317,33 @@ async function onTabChange(key: string) {
       <!-- Organization Tab -->
       <!-- ================================================================ -->
       <div v-else-if="activeTab === 'org'">
-        <div class="bg-bg-card border border-border rounded-xl p-6 max-w-xl">
+        <div class="bg-card border border-border rounded-xl p-6 max-w-xl">
           <div class="flex items-center gap-3 mb-6">
             <div class="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
               <Building2 :size="20" class="text-accent" />
             </div>
             <div>
-              <h3 class="text-[15px] font-semibold text-text-primary">Organization Settings</h3>
-              <p class="text-sm text-text-muted">{{ org?.slug }}</p>
+              <h3 class="text-[15px] font-semibold text-foreground">Organization Settings</h3>
+              <p class="text-sm text-muted-foreground">{{ org?.slug }}</p>
             </div>
           </div>
 
           <form @submit.prevent="saveOrg">
-            <div class="form-group">
-              <label class="form-label">Organization Name</label>
-              <input v-model="orgForm.name" type="text" class="form-input" required />
+            <div class="flex flex-col gap-2">
+              <Label>Organization Name</Label>
+              <Input v-model="orgForm.name" type="text" required />
             </div>
 
-            <div class="flex items-center gap-3 p-3 bg-bg-tertiary rounded-lg text-sm text-text-muted mb-4">
-              <span>Status: <strong class="text-text-primary">{{ org?.status || 'active' }}</strong></span>
+            <div class="flex items-center gap-3 p-3 bg-muted rounded-lg text-sm text-muted-foreground mb-4">
+              <span>Status: <strong class="text-foreground">{{ org?.status || 'active' }}</strong></span>
               <span class="mx-2 text-border">|</span>
-              <span>Created: <strong class="text-text-primary">{{ org ? formatDate(org.created_at) : '-' }}</strong></span>
+              <span>Created: <strong class="text-foreground">{{ org ? formatDate(org.created_at) : '-' }}</strong></span>
             </div>
 
-            <button type="submit" class="btn-primary" :disabled="savingOrg">
+            <Button type="submit" :disabled="savingOrg">
               <Loader2 v-if="savingOrg" :size="16" class="spin" />
               Save Changes
-            </button>
+            </Button>
           </form>
         </div>
       </div>
@@ -348,101 +353,109 @@ async function onTabChange(key: string) {
       <!-- ================================================================ -->
       <div v-else-if="activeTab === 'members'">
         <div class="flex justify-between items-center mb-4">
-          <p class="text-sm text-text-muted">{{ members.length }} member{{ members.length !== 1 ? 's' : '' }}</p>
-          <button class="btn-primary btn-sm" @click="showAddMember = true">
+          <p class="text-sm text-muted-foreground">{{ members.length }} member{{ members.length !== 1 ? 's' : '' }}</p>
+          <Button size="sm" @click="showAddMember = true">
             <UserPlus :size="15" /> Add Member
-          </button>
+          </Button>
         </div>
 
-        <div v-if="members.length === 0" class="bg-bg-card border border-border rounded-xl">
+        <div v-if="members.length === 0" class="bg-card border border-border rounded-xl">
           <EmptyState :icon="Users" title="No members" description="Add your first team member" />
         </div>
 
-        <div v-else class="bg-bg-card border border-border rounded-xl">
-          <table class="data-table w-full">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Email</th>
-                <th scope="col">Role</th>
-                <th scope="col">Status</th>
-                <th scope="col">Joined</th>
-                <th scope="col" class="w-20"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="m in members" :key="m.id">
-                <td class="font-medium text-text-primary">{{ m.name || '-' }}</td>
-                <td class="text-text-muted text-sm">{{ m.email }}</td>
-                <td>
-                  <span :class="['badge-sm', roleBadgeClass(m.role)]">{{ m.role }}</span>
-                </td>
-                <td>
-                  <span :class="['badge-sm', m.status === 'active' ? 'badge-success' : 'badge-warning']">
+        <div v-else class="bg-card border border-border rounded-xl">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Joined</TableHead>
+                <TableHead class="w-20"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-for="m in members" :key="m.id">
+                <TableCell class="font-medium text-foreground">{{ m.name || '-' }}</TableCell>
+                <TableCell class="text-muted-foreground text-sm">{{ m.email }}</TableCell>
+                <TableCell>
+                  <span :class="['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', roleBadgeClass(m.role)]">{{ m.role }}</span>
+                </TableCell>
+                <TableCell>
+                  <span :class="['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', m.status === 'active' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500']">
                     {{ m.status }}
                   </span>
-                </td>
-                <td class="text-text-muted text-sm">{{ formatDate(m.joined_at) }}</td>
-                <td>
+                </TableCell>
+                <TableCell class="text-muted-foreground text-sm">{{ formatDate(m.joined_at) }}</TableCell>
+                <TableCell>
                   <div class="flex items-center gap-1">
-                    <button class="btn-ghost btn-sm" @click="promptEditRole(m)" title="Change role">
+                    <Button variant="ghost" size="sm" @click="promptEditRole(m)" title="Change role">
                       <Pencil :size="14" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       v-if="m.role !== 'owner'"
-                      class="btn-ghost btn-sm text-danger"
+                      variant="ghost"
+                      size="sm"
+                      class="text-danger"
                       @click="promptRemoveMember(m.user_id)"
                       title="Remove member"
                     >
                       <UserMinus :size="14" />
-                    </button>
+                    </Button>
                   </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
 
         <!-- Add Member Modal -->
         <Modal :show="showAddMember" title="Add Member" size="sm" @close="showAddMember = false">
-          <form id="add-member-form" @submit.prevent="addMember">
-            <div class="form-group">
-              <label class="form-label">Email Address</label>
-              <input v-model="addMemberForm.email" type="email" class="form-input" placeholder="user@example.com" required />
-              <p class="text-xs text-text-muted mt-1">User must already have an account</p>
+          <form id="add-member-form" @submit.prevent="addMember" class="space-y-4">
+            <div class="flex flex-col gap-2">
+              <Label>Email Address</Label>
+              <Input v-model="addMemberForm.email" type="email" placeholder="user@example.com" required />
+              <p class="text-xs text-muted-foreground mt-1">User must already have an account</p>
             </div>
-            <div class="form-group">
-              <label class="form-label">Role</label>
-              <select v-model="addMemberForm.role" class="form-select">
-                <option v-for="r in roleOptions.filter(r => r !== 'owner')" :key="r" :value="r">{{ r }}</option>
-              </select>
+            <div class="flex flex-col gap-2">
+              <Label>Role</Label>
+              <Select v-model="addMemberForm.role">
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="r in roleOptions.filter(r => r !== 'owner')" :key="r" :value="r">{{ r }}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </form>
           <template #footer>
-            <button class="btn-ghost" @click="showAddMember = false">Cancel</button>
-            <button type="submit" form="add-member-form" class="btn-primary" :disabled="addingMember">
+            <Button variant="ghost" @click="showAddMember = false">Cancel</Button>
+            <Button type="submit" form="add-member-form" :disabled="addingMember">
               <Loader2 v-if="addingMember" :size="16" class="spin" />
               Add Member
-            </button>
+            </Button>
           </template>
         </Modal>
 
         <!-- Edit Role Modal -->
         <Modal :show="editRoleModal.show" title="Change Role" size="sm" @close="editRoleModal.show = false">
-          <p class="text-sm text-text-muted mb-4">
-            Change role for <strong class="text-text-primary">{{ editRoleModal.name }}</strong>
+          <p class="text-sm text-muted-foreground mb-4">
+            Change role for <strong class="text-foreground">{{ editRoleModal.name }}</strong>
           </p>
-          <div class="form-group">
-            <label class="form-label">Role</label>
-            <select v-model="editRoleModal.newRole" class="form-select">
-              <option v-for="r in roleOptions" :key="r" :value="r">{{ r }}</option>
-            </select>
+          <div class="flex flex-col gap-2">
+            <Label>Role</Label>
+            <Select v-model="editRoleModal.newRole">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="r in roleOptions" :key="r" :value="r">{{ r }}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <template #footer>
-            <button class="btn-ghost" @click="editRoleModal.show = false">Cancel</button>
-            <button class="btn-primary" @click="confirmEditRole" :disabled="editRoleModal.newRole === editRoleModal.currentRole">
+            <Button variant="ghost" @click="editRoleModal.show = false">Cancel</Button>
+            <Button @click="confirmEditRole" :disabled="editRoleModal.newRole === editRoleModal.currentRole">
               Update Role
-            </button>
+            </Button>
           </template>
         </Modal>
       </div>
@@ -452,57 +465,59 @@ async function onTabChange(key: string) {
       <!-- ================================================================ -->
       <div v-else-if="activeTab === 'teams'">
         <div class="flex justify-between items-center mb-4">
-          <p class="text-sm text-text-muted">{{ teams.length }} team{{ teams.length !== 1 ? 's' : '' }}</p>
-          <button class="btn-primary btn-sm" @click="showCreateTeam = true">
+          <p class="text-sm text-muted-foreground">{{ teams.length }} team{{ teams.length !== 1 ? 's' : '' }}</p>
+          <Button size="sm" @click="showCreateTeam = true">
             <Plus :size="15" /> Create Team
-          </button>
+          </Button>
         </div>
 
-        <div v-if="teams.length === 0" class="bg-bg-card border border-border rounded-xl">
+        <div v-if="teams.length === 0" class="bg-card border border-border rounded-xl">
           <EmptyState :icon="UsersRound" title="No teams yet" description="Create teams to organize your members" />
         </div>
 
         <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(350px,1fr))] gap-4">
-          <div v-for="team in teams" :key="team.id" class="bg-bg-card border border-border rounded-xl p-5">
+          <div v-for="team in teams" :key="team.id" class="bg-card border border-border rounded-xl p-5">
             <div class="flex justify-between items-start mb-3">
               <div>
-                <h3 class="text-[15px] font-semibold text-text-primary">{{ team.name }}</h3>
-                <p v-if="team.description" class="text-sm text-text-muted mt-0.5">{{ team.description }}</p>
+                <h3 class="text-[15px] font-semibold text-foreground">{{ team.name }}</h3>
+                <p v-if="team.description" class="text-sm text-muted-foreground mt-0.5">{{ team.description }}</p>
               </div>
               <div class="flex items-center gap-1">
-                <button class="btn-ghost btn-sm text-danger" @click="promptDeleteTeam(team.id)">
+                <Button variant="ghost" size="sm" class="text-danger" @click="promptDeleteTeam(team.id)">
                   <Trash2 :size="14" />
-                </button>
+                </Button>
               </div>
             </div>
 
-            <div class="flex items-center gap-3 text-sm text-text-muted mb-3">
+            <div class="flex items-center gap-3 text-sm text-muted-foreground mb-3">
               <span class="flex items-center gap-1">
                 <Users :size="14" /> {{ team.member_count || 0 }} member{{ (team.member_count || 0) !== 1 ? 's' : '' }}
               </span>
               <span>Created {{ formatDate(team.created_at) }}</span>
             </div>
 
-            <button
-              class="btn-ghost btn-sm w-full justify-center"
+            <Button
+              variant="ghost"
+              size="sm"
+              class="w-full justify-center"
               @click="toggleTeamMembers(team.id)"
             >
               {{ expandedTeam === team.id ? 'Hide Members' : 'Show Members' }}
-            </button>
+            </Button>
 
             <div v-if="expandedTeam === team.id" class="mt-3 border-t border-border pt-3">
-              <div v-if="!teamMembers[team.id]?.length" class="text-sm text-text-muted text-center py-2">
+              <div v-if="!teamMembers[team.id]?.length" class="text-sm text-muted-foreground text-center py-2">
                 No members
               </div>
               <div v-else class="space-y-2">
                 <div
                   v-for="tm in teamMembers[team.id]"
                   :key="tm.id"
-                  class="flex items-center justify-between p-2 rounded-lg bg-bg-tertiary"
+                  class="flex items-center justify-between p-2 rounded-lg bg-muted"
                 >
                   <div>
-                    <span class="text-sm font-medium text-text-primary">{{ tm.name || tm.email }}</span>
-                    <span class="badge-sm badge-default ml-2">{{ tm.role }}</span>
+                    <span class="text-sm font-medium text-foreground">{{ tm.name || tm.email }}</span>
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground ml-2">{{ tm.role }}</span>
                   </div>
                 </div>
               </div>
@@ -512,22 +527,22 @@ async function onTabChange(key: string) {
 
         <!-- Create Team Modal -->
         <Modal :show="showCreateTeam" title="Create Team" size="sm" @close="showCreateTeam = false">
-          <form id="create-team-form" @submit.prevent="createTeam">
-            <div class="form-group">
-              <label class="form-label">Team Name *</label>
-              <input v-model="teamForm.name" type="text" class="form-input" required />
+          <form id="create-team-form" @submit.prevent="createTeam" class="space-y-4">
+            <div class="flex flex-col gap-2">
+              <Label>Team Name *</Label>
+              <Input v-model="teamForm.name" type="text" required />
             </div>
-            <div class="form-group">
-              <label class="form-label">Description</label>
-              <input v-model="teamForm.description" type="text" class="form-input" />
+            <div class="flex flex-col gap-2">
+              <Label>Description</Label>
+              <Input v-model="teamForm.description" type="text" />
             </div>
           </form>
           <template #footer>
-            <button class="btn-ghost" @click="showCreateTeam = false">Cancel</button>
-            <button type="submit" form="create-team-form" class="btn-primary" :disabled="creatingTeam">
+            <Button variant="ghost" @click="showCreateTeam = false">Cancel</Button>
+            <Button type="submit" form="create-team-form" :disabled="creatingTeam">
               <Loader2 v-if="creatingTeam" :size="16" class="spin" />
               Create
-            </button>
+            </Button>
           </template>
         </Modal>
       </div>
@@ -536,7 +551,7 @@ async function onTabChange(key: string) {
       <!-- Roles Tab -->
       <!-- ================================================================ -->
       <div v-else-if="activeTab === 'roles'">
-        <div v-if="roles.length === 0" class="bg-bg-card border border-border rounded-xl">
+        <div v-if="roles.length === 0" class="bg-card border border-border rounded-xl">
           <EmptyState :icon="Shield" title="No roles defined" description="System roles are created during setup" />
         </div>
 
@@ -544,15 +559,15 @@ async function onTabChange(key: string) {
           <div
             v-for="role in roles"
             :key="role.id"
-            class="bg-bg-card border border-border rounded-xl p-5"
+            class="bg-card border border-border rounded-xl p-5"
           >
             <div class="flex items-center gap-3 mb-3">
               <div class="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center">
                 <Shield :size="18" class="text-accent" />
               </div>
               <div>
-                <h3 class="text-[15px] font-semibold text-text-primary">{{ role.name }}</h3>
-                <p v-if="role.description" class="text-sm text-text-muted">{{ role.description }}</p>
+                <h3 class="text-[15px] font-semibold text-foreground">{{ role.name }}</h3>
+                <p v-if="role.description" class="text-sm text-muted-foreground">{{ role.description }}</p>
               </div>
             </div>
 
@@ -560,13 +575,13 @@ async function onTabChange(key: string) {
               <span
                 v-for="perm in role.permissions.slice(0, 12)"
                 :key="perm"
-                class="text-xs px-2 py-0.5 rounded-md bg-bg-tertiary text-text-muted font-mono"
+                class="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-mono"
               >
                 {{ perm }}
               </span>
               <span
                 v-if="role.permissions.length > 12"
-                class="text-xs px-2 py-0.5 rounded-md bg-bg-tertiary text-text-muted"
+                class="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground"
               >
                 +{{ role.permissions.length - 12 }} more
               </span>
@@ -586,11 +601,11 @@ async function onTabChange(key: string) {
       <!-- ================================================================ -->
       <div v-else-if="activeTab === 'audit'">
         <div class="flex items-center gap-4 mb-4">
-          <div class="flex bg-bg-tertiary rounded-lg p-0.5">
+          <div class="flex bg-muted rounded-lg p-0.5">
             <button
               :class="[
                 'px-3 py-1.5 text-sm rounded-md transition-all',
-                auditLogType === 'audit' ? 'bg-bg-card text-text-primary font-medium shadow-xs' : 'text-text-muted hover:text-text-primary'
+                auditLogType === 'audit' ? 'bg-card text-foreground font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground'
               ]"
               @click="switchLogType('audit')"
             >
@@ -599,87 +614,89 @@ async function onTabChange(key: string) {
             <button
               :class="[
                 'px-3 py-1.5 text-sm rounded-md transition-all',
-                auditLogType === 'activity' ? 'bg-bg-card text-text-primary font-medium shadow-xs' : 'text-text-muted hover:text-text-primary'
+                auditLogType === 'activity' ? 'bg-card text-foreground font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground'
               ]"
               @click="switchLogType('activity')"
             >
               Activity
             </button>
           </div>
-          <span class="text-sm text-text-muted">{{ auditTotal }} total</span>
+          <span class="text-sm text-muted-foreground">{{ auditTotal }} total</span>
         </div>
 
         <div v-if="auditLoading" class="space-y-2">
           <Skeleton variant="text" :count="8" />
         </div>
 
-        <div v-else-if="(auditLogType === 'audit' ? auditLogs : activityLogs).length === 0" class="bg-bg-card border border-border rounded-xl">
+        <div v-else-if="(auditLogType === 'audit' ? auditLogs : activityLogs).length === 0" class="bg-card border border-border rounded-xl">
           <EmptyState :icon="ScrollText" title="No logs yet" description="Actions will appear here as your team works" />
         </div>
 
-        <div v-else class="bg-bg-card border border-border rounded-xl">
+        <div v-else class="bg-card border border-border rounded-xl">
           <!-- Audit Logs Table -->
-          <table v-if="auditLogType === 'audit'" class="data-table w-full">
-            <thead>
-              <tr>
-                <th scope="col">Action</th>
-                <th scope="col">Entity</th>
-                <th scope="col">Actor</th>
-                <th scope="col">Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="log in auditLogs" :key="log.id">
-                <td>
-                  <span class="text-sm font-mono text-text-primary">{{ log.action }}</span>
-                </td>
-                <td class="text-sm text-text-muted">{{ log.entity_type }}{{ log.entity_id ? `: ${log.entity_id.substring(0, 16)}...` : '' }}</td>
-                <td class="text-sm text-text-muted">{{ log.actor_email || log.actor_id.substring(0, 12) }}</td>
-                <td class="text-sm text-text-muted">{{ formatDate(log.created_at) }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <Table v-if="auditLogType === 'audit'">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Action</TableHead>
+                <TableHead>Entity</TableHead>
+                <TableHead>Actor</TableHead>
+                <TableHead>Time</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-for="log in auditLogs" :key="log.id">
+                <TableCell>
+                  <span class="text-sm font-mono text-foreground">{{ log.action }}</span>
+                </TableCell>
+                <TableCell class="text-sm text-muted-foreground">{{ log.entity_type }}{{ log.entity_id ? `: ${log.entity_id.substring(0, 16)}...` : '' }}</TableCell>
+                <TableCell class="text-sm text-muted-foreground">{{ log.actor_email || log.actor_id.substring(0, 12) }}</TableCell>
+                <TableCell class="text-sm text-muted-foreground">{{ formatDate(log.created_at) }}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
 
           <!-- Activity Logs Table -->
-          <table v-else class="data-table w-full">
-            <thead>
-              <tr>
-                <th scope="col">Action</th>
-                <th scope="col">Description</th>
-                <th scope="col">Actor</th>
-                <th scope="col">Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="log in activityLogs" :key="log.id">
-                <td>
-                  <span class="text-sm font-mono text-text-primary">{{ log.action }}</span>
-                </td>
-                <td class="text-sm text-text-muted">{{ log.description }}</td>
-                <td class="text-sm text-text-muted">{{ log.actor_email || log.actor_id.substring(0, 12) }}</td>
-                <td class="text-sm text-text-muted">{{ formatDate(log.created_at) }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <Table v-else>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Action</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Actor</TableHead>
+                <TableHead>Time</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-for="log in activityLogs" :key="log.id">
+                <TableCell>
+                  <span class="text-sm font-mono text-foreground">{{ log.action }}</span>
+                </TableCell>
+                <TableCell class="text-sm text-muted-foreground">{{ log.description }}</TableCell>
+                <TableCell class="text-sm text-muted-foreground">{{ log.actor_email || log.actor_id.substring(0, 12) }}</TableCell>
+                <TableCell class="text-sm text-muted-foreground">{{ formatDate(log.created_at) }}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
 
         <!-- Pagination -->
         <div v-if="auditTotalPages > 1" class="flex items-center justify-center gap-2 mt-4">
-          <button
-            class="btn-ghost btn-sm"
+          <Button
+            variant="ghost"
+            size="sm"
             :disabled="auditPage <= 1"
             @click="loadAuditLogs(auditPage - 1)"
           >
             <ChevronLeft :size="16" />
-          </button>
-          <span class="text-sm text-text-muted">Page {{ auditPage }} of {{ auditTotalPages }}</span>
-          <button
-            class="btn-ghost btn-sm"
+          </Button>
+          <span class="text-sm text-muted-foreground">Page {{ auditPage }} of {{ auditTotalPages }}</span>
+          <Button
+            variant="ghost"
+            size="sm"
             :disabled="auditPage >= auditTotalPages"
             @click="loadAuditLogs(auditPage + 1)"
           >
             <ChevronRight :size="16" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { contactsApi } from '../../lib/api'
 import { Mail, Pause, Bell, BellOff, Clock, Loader2, Check } from 'lucide-vue-next'
+import { Input } from '@/components/ui/input'
 
 const props = defineProps<{
   contactId: string
@@ -54,12 +55,12 @@ onMounted(load)
 <template>
   <div>
     <div v-if="loading" class="flex justify-center py-4">
-      <Loader2 :size="18" class="animate-spin text-text-muted" />
+      <Loader2 :size="18" class="animate-spin text-muted-foreground" />
     </div>
 
     <div v-else class="space-y-2">
       <div class="flex items-center justify-between mb-2">
-        <span class="text-xs font-semibold text-text-secondary">Email Preference</span>
+        <span class="text-xs font-semibold text-muted-foreground">Email Preference</span>
         <span v-if="savedMsg" class="text-[10px] text-green-400 flex items-center gap-1"><Check :size="10" /> {{ savedMsg }}</span>
       </div>
 
@@ -71,19 +72,19 @@ onMounted(load)
         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition text-left"
         :class="preference === opt.value
           ? 'border-accent/40 bg-accent/5'
-          : 'border-border hover:border-text-muted bg-surface-0'"
+          : 'border-border hover:border-text-muted bg-background'"
       >
         <component :is="opt.icon" :size="14" :class="preference === opt.value ? 'text-accent' : opt.color" />
         <div class="flex-1 min-w-0">
-          <div class="text-xs font-medium" :class="preference === opt.value ? 'text-accent' : 'text-text-primary'">{{ opt.label }}</div>
-          <div class="text-[10px] text-text-muted">{{ opt.desc }}</div>
+          <div class="text-xs font-medium" :class="preference === opt.value ? 'text-accent' : 'text-foreground'">{{ opt.label }}</div>
+          <div class="text-[10px] text-muted-foreground">{{ opt.desc }}</div>
         </div>
         <div v-if="preference === opt.value" class="w-2 h-2 rounded-full bg-accent shrink-0"></div>
       </button>
 
       <div v-if="preference === 'paused'" class="pt-2">
-        <label class="text-[10px] text-text-muted">Pause for (days):</label>
-        <input type="number" v-model.number="pauseDays" min="1" max="365" class="form-input text-xs mt-1 w-24" />
+        <label class="text-[10px] text-muted-foreground">Pause for (days):</label>
+        <Input type="number" :model-value="pauseDays" @update:model-value="pauseDays = Number($event)" min="1" max="365" class="text-xs mt-1 w-24" />
       </div>
     </div>
   </div>

@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import PageHeader from '../components/ui/PageHeader.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
@@ -14,14 +20,12 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Code2,
   Power,
   PowerOff,
   Inbox,
   Loader2,
   Copy,
   Check,
-  ClipboardList,
 } from 'lucide-vue-next'
 
 const toast = useToast()
@@ -143,29 +147,6 @@ async function toggleForm(f: FormEndpoint) {
   }
 }
 
-async function showEmbed(f: FormEndpoint) {
-  try {
-    embedCode.value = await formsApi.getEmbed(f.id)
-    showEmbedModal.value = true
-    embedCopied.value = false
-  } catch (err: any) {
-    toast.error(err.message || 'Failed to get embed code')
-  }
-}
-
-async function viewSubmissions(f: FormEndpoint) {
-  submissionsFormName.value = f.name
-  submissionsLoading.value = true
-  showSubmissions.value = true
-  try {
-    submissionsData.value = await formsApi.getSubmissions(f.id)
-  } catch (err: any) {
-    toast.error(err.message || 'Failed to load submissions')
-  } finally {
-    submissionsLoading.value = false
-  }
-}
-
 function copyEmbed(text: string) {
   navigator.clipboard.writeText(text)
   embedCopied.value = true
@@ -281,7 +262,7 @@ fetchLists()
   <div>
     <PageHeader title="Forms" subtitle="Create form endpoints for lead capture on external websites">
       <template #actions>
-        <button class="btn-primary" @click="openNewForm"><Plus :size="16" /> New Form</button>
+        <Button @click="openNewForm"><Plus :size="16" /> New Form</Button>
       </template>
     </PageHeader>
 
@@ -291,14 +272,14 @@ fetchLists()
     </div>
 
     <!-- Empty -->
-    <div v-else-if="forms.length === 0" class="bg-bg-card border border-border rounded-xl">
+    <div v-else-if="forms.length === 0" class="bg-card border border-border rounded-xl">
       <EmptyState
         :icon="Inbox"
         title="No form endpoints"
         description="Create a form to start capturing leads from your website"
       >
         <template #actions>
-          <button class="btn-primary" @click="openNewForm"><Plus :size="16" /> Create Form</button>
+          <Button @click="openNewForm"><Plus :size="16" /> Create Form</Button>
         </template>
       </EmptyState>
     </div>
@@ -308,12 +289,12 @@ fetchLists()
       <div
         v-for="f in forms"
         :key="f.id"
-        class="bg-bg-card border border-border rounded-xl p-5 flex flex-col gap-3 transition-all duration-150 hover:border-border-hover"
+        class="bg-card border border-border rounded-xl p-5 flex flex-col gap-3 transition-all duration-150 hover:border-primary/25"
       >
         <div class="flex justify-between items-start gap-3">
           <div class="min-w-0">
-            <h3 class="text-sm font-semibold text-text-primary truncate m-0">{{ f.name }}</h3>
-            <p class="text-xs text-text-muted mt-1 m-0">List: {{ listName(f.list_id) }}</p>
+            <h3 class="text-sm font-semibold text-foreground truncate m-0">{{ f.name }}</h3>
+            <p class="text-xs text-muted-foreground mt-1 m-0">List: {{ listName(f.list_id) }}</p>
           </div>
           <span
             :class="[
@@ -327,34 +308,35 @@ fetchLists()
           </span>
         </div>
 
-        <div class="flex gap-4 text-xs text-text-secondary">
+        <div class="flex gap-4 text-xs text-muted-foreground">
           <span>{{ f.submission_count }} submissions</span>
           <span>{{ formatDate(f.created_at) }}</span>
         </div>
 
         <div class="flex justify-between items-center pt-3 border-t border-border mt-auto">
+          <router-link
+            :to="`/forms/${f.id}`"
+            class="text-xs font-medium text-accent hover:underline"
+          >
+            View Details →
+          </router-link>
           <div class="flex gap-1">
-            <button class="btn-ghost text-sm px-2 py-1" title="Edit" @click="openEditForm(f)">
+            <Button variant="ghost" size="sm" title="Edit" @click="openEditForm(f)">
               <Pencil :size="14" />
-            </button>
-            <button class="btn-ghost text-sm px-2 py-1" title="Embed Code" @click="showEmbed(f)">
-              <Code2 :size="14" />
-            </button>
-            <button class="btn-ghost text-sm px-2 py-1" title="View Submissions" @click="viewSubmissions(f)">
-              <ClipboardList :size="14" />
-            </button>
-            <button
-              class="btn-ghost text-sm px-2 py-1"
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               :title="f.status === 'active' ? 'Pause' : 'Activate'"
               @click="toggleForm(f)"
             >
               <PowerOff v-if="f.status === 'active'" :size="14" class="text-warning" />
               <Power v-else :size="14" class="text-success" />
-            </button>
+            </Button>
+            <Button variant="ghost" size="sm" class="text-danger" title="Delete" @click="deleteConfirm = { show: true, id: f.id }">
+              <Trash2 :size="14" />
+            </Button>
           </div>
-          <button class="btn-ghost text-sm px-2 py-1 text-danger" title="Delete" @click="deleteConfirm = { show: true, id: f.id }">
-            <Trash2 :size="14" />
-          </button>
         </div>
       </div>
     </div>
@@ -376,58 +358,59 @@ fetchLists()
 
       <!-- Settings Tab -->
       <div v-if="activeTab === 'settings'" class="flex flex-col gap-4">
-        <div>
-          <label class="form-label">Form Name *</label>
-          <input v-model="form.name" type="text" class="form-input" placeholder="e.g. Newsletter Signup" />
+        <div class="flex flex-col gap-2">
+          <Label>Form Name *</Label>
+          <Input v-model="form.name" type="text" placeholder="e.g. Newsletter Signup" />
         </div>
-        <div>
-          <label class="form-label">Target Contact List *</label>
-          <select v-model="form.list_id" class="form-select">
-            <option value="" disabled>Select a list</option>
-            <option v-for="l in lists" :key="l.id" :value="l.id">{{ l.name }}</option>
-          </select>
+        <div class="flex flex-col gap-2">
+          <Label>Target Contact List *</Label>
+          <Select v-model="form.list_id">
+            <SelectTrigger><SelectValue placeholder="Select a list" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="l in lists" :key="l.id" :value="l.id">{{ l.name }}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <div>
-          <label class="form-label">Success Message</label>
-          <input v-model="form.success_message" type="text" class="form-input" placeholder="Thank you for subscribing!" />
+        <div class="flex flex-col gap-2">
+          <Label>Success Message</Label>
+          <Input v-model="form.success_message" type="text" placeholder="Thank you for subscribing!" />
         </div>
-        <div>
-          <label class="form-label">Redirect URL (optional)</label>
-          <input v-model="form.redirect_url" type="url" class="form-input" placeholder="https://example.com/thank-you" />
+        <div class="flex flex-col gap-2">
+          <Label>Redirect URL (optional)</Label>
+          <Input v-model="form.redirect_url" type="url" placeholder="https://example.com/thank-you" />
         </div>
         <div class="flex items-center gap-3">
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="form.double_optin" class="sr-only peer" />
-            <div class="w-9 h-5 bg-surface-3 rounded-full peer peer-checked:bg-accent transition-colors after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-          </label>
-          <span class="text-sm text-text-secondary">Require double opt-in</span>
+          <Switch v-model="form.double_optin" />
+          <span class="text-sm text-muted-foreground">Require double opt-in</span>
         </div>
       </div>
 
       <!-- Field Mapping Tab -->
       <div v-if="activeTab === 'fields'" class="flex flex-col gap-4">
-        <p class="text-sm text-text-muted m-0">Map form field names to contact fields. The form field name should match your HTML input name attribute.</p>
+        <p class="text-sm text-muted-foreground m-0">Map form field names to contact fields. The form field name should match your HTML input name attribute.</p>
         <div v-for="(entry, i) in fieldMappingEntries" :key="i" class="flex gap-3 items-center">
-          <input v-model="entry.from" class="form-input flex-1" placeholder="Form field (e.g. email)" />
-          <span class="text-text-muted text-sm shrink-0">maps to</span>
-          <select v-model="entry.to" class="form-select flex-1">
-            <option value="email">email</option>
-            <option value="first_name">first_name</option>
-            <option value="last_name">last_name</option>
-            <option value="company">company</option>
-            <option value="phone">phone</option>
-          </select>
-          <button class="btn-ghost text-danger px-1.5 py-1" @click="removeFieldMapping(i)"><Trash2 :size="14" /></button>
+          <Input v-model="entry.from" class="flex-1" placeholder="Form field (e.g. email)" />
+          <span class="text-muted-foreground text-sm shrink-0">maps to</span>
+          <Select v-model="entry.to">
+            <SelectTrigger class="flex-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="email">email</SelectItem>
+              <SelectItem value="first_name">first_name</SelectItem>
+              <SelectItem value="last_name">last_name</SelectItem>
+              <SelectItem value="company">company</SelectItem>
+              <SelectItem value="phone">phone</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="ghost" size="sm" class="text-danger" @click="removeFieldMapping(i)"><Trash2 :size="14" /></Button>
         </div>
-        <button class="btn-secondary self-start text-sm" @click="addFieldMapping"><Plus :size="14" /> Add Field</button>
+        <Button variant="secondary" size="sm" class="self-start" @click="addFieldMapping"><Plus :size="14" /> Add Field</Button>
 
-        <div class="mt-2">
-          <label class="form-label">Required Fields</label>
-          <p class="text-xs text-text-muted mb-2 m-0">Comma-separated list of required form fields</p>
-          <input
-            :value="form.required_fields.join(', ')"
-            @input="form.required_fields = ($event.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean)"
-            class="form-input"
+        <div class="mt-2 flex flex-col gap-2">
+          <Label>Required Fields</Label>
+          <p class="text-xs text-muted-foreground m-0">Comma-separated list of required form fields</p>
+          <Input
+            :model-value="form.required_fields.join(', ')"
+            @update:model-value="form.required_fields = String($event).split(',').map(s => s.trim()).filter(Boolean)"
             placeholder="email, name"
           />
         </div>
@@ -435,55 +418,58 @@ fetchLists()
 
       <!-- Actions Tab -->
       <div v-if="activeTab === 'actions'" class="flex flex-col gap-4">
-        <p class="text-sm text-text-muted m-0">Actions to execute when a form is submitted.</p>
-        <div v-for="(action, i) in form.actions" :key="i" class="flex gap-3 items-center bg-surface-2 rounded-lg p-3">
-          <select v-model="action.type" class="form-select w-40 shrink-0">
-            <option value="add_tag">Add Tag</option>
-            <option value="enroll_automation">Enroll in Automation</option>
-            <option value="send_email">Send Email</option>
-            <option value="update_score">Update Score</option>
-            <option value="webhook">Webhook</option>
-          </select>
-          <input
+        <p class="text-sm text-muted-foreground m-0">Actions to execute when a form is submitted.</p>
+        <div v-for="(action, i) in form.actions" :key="i" class="flex gap-3 items-center bg-card rounded-lg p-3">
+          <Select v-model="action.type">
+            <SelectTrigger class="w-40 shrink-0"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="add_tag">Add Tag</SelectItem>
+              <SelectItem value="enroll_automation">Enroll in Automation</SelectItem>
+              <SelectItem value="send_email">Send Email</SelectItem>
+              <SelectItem value="update_score">Update Score</SelectItem>
+              <SelectItem value="webhook">Webhook</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
             v-if="action.type === 'add_tag'"
             v-model="action.tag"
-            class="form-input flex-1"
+            class="flex-1"
             placeholder="Tag name"
           />
-          <input
+          <Input
             v-if="action.type === 'webhook'"
             v-model="action.url"
-            class="form-input flex-1"
+            class="flex-1"
             placeholder="Webhook URL"
           />
-          <input
+          <Input
             v-if="action.type === 'update_score'"
-            v-model.number="action.amount"
+            v-model="action.amount"
             type="number"
-            class="form-input w-24"
+            class="w-24"
             placeholder="+10"
           />
-          <button class="btn-ghost text-danger px-1.5 py-1 shrink-0" @click="removeAction(i)"><Trash2 :size="14" /></button>
+          <Button variant="ghost" size="sm" class="text-danger shrink-0" @click="removeAction(i)"><Trash2 :size="14" /></Button>
         </div>
-        <button class="btn-secondary self-start text-sm" @click="addAction"><Plus :size="14" /> Add Action</button>
+        <Button variant="secondary" size="sm" class="self-start" @click="addAction"><Plus :size="14" /> Add Action</Button>
       </div>
 
       <!-- Advanced Tab -->
       <div v-if="activeTab === 'advanced'" class="flex flex-col gap-4">
-        <div>
-          <label class="form-label">Allowed Domains</label>
-          <p class="text-xs text-text-muted mb-2 m-0">One domain per line. Leave empty to allow any domain.</p>
-          <textarea v-model="allowedDomainsText" class="form-input" rows="4" placeholder="https://example.com&#10;https://blog.example.com"></textarea>
+        <div class="flex flex-col gap-2">
+          <Label>Allowed Domains</Label>
+          <p class="text-xs text-muted-foreground m-0">One domain per line. Leave empty to allow any domain.</p>
+          <Textarea v-model="allowedDomainsText" :rows="4" placeholder="https://example.com&#10;https://blog.example.com" />
         </div>
       </div>
     </div>
 
     <template #footer>
-      <button class="btn-ghost" @click="closeEditor">Cancel</button>
-      <button class="btn-primary" @click="saveForm" :disabled="saving || !form.name || !form.list_id">
+      <Button variant="ghost" @click="closeEditor">Cancel</Button>
+      <Button @click="saveForm" :disabled="saving || !form.name || !form.list_id">
         <Loader2 v-if="saving" :size="16" class="spin" />
         {{ editingId ? 'Update' : 'Create' }}
-      </button>
+      </Button>
     </template>
   </SlidePanel>
 
@@ -491,34 +477,36 @@ fetchLists()
   <Modal :show="showEmbedModal" title="Embed Code" size="lg" @close="showEmbedModal = false">
     <div class="flex flex-col gap-5">
       <div>
-        <h4 class="text-sm font-semibold text-text-primary mb-2">HTML Embed</h4>
+        <h4 class="text-sm font-semibold text-foreground mb-2">HTML Embed</h4>
         <div class="relative">
-          <pre class="bg-surface-3 rounded-lg p-4 text-xs text-text-secondary font-mono overflow-x-auto whitespace-pre-wrap">{{ embedCode.html }}</pre>
-          <button
-            class="absolute top-2 right-2 btn-ghost text-xs px-2 py-1"
+          <pre class="bg-muted rounded-lg p-4 text-xs text-muted-foreground font-mono overflow-x-auto whitespace-pre-wrap">{{ embedCode.html }}</pre>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="absolute top-2 right-2"
             @click="copyEmbed(embedCode.html)"
           >
             <Check v-if="embedCopied" :size="12" class="text-success" />
             <Copy v-else :size="12" />
-          </button>
+          </Button>
         </div>
       </div>
       <div>
-        <h4 class="text-sm font-semibold text-text-primary mb-2">JavaScript Widget</h4>
+        <h4 class="text-sm font-semibold text-foreground mb-2">JavaScript Widget</h4>
         <div class="relative">
-          <pre class="bg-surface-3 rounded-lg p-4 text-xs text-text-secondary font-mono overflow-x-auto whitespace-pre-wrap">{{ embedCode.js }}</pre>
-          <button class="absolute top-2 right-2 btn-ghost text-xs px-2 py-1" @click="copyEmbed(embedCode.js)">
+          <pre class="bg-muted rounded-lg p-4 text-xs text-muted-foreground font-mono overflow-x-auto whitespace-pre-wrap">{{ embedCode.js }}</pre>
+          <Button variant="ghost" size="sm" class="absolute top-2 right-2" @click="copyEmbed(embedCode.js)">
             <Copy :size="12" />
-          </button>
+          </Button>
         </div>
       </div>
       <div v-if="embedCode.api">
-        <h4 class="text-sm font-semibold text-text-primary mb-2">API Example</h4>
+        <h4 class="text-sm font-semibold text-foreground mb-2">API Example</h4>
         <div class="relative">
-          <pre class="bg-surface-3 rounded-lg p-4 text-xs text-text-secondary font-mono overflow-x-auto whitespace-pre-wrap">{{ embedCode.api }}</pre>
-          <button class="absolute top-2 right-2 btn-ghost text-xs px-2 py-1" @click="copyEmbed(embedCode.api)">
+          <pre class="bg-muted rounded-lg p-4 text-xs text-muted-foreground font-mono overflow-x-auto whitespace-pre-wrap">{{ embedCode.api }}</pre>
+          <Button variant="ghost" size="sm" class="absolute top-2 right-2" @click="copyEmbed(embedCode.api)">
             <Copy :size="12" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -529,20 +517,20 @@ fetchLists()
     <div v-if="submissionsLoading" class="flex justify-center py-12">
       <Loader2 :size="24" class="spin text-accent" />
     </div>
-    <div v-else-if="submissionsData.submissions.length === 0" class="py-12 text-center text-text-muted text-sm">
+    <div v-else-if="submissionsData.submissions.length === 0" class="py-12 text-center text-muted-foreground text-sm">
       No submissions yet
     </div>
     <div v-else class="flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
       <div
         v-for="sub in submissionsData.submissions"
         :key="sub.id"
-        class="bg-surface-2 rounded-lg p-4 text-sm"
+        class="bg-card rounded-lg p-4 text-sm"
       >
         <div class="flex justify-between items-center mb-2">
-          <span class="text-text-muted text-xs">{{ formatDate(sub.created_at) }}</span>
-          <span v-if="sub.ip_address" class="text-text-muted text-xs">{{ sub.ip_address }}</span>
+          <span class="text-muted-foreground text-xs">{{ formatDate(sub.created_at) }}</span>
+          <span v-if="sub.ip_address" class="text-muted-foreground text-xs">{{ sub.ip_address }}</span>
         </div>
-        <pre class="text-text-secondary text-xs whitespace-pre-wrap m-0">{{ JSON.stringify(JSON.parse(sub.data || '{}'), null, 2) }}</pre>
+        <pre class="text-muted-foreground text-xs whitespace-pre-wrap m-0">{{ JSON.stringify(JSON.parse(sub.data || '{}'), null, 2) }}</pre>
       </div>
     </div>
   </Modal>

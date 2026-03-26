@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import type { ContactInput } from '../../lib/api'
 import { X, Loader2 } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps<{
   show: boolean
@@ -59,13 +60,13 @@ function handleSave() {
       class="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000] backdrop-blur-[4px]"
       @click.self="emit('close')"
     >
-      <div class="bg-bg-secondary border border-border rounded-xl w-[480px] max-w-[90vw] max-h-[80vh] overflow-y-auto">
+      <div class="bg-secondary border border-border rounded-xl w-[480px] max-w-[90vw] max-h-[80vh] overflow-y-auto">
         <div class="flex justify-between items-center px-6 py-5 border-b border-border">
-          <h3 class="text-base font-semibold text-text-primary m-0">
+          <h3 class="text-base font-semibold text-foreground m-0">
             {{ mode === 'create' ? 'Add Contact' : 'Edit Contact' }}
           </h3>
           <button
-            class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
+            class="bg-transparent border-none cursor-pointer p-1 text-muted-foreground rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
             @click="emit('close')"
           >
             <X :size="18" />
@@ -73,58 +74,58 @@ function handleSave() {
         </div>
         <div class="p-6">
           <div class="mb-4">
-            <label class="block text-[13px] font-medium text-text-secondary mb-1.5">
+            <label class="block text-sm font-medium text-muted-foreground mb-2">
               Email {{ mode === 'create' ? '*' : '' }}
             </label>
             <input
               v-model="form.email"
               type="email"
               :placeholder="mode === 'create' ? 'email@example.com' : ''"
-              class="w-full px-3 py-2.5 bg-bg-primary border border-border rounded-lg text-text-primary text-sm outline-none transition-colors duration-150 focus:border-accent"
+              class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-foreground text-sm outline-none transition-colors duration-150 focus:border-accent"
             />
           </div>
           <div class="flex gap-3 max-md:flex-col max-md:gap-0">
             <div class="flex-1 mb-4">
-              <label class="block text-[13px] font-medium text-text-secondary mb-1.5">First Name</label>
+              <label class="block text-sm font-medium text-muted-foreground mb-2">First Name</label>
               <input
                 v-model="form.first_name"
                 type="text"
-                class="w-full px-3 py-2.5 bg-bg-primary border border-border rounded-lg text-text-primary text-sm outline-none transition-colors duration-150 focus:border-accent"
+                class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-foreground text-sm outline-none transition-colors duration-150 focus:border-accent"
               />
             </div>
             <div class="flex-1 mb-4">
-              <label class="block text-[13px] font-medium text-text-secondary mb-1.5">Last Name</label>
+              <label class="block text-sm font-medium text-muted-foreground mb-2">Last Name</label>
               <input
                 v-model="form.last_name"
                 type="text"
-                class="w-full px-3 py-2.5 bg-bg-primary border border-border rounded-lg text-text-primary text-sm outline-none transition-colors duration-150 focus:border-accent"
+                class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-foreground text-sm outline-none transition-colors duration-150 focus:border-accent"
               />
             </div>
           </div>
           <div class="flex gap-3 max-md:flex-col max-md:gap-0">
             <div class="flex-1 mb-4">
-              <label class="block text-[13px] font-medium text-text-secondary mb-1.5">Company</label>
+              <label class="block text-sm font-medium text-muted-foreground mb-2">Company</label>
               <input
                 v-model="form.company"
                 type="text"
-                class="w-full px-3 py-2.5 bg-bg-primary border border-border rounded-lg text-text-primary text-sm outline-none transition-colors duration-150 focus:border-accent"
+                class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-foreground text-sm outline-none transition-colors duration-150 focus:border-accent"
               />
             </div>
             <div class="flex-1 mb-4">
-              <label class="block text-[13px] font-medium text-text-secondary mb-1.5">Phone</label>
+              <label class="block text-sm font-medium text-muted-foreground mb-2">Phone</label>
               <input
                 v-model="form.phone"
                 type="text"
-                class="w-full px-3 py-2.5 bg-bg-primary border border-border rounded-lg text-text-primary text-sm outline-none transition-colors duration-150 focus:border-accent"
+                class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-foreground text-sm outline-none transition-colors duration-150 focus:border-accent"
               />
             </div>
           </div>
           <!-- Status field only in edit mode -->
           <div v-if="mode === 'edit'" class="mb-4">
-            <label class="block text-[13px] font-medium text-text-secondary mb-1.5">Status</label>
+            <label class="block text-sm font-medium text-muted-foreground mb-2">Status</label>
             <select
               v-model="form.status"
-              class="w-full px-3 py-2.5 bg-bg-primary border border-border rounded-lg text-text-primary text-sm outline-none transition-colors duration-150 focus:border-accent"
+              class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-foreground text-sm outline-none transition-colors duration-150 focus:border-accent"
             >
               <option value="active">Active</option>
               <option value="unsubscribed">Unsubscribed</option>
@@ -134,20 +135,13 @@ function handleSave() {
           </div>
         </div>
         <div class="flex justify-end gap-2 px-6 py-4 border-t border-border">
-          <button
-            class="btn-ghost inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
-            @click="emit('close')"
-          >
+          <Button variant="ghost" @click="emit('close')">
             Cancel
-          </button>
-          <button
-            class="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
-            @click="handleSave"
-            :disabled="saving"
-          >
+          </Button>
+          <Button @click="handleSave" :disabled="saving">
             <Loader2 v-if="saving" :size="14" class="animate-spin" />
             {{ mode === 'create' ? 'Add Contact' : 'Save' }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

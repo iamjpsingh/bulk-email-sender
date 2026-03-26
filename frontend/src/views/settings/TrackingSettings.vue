@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { cloudflareApi, type CloudflareZone, type TrackingStats } from '../../lib/api/cloudflare'
-import { Radio, Globe, Zap, BarChart3, Trash2, Loader2, ExternalLink, Check, AlertCircle } from 'lucide-vue-next'
+import { Radio, Globe, Zap, Trash2, Loader2, Check, AlertCircle } from 'lucide-vue-next'
 
 const loading = ref(true)
 const deploying = ref<string | null>(null)
@@ -59,6 +59,7 @@ async function deploy(zone: CloudflareZone) {
   successMsg.value = ''
   try {
     const opts = deployOptions.value[zone.id]
+    if (!opts) return
     await cloudflareApi.deploy({
       zoneId: zone.id,
       domain: zone.name,
@@ -108,8 +109,8 @@ onMounted(() => {
 <template>
   <div class="space-y-6">
     <div>
-      <h2 class="text-lg font-semibold text-text-primary">Email Tracking</h2>
-      <p class="text-sm text-text-muted mt-1">
+      <h2 class="text-lg font-semibold text-foreground">Email Tracking</h2>
+      <p class="text-sm text-muted-foreground mt-1">
         Deploy Cloudflare Workers on your own domains for first-party email tracking.
         Opens, clicks, and unsubscribes are tracked from the same domain you send from.
       </p>
@@ -127,15 +128,15 @@ onMounted(() => {
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <Loader2 :size="24" class="animate-spin text-text-muted" />
+      <Loader2 :size="24" class="animate-spin text-muted-foreground" />
     </div>
 
     <template v-else>
       <!-- Not connected -->
-      <div v-if="!status.connected" class="bg-surface-1 rounded-xl border border-border p-8 text-center">
-        <Globe :size="40" class="mx-auto text-text-muted mb-4" />
-        <h3 class="text-base font-medium text-text-primary mb-2">Connect Cloudflare</h3>
-        <p class="text-sm text-text-muted mb-6 max-w-md mx-auto">
+      <div v-if="!status.connected" class="bg-secondary rounded-xl border border-border p-8 text-center">
+        <Globe :size="40" class="mx-auto text-muted-foreground mb-4" />
+        <h3 class="text-base font-medium text-foreground mb-2">Connect Cloudflare</h3>
+        <p class="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
           Log in to your Cloudflare account to deploy tracking Workers on your domains.
           No API keys needed — just authorize with one click.
         </p>
@@ -150,18 +151,18 @@ onMounted(() => {
 
       <!-- Connected — show zones -->
       <template v-else>
-        <div class="bg-surface-1 rounded-xl border border-border p-4">
+        <div class="bg-secondary rounded-xl border border-border p-4">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
                 <Check :size="16" class="text-green-400" />
               </div>
               <div>
-                <div class="text-sm font-medium text-text-primary">Connected to Cloudflare</div>
-                <div class="text-xs text-text-muted">{{ status.accountName }}</div>
+                <div class="text-sm font-medium text-foreground">Connected to Cloudflare</div>
+                <div class="text-xs text-muted-foreground">{{ status.accountName }}</div>
               </div>
             </div>
-            <button @click="connectCloudflare" class="text-xs text-text-muted hover:text-text-secondary transition">
+            <button @click="connectCloudflare" class="text-xs text-muted-foreground hover:text-muted-foreground transition">
               Reconnect
             </button>
           </div>
@@ -169,22 +170,22 @@ onMounted(() => {
 
         <!-- Zones list -->
         <div class="space-y-4">
-          <h3 class="text-sm font-medium text-text-secondary">Your Domains</h3>
+          <h3 class="text-sm font-medium text-muted-foreground">Your Domains</h3>
 
-          <div v-if="zones.length === 0" class="text-sm text-text-muted text-center py-8">
+          <div v-if="zones.length === 0" class="text-sm text-muted-foreground text-center py-8">
             No domains found on your Cloudflare account.
           </div>
 
-          <div v-for="zone in zones" :key="zone.id" class="bg-surface-1 rounded-xl border border-border overflow-hidden">
+          <div v-for="zone in zones" :key="zone.id" class="bg-secondary rounded-xl border border-border overflow-hidden">
             <div class="p-4">
               <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-3">
-                  <Globe :size="16" class="text-text-muted" />
-                  <span class="font-medium text-text-primary text-sm">{{ zone.name }}</span>
+                  <Globe :size="16" class="text-muted-foreground" />
+                  <span class="font-medium text-foreground text-sm">{{ zone.name }}</span>
                   <span v-if="zone.deployed" class="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full">
                     Deployed
                   </span>
-                  <span v-else class="text-xs bg-surface-2 text-text-muted px-2 py-0.5 rounded-full">
+                  <span v-else class="text-xs bg-card text-muted-foreground px-2 py-0.5 rounded-full">
                     Not deployed
                   </span>
                 </div>
@@ -192,32 +193,32 @@ onMounted(() => {
 
               <!-- Deployed — show info + stats -->
               <template v-if="zone.deployed && zone.deployment">
-                <div class="text-xs text-text-muted space-y-1 mb-3">
-                  <div>Routes: <code class="text-text-secondary">{{ zone.name }}/{{ zone.deployment.openPath }}/*</code> · <code class="text-text-secondary">{{ zone.name }}/{{ zone.deployment.clickPath }}/*</code> · <code class="text-text-secondary">{{ zone.name }}/{{ zone.deployment.unsubPath }}/*</code></div>
+                <div class="text-xs text-muted-foreground space-y-1 mb-3">
+                  <div>Routes: <code class="text-muted-foreground">{{ zone.name }}/{{ zone.deployment.openPath }}/*</code> · <code class="text-muted-foreground">{{ zone.name }}/{{ zone.deployment.clickPath }}/*</code> · <code class="text-muted-foreground">{{ zone.name }}/{{ zone.deployment.unsubPath }}/*</code></div>
                   <div>Deployed: {{ new Date(zone.deployment.deployedAt).toLocaleDateString() }}</div>
                 </div>
 
                 <!-- Stats -->
                 <div v-if="stats[zone.name]" class="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3">
-                  <div class="bg-surface-0 rounded-lg p-3 text-center">
-                    <div class="text-lg font-semibold text-text-primary">{{ stats[zone.name].opens.toLocaleString() }}</div>
-                    <div class="text-xs text-text-muted">Opens</div>
+                  <div class="bg-background rounded-lg p-3 text-center">
+                    <div class="text-lg font-semibold text-foreground">{{ stats[zone.name]!.opens.toLocaleString() }}</div>
+                    <div class="text-xs text-muted-foreground">Opens</div>
                   </div>
-                  <div class="bg-surface-0 rounded-lg p-3 text-center">
-                    <div class="text-lg font-semibold text-text-primary">{{ stats[zone.name].clicks.toLocaleString() }}</div>
-                    <div class="text-xs text-text-muted">Clicks</div>
+                  <div class="bg-background rounded-lg p-3 text-center">
+                    <div class="text-lg font-semibold text-foreground">{{ stats[zone.name]!.clicks.toLocaleString() }}</div>
+                    <div class="text-xs text-muted-foreground">Clicks</div>
                   </div>
-                  <div class="bg-surface-0 rounded-lg p-3 text-center">
-                    <div class="text-lg font-semibold text-text-primary">{{ stats[zone.name].uniqueOpens.toLocaleString() }}</div>
-                    <div class="text-xs text-text-muted">Unique Opens</div>
+                  <div class="bg-background rounded-lg p-3 text-center">
+                    <div class="text-lg font-semibold text-foreground">{{ stats[zone.name]!.uniqueOpens.toLocaleString() }}</div>
+                    <div class="text-xs text-muted-foreground">Unique Opens</div>
                   </div>
-                  <div class="bg-surface-0 rounded-lg p-3 text-center">
-                    <div class="text-lg font-semibold text-text-primary">{{ stats[zone.name].uniqueClicks.toLocaleString() }}</div>
-                    <div class="text-xs text-text-muted">Unique Clicks</div>
+                  <div class="bg-background rounded-lg p-3 text-center">
+                    <div class="text-lg font-semibold text-foreground">{{ stats[zone.name]!.uniqueClicks.toLocaleString() }}</div>
+                    <div class="text-xs text-muted-foreground">Unique Clicks</div>
                   </div>
-                  <div class="bg-surface-0 rounded-lg p-3 text-center">
-                    <div class="text-lg font-semibold text-text-primary">{{ stats[zone.name].unsubscribes.toLocaleString() }}</div>
-                    <div class="text-xs text-text-muted">Unsubs</div>
+                  <div class="bg-background rounded-lg p-3 text-center">
+                    <div class="text-lg font-semibold text-foreground">{{ stats[zone.name]!.unsubscribes.toLocaleString() }}</div>
+                    <div class="text-xs text-muted-foreground">Unsubs</div>
                   </div>
                 </div>
 
@@ -232,35 +233,35 @@ onMounted(() => {
               </template>
 
               <!-- Not deployed — show config + deploy -->
-              <template v-else>
+              <template v-else-if="deployOptions[zone.id]">
                 <div class="space-y-3">
                   <div class="flex items-center gap-4 text-xs">
                     <label class="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" :value="false" v-model="deployOptions[zone.id].useSubdomain" class="accent-accent" />
-                      <span class="text-text-secondary">Same domain <span class="text-text-muted">(recommended)</span></span>
+                      <input type="radio" :value="false" v-model="deployOptions[zone.id]!.useSubdomain" class="accent-accent" />
+                      <span class="text-muted-foreground">Same domain <span class="text-muted-foreground">(recommended)</span></span>
                     </label>
                     <label class="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" :value="true" v-model="deployOptions[zone.id].useSubdomain" class="accent-accent" />
-                      <span class="text-text-secondary">Subdomain</span>
+                      <input type="radio" :value="true" v-model="deployOptions[zone.id]!.useSubdomain" class="accent-accent" />
+                      <span class="text-muted-foreground">Subdomain</span>
                     </label>
                   </div>
 
-                  <div v-if="deployOptions[zone.id].useSubdomain" class="flex items-center gap-2">
+                  <div v-if="deployOptions[zone.id]!.useSubdomain" class="flex items-center gap-2">
                     <input
-                      v-model="deployOptions[zone.id].subdomain"
+                      v-model="deployOptions[zone.id]!.subdomain"
                       type="text"
                       placeholder="e"
-                      class="w-16 px-2 py-1.5 bg-surface-0 border border-border rounded text-xs text-text-primary"
+                      class="w-16 px-2 py-1.5 bg-background border border-border rounded text-xs text-foreground"
                     />
-                    <span class="text-xs text-text-muted">.{{ zone.name }}</span>
+                    <span class="text-xs text-muted-foreground">.{{ zone.name }}</span>
                   </div>
 
-                  <div class="text-xs text-text-muted">
-                    <template v-if="deployOptions[zone.id].useSubdomain">
-                      {{ deployOptions[zone.id].subdomain || 'e' }}.{{ zone.name }}/{{ deployOptions[zone.id].openPath }}/* · {{ deployOptions[zone.id].subdomain || 'e' }}.{{ zone.name }}/{{ deployOptions[zone.id].clickPath }}/*
+                  <div class="text-xs text-muted-foreground">
+                    <template v-if="deployOptions[zone.id]!.useSubdomain">
+                      {{ deployOptions[zone.id]!.subdomain || 'e' }}.{{ zone.name }}/{{ deployOptions[zone.id]!.openPath }}/* · {{ deployOptions[zone.id]!.subdomain || 'e' }}.{{ zone.name }}/{{ deployOptions[zone.id]!.clickPath }}/*
                     </template>
                     <template v-else>
-                      {{ zone.name }}/{{ deployOptions[zone.id].openPath }}/* · {{ zone.name }}/{{ deployOptions[zone.id].clickPath }}/* · {{ zone.name }}/{{ deployOptions[zone.id].unsubPath }}/*
+                      {{ zone.name }}/{{ deployOptions[zone.id]!.openPath }}/* · {{ zone.name }}/{{ deployOptions[zone.id]!.clickPath }}/* · {{ zone.name }}/{{ deployOptions[zone.id]!.unsubPath }}/*
                     </template>
                   </div>
 

@@ -3,6 +3,10 @@ import { ref, onMounted } from 'vue'
 import { adminApi } from '../../lib/api/admin'
 import type { Team, TeamMember } from '../../lib/api/admin'
 import { useToast } from '../../composables/useToast'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import Modal from '../../components/ui/Modal.vue'
 import ConfirmDialog from '../../components/ui/ConfirmDialog.vue'
 import EmptyState from '../../components/ui/EmptyState.vue'
@@ -93,52 +97,52 @@ onMounted(loadTeams)
 
     <template v-else>
       <div class="flex justify-between items-center mb-4">
-        <p class="text-sm text-text-muted">{{ teams.length }} team{{ teams.length !== 1 ? 's' : '' }}</p>
-        <button class="btn-primary btn-sm" @click="showCreateTeam = true">
+        <p class="text-sm text-muted-foreground">{{ teams.length }} team{{ teams.length !== 1 ? 's' : '' }}</p>
+        <Button size="sm" @click="showCreateTeam = true">
           <Plus :size="15" /> Create Team
-        </button>
+        </Button>
       </div>
 
-      <div v-if="teams.length === 0" class="bg-bg-card border border-border rounded-xl">
+      <div v-if="teams.length === 0" class="bg-card border border-border rounded-xl">
         <EmptyState :icon="UsersRound" title="No teams yet" description="Create teams to organize your members" />
       </div>
 
       <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(350px,1fr))] gap-4">
-        <div v-for="team in teams" :key="team.id" class="bg-bg-card border border-border rounded-xl p-5">
+        <div v-for="team in teams" :key="team.id" class="bg-card border border-border rounded-xl p-5">
           <div class="flex justify-between items-start mb-3">
             <div>
-              <h3 class="text-[15px] font-semibold text-text-primary">{{ team.name }}</h3>
-              <p v-if="team.description" class="text-sm text-text-muted mt-0.5">{{ team.description }}</p>
+              <h3 class="text-[15px] font-semibold text-foreground">{{ team.name }}</h3>
+              <p v-if="team.description" class="text-sm text-muted-foreground mt-0.5">{{ team.description }}</p>
             </div>
-            <button class="btn-ghost btn-sm text-danger" @click="promptDeleteTeam(team.id)">
+            <Button variant="ghost" size="sm" class="text-danger" @click="promptDeleteTeam(team.id)">
               <Trash2 :size="14" />
-            </button>
+            </Button>
           </div>
 
-          <div class="flex items-center gap-3 text-sm text-text-muted mb-3">
+          <div class="flex items-center gap-3 text-sm text-muted-foreground mb-3">
             <span class="flex items-center gap-1">
               <Users :size="14" /> {{ team.member_count || 0 }} member{{ (team.member_count || 0) !== 1 ? 's' : '' }}
             </span>
             <span>Created {{ formatDate(team.created_at) }}</span>
           </div>
 
-          <button class="btn-ghost btn-sm w-full justify-center" @click="toggleTeamMembers(team.id)">
+          <Button variant="ghost" size="sm" class="w-full justify-center" @click="toggleTeamMembers(team.id)">
             {{ expandedTeam === team.id ? 'Hide Members' : 'Show Members' }}
-          </button>
+          </Button>
 
           <div v-if="expandedTeam === team.id" class="mt-3 border-t border-border pt-3">
-            <div v-if="!teamMembers[team.id]?.length" class="text-sm text-text-muted text-center py-2">
+            <div v-if="!teamMembers[team.id]?.length" class="text-sm text-muted-foreground text-center py-2">
               No members
             </div>
             <div v-else class="space-y-2">
               <div
                 v-for="tm in teamMembers[team.id]"
                 :key="tm.id"
-                class="flex items-center justify-between p-2 rounded-lg bg-bg-tertiary"
+                class="flex items-center justify-between p-2 rounded-lg bg-muted"
               >
                 <div>
-                  <span class="text-sm font-medium text-text-primary">{{ tm.name || tm.email }}</span>
-                  <span class="badge-sm badge-default ml-2">{{ tm.role }}</span>
+                  <span class="text-sm font-medium text-foreground">{{ tm.name || tm.email }}</span>
+                  <Badge variant="outline" class="ml-2">{{ tm.role }}</Badge>
                 </div>
               </div>
             </div>
@@ -149,21 +153,21 @@ onMounted(loadTeams)
       <!-- Create Team Modal -->
       <Modal :show="showCreateTeam" title="Create Team" size="sm" @close="showCreateTeam = false">
         <form id="create-team-form" @submit.prevent="createTeam">
-          <div class="form-group">
-            <label class="form-label">Team Name *</label>
-            <input v-model="teamForm.name" type="text" class="form-input" required />
+          <div class="mb-5">
+            <Label required>Team Name</Label>
+            <Input v-model="teamForm.name" type="text" required />
           </div>
-          <div class="form-group">
-            <label class="form-label">Description</label>
-            <input v-model="teamForm.description" type="text" class="form-input" />
+          <div class="flex flex-col gap-2">
+            <Label>Description</Label>
+            <Input v-model="teamForm.description" type="text" />
           </div>
         </form>
         <template #footer>
-          <button class="btn-ghost" @click="showCreateTeam = false">Cancel</button>
-          <button type="submit" form="create-team-form" class="btn-primary" :disabled="creatingTeam">
+          <Button variant="ghost" @click="showCreateTeam = false">Cancel</Button>
+          <Button type="submit" form="create-team-form" :disabled="creatingTeam">
             <Loader2 v-if="creatingTeam" :size="16" class="spin" />
             Create
-          </button>
+          </Button>
         </template>
       </Modal>
 

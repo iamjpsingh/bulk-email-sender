@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { X, Loader2 } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps<{
   show: boolean
@@ -38,27 +39,27 @@ function handleClose() {
       class="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000] backdrop-blur-[4px]"
       @click.self="handleClose"
     >
-      <div class="bg-bg-secondary border border-border rounded-xl w-[480px] max-w-[90vw] max-h-[80vh] overflow-y-auto">
+      <div class="bg-secondary border border-border rounded-xl w-[480px] max-w-[90vw] max-h-[80vh] overflow-y-auto">
         <div class="flex justify-between items-center px-6 py-5 border-b border-border">
-          <h3 class="text-base font-semibold text-text-primary m-0">Import Contacts</h3>
+          <h3 class="text-base font-semibold text-foreground m-0">Import Contacts</h3>
           <button
-            class="bg-transparent border-none cursor-pointer p-1 text-text-muted rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
+            class="bg-transparent border-none cursor-pointer p-1 text-muted-foreground rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
             @click="handleClose"
           >
             <X :size="18" />
           </button>
         </div>
         <div class="p-6">
-          <p class="text-text-muted text-[13px] mb-4">
+          <p class="text-muted-foreground text-[13px] mb-4">
             Upload a CSV or Excel file. Columns will be auto-mapped (email, first_name, last_name, company, phone).
           </p>
           <div class="mb-4">
-            <label class="block text-[13px] font-medium text-text-secondary mb-1.5">File</label>
+            <label class="block text-sm font-medium text-muted-foreground mb-2">File</label>
             <input
               type="file"
               accept=".csv,.xlsx,.xls"
               @change="onFileChange"
-              class="w-full px-3 py-2.5 bg-bg-primary border border-border rounded-lg text-text-primary text-sm outline-none"
+              class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-foreground text-sm outline-none"
             />
           </div>
           <div v-if="importResult" class="mt-3 p-3 bg-green-500/[0.08] rounded-lg text-[13px]">
@@ -70,20 +71,13 @@ function handleClose() {
           </div>
         </div>
         <div class="flex justify-end gap-2 px-6 py-4 border-t border-border">
-          <button
-            class="btn-ghost inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
-            @click="handleClose"
-          >
+          <Button variant="ghost" @click="handleClose">
             Cancel
-          </button>
-          <button
-            class="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium"
-            @click="handleImport"
-            :disabled="!importFile || importing"
-          >
+          </Button>
+          <Button @click="handleImport" :disabled="!importFile || importing">
             <Loader2 v-if="importing" :size="14" class="animate-spin" />
             Import
-          </button>
+          </Button>
         </div>
       </div>
     </div>

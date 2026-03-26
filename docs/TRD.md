@@ -1,10 +1,12 @@
-# Dispatch v3.0 — Technical Requirements Document
+# Dispatch — Technical Requirements Document
+
+**Stack**: Bun + Hono + Vue 3 + Tailwind CSS v4 + shadcn-vue + Cloudflare Workers + D1
 
 ## Architecture Overview
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                         Frontend (Vue 3 + Vite)                       │
+│                  Frontend (Vue 3 + Tailwind + shadcn-vue)             │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐  │
 │  │Dashboard │ │Campaigns │ │Contacts  │ │Templates │ │Automation │  │
 │  │  (SSE)   │ │(Wizard)  │ │(CRM-lite)│ │(Builder) │ │(Flowchart)│  │
@@ -833,44 +835,37 @@ SSE endpoint streams events per campaign or globally per user.
 
 ## 11. New File Summary
 
-### New Files (All Phases)
+### Key Files
 
-| File | Phase | Purpose |
-|------|-------|---------|
-| `src/services/queueEngine.ts` | 1 | SQLite persistent job queue |
-| `src/services/retryEngine.ts` | 1 | Exponential backoff + error classification |
-| `src/services/suppressionService.ts` | 1 | Bounce/unsubscribe suppression |
-| `src/services/validationService.ts` | 1 | Email validation (MX, syntax, disposable) |
-| `src/services/contactService.ts` | 1 | Contact list CRUD + import/export |
-| `src/services/eventBus.ts` | 1 | In-memory pub/sub for SSE |
-| `src/routes/events.ts` | 1 | SSE streaming endpoint |
-| `src/routes/contacts.ts` | 1 | Contact management API |
-| `src/data/disposable-domains.json` | 1 | ~3000 known disposable domains |
-| `src/services/scoringEngine.ts` | 2 | Engagement scoring (0-100) |
-| `src/services/templateService.ts` | 2 | Template CRUD + MJML compilation |
-| `src/services/campaignService.ts` | 2 | Campaign lifecycle management |
-| `src/services/automationService.ts` | 2 | Automation workflows + execution |
-| `src/services/segmentService.ts` | 2 | Static/dynamic contact segments |
-| `src/services/webhookService.ts` | 2 | Outgoing webhook dispatch |
-| `src/routes/templates.ts` | 2 | Template API |
-| `src/routes/campaigns.ts` | 2 | Campaign API |
-| `src/routes/automations.ts` | 2 | Automation API |
-| `src/routes/segments.ts` | 2 | Segment API |
-| `src/routes/webhooks.ts` | 2 | Webhook API |
-| `src/routes/apikeys.ts` | 2 | API key management |
-| `src/services/routingEngine.ts` | 3 | Smart provider selection |
-| `src/services/pluginManager.ts` | 3 | Plugin lifecycle |
-| `frontend/src/views/ContactsView.vue` | 1 | Contact management page |
-| `frontend/src/views/TemplatesView.vue` | 2 | Template library + editor |
-| `frontend/src/views/CampaignsView.vue` | 2 | Campaign list + wizard |
-| `frontend/src/views/AutomationsView.vue` | 2 | Automation builder |
-| `frontend/src/views/SegmentsView.vue` | 2 | Segment management |
-| `frontend/src/lib/sse.ts` | 1 | SSE client composable |
-| `frontend/src/components/contacts/ImportWizard.vue` | 1 | Import with field mapping |
-| `frontend/src/components/templates/TemplateEditor.vue` | 2 | HTML + MJML editor |
-| `frontend/src/components/campaigns/CampaignWizard.vue` | 2 | Step-by-step campaign builder |
-| `frontend/src/components/automations/FlowBuilder.vue` | 2 | Visual automation editor |
-| `frontend/src/components/dashboard/LiveStats.vue` | 1 | SSE-powered real-time stats |
+| File | Purpose |
+|------|---------|
+| `src/services/queueEngine.ts` | SQLite persistent job queue |
+| `src/services/retryEngine.ts` | Exponential backoff + error classification |
+| `src/services/suppressionService.ts` | Bounce/unsubscribe suppression |
+| `src/services/validationService.ts` | Email validation (MX, syntax, disposable) |
+| `src/services/contactService.ts` | Contact list CRUD + import/export |
+| `src/services/eventBus.ts` | In-memory pub/sub for SSE |
+| `src/services/scoringEngine.ts` | Engagement scoring (0-100) |
+| `src/services/templateService.ts` | Template CRUD + MJML compilation |
+| `src/services/campaignService.ts` | Campaign lifecycle management |
+| `src/services/automationService.ts` | Automation workflows + execution |
+| `src/services/segmentService.ts` | Static/dynamic contact segments |
+| `src/services/webhookService.ts` | Outgoing webhook dispatch |
+| `src/services/routingEngine.ts` | Smart provider selection |
+| `src/services/pluginManager.ts` | Plugin lifecycle |
+| `src/routes/events.ts` | SSE streaming endpoint |
+| `src/routes/contacts.ts` | Contact management API |
+| `src/routes/templates.ts` | Template API |
+| `src/routes/campaigns.ts` | Campaign API |
+| `src/routes/automations.ts` | Automation API |
+| `src/routes/webhooks.ts` | Webhook API |
+| `src/routes/apikeys.ts` | API key management |
+| `src/data/disposable-domains.json` | ~3000 known disposable domains |
+| `frontend/src/views/ContactsView.vue` | Contact management page |
+| `frontend/src/views/TemplatesView.vue` | Template library + editor |
+| `frontend/src/views/CampaignsView.vue` | Campaign list + wizard |
+| `frontend/src/views/AutomationsView.vue` | Automation builder |
+| `frontend/src/lib/sse.ts` | SSE client composable |
 
 ### Modified Files
 
@@ -893,21 +888,19 @@ SSE endpoint streams events per campaign or globally per user.
 
 ## 12. Dependencies
 
-### Phase 1 — Zero new external dependencies
+### Design Principle
+
+Use built-ins first. Bun has SQLite, DNS, and fast HTTP. Hono has SSE. Only add a dependency when there's no reasonable built-in alternative.
 
 | Need | Solution |
 |------|----------|
 | Job queue DB | `bun:sqlite` (built-in) |
 | MX lookup | `dns/promises` (built-in) |
 | SSE streaming | `hono/streaming` (built-in) |
-
-### Phase 2 — No new dependencies
-
-Templates use raw HTML + Quill editor (already installed).
-
-### Design Principle
-
-Use built-ins first. Bun has SQLite, DNS, and fast HTTP. Hono has SSE. Only add a dependency when there's no reasonable built-in alternative.
+| Visual email builder | GrapesJS |
+| MJML compilation | `mjml` |
+| Visual automation editor | Vue Flow |
+| UI components | shadcn-vue + reka-ui |
 
 ---
 
@@ -925,39 +918,19 @@ All workers are started in `src/app.ts` on server boot and use SQLite/D1 for sta
 
 ---
 
-## 14. Implementation Order
+## 14. Feature Areas
 
-```
-Phase 1 — Foundation (P0):
-  1.  Queue Engine (queueEngine.ts)              ← Foundation
-  2.  Retry Engine (retryEngine.ts)              ← Used by queue
-  3.  Suppression Service                        ← Used by queue
-  4.  Refactor batchService → use queue          ← Integrate
-  5.  Contact Service + Import                   ← Contact management
-  6.  Contact Import Wizard (frontend)           ← Field mapping UI
-  7.  Email Validation Service                   ← Pre-send check
-  8.  Compliance Headers                         ← emailService update
-  9.  Bounce Detection + Unsubscribe Endpoint    ← Worker update
-  10. Event Bus + SSE                            ← Real-time
-  11. Frontend: Contacts page + Live dashboard   ← UI
+All features are implemented. The system covers:
 
-Phase 2 — Marketing Features (P1):
-  12. Scoring Engine                             ← Engagement scores
-  13. Template Service + Template Editor          ← Template library
-  14. Campaign Service + Campaign Wizard          ← Full campaign lifecycle
-  15. Segmentation Engine                        ← Dynamic/static segments
-  16. Automation Service + Flow Builder           ← Drip sequences
-  17. Automation Worker                           ← Background execution
-  18. A/B Testing                                ← Campaign variants
-  19. Webhook System                             ← Outgoing events
-  20. API Key Auth                               ← Programmatic access
-
-Phase 3 — Intelligence & Scale (P2):
-  21. Smart Provider Routing                     ← Score-based selection
-  22. Email Warmup                               ← Volume ramp
-  23. Campaign Calendar                          ← Visual scheduling
-  24. Advanced Analytics + Reports               ← Deep insights
-  25. Plugin System                              ← Extensibility
-  26. CLI Tool                                   ← Terminal access
-  27. Multi-Language Templates                   ← i18n
-```
+1. Queue Engine + Retry Engine — Persistent job processing with error recovery
+2. Contact Management — CRUD, import, validation, scoring, segmentation
+3. Template System — Library, GrapesJS builder, MJML, variables, preview
+4. Campaign Lifecycle — Wizard, scheduling, A/B testing, calendar, rotation
+5. Automation — Visual flowchart editor, 15 node types, background execution
+6. Tracking — Cloudflare Worker, open/click/unsubscribe, D1 analytics
+7. Bounce/Compliance — 5 provider parsers, suppression, RFC 8058 headers
+8. Analytics — Reports, heatmaps, device breakdown, recipient profiles
+9. Forms & Pages — Form builder, landing pages, embed codes
+10. API & Webhooks — API keys, outgoing webhooks, HMAC signing
+11. Multi-Org & RBAC — Organizations, roles, teams, permissions, audit
+12. Platform Admin — System mailer, tracking setup, user/org management

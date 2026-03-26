@@ -13,11 +13,7 @@ onMounted(async () => {
 
 <template>
   <div id="app">
-    <RouterView v-slot="{ Component }">
-      <Transition name="fade" mode="out-in">
-        <component :is="Component" />
-      </Transition>
-    </RouterView>
+    <RouterView />
     <ToastContainer />
   </div>
 </template>
@@ -25,32 +21,5 @@ onMounted(async () => {
 <style>
 #app {
   min-height: 100vh;
-}
-
-.fade-enter-active {
-  transition: opacity 0.2s ease;
-}
-.fade-leave-active {
-  transition: opacity 0.12s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.page-enter-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-.page-leave-active {
-  transition: opacity 0.12s ease;
-}
-.page-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
-}
-.page-leave-to {
-  opacity: 0;
 }
 </style>

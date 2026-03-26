@@ -52,10 +52,10 @@ const titleMap = {
             <div class="text-xs font-semibold uppercase tracking-wider mb-0.5" :class="textMap[toast.type]">
               {{ titleMap[toast.type] }}
             </div>
-            <span class="text-sm text-text-primary leading-snug">{{ toast.message }}</span>
+            <span class="text-sm text-foreground leading-snug">{{ toast.message }}</span>
           </div>
           <button
-            class="shrink-0 p-1.5 -mr-1 -mt-0.5 rounded-lg hover:bg-white/10 text-text-muted cursor-pointer transition-colors duration-150"
+            class="shrink-0 p-1.5 -mr-1 -mt-0.5 rounded-lg hover:bg-white/10 text-muted-foreground cursor-pointer transition-colors duration-150"
             @click="remove(toast.id)"
             aria-label="Dismiss notification"
           >

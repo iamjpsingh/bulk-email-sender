@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { HelpCircle } from 'lucide-vue-next'
-import Tooltip from './Tooltip.vue'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 withDefaults(defineProps<{
   text: string
@@ -13,9 +13,16 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <Tooltip :content="text" :side="side">
-    <span class="inline-flex items-center text-text-muted hover:text-text-secondary cursor-help transition-colors">
-      <HelpCircle :size="size" />
-    </span>
-  </Tooltip>
+  <TooltipProvider :delay-duration="300">
+    <Tooltip>
+      <TooltipTrigger as-child>
+        <span class="inline-flex items-center text-muted-foreground hover:text-foreground cursor-help transition-colors">
+          <HelpCircle :size="size" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent :side="side">
+        {{ text }}
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
 </template>

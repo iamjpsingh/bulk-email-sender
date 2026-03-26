@@ -8,6 +8,7 @@ import StatusBadge from '../components/ui/StatusBadge.vue'
 import ProgressBar from '../components/ui/ProgressBar.vue'
 import Skeleton from '../components/ui/Skeleton.vue'
 import AlertBanner from '../components/ui/AlertBanner.vue'
+import { Button } from '@/components/ui/button'
 import { useToast } from '../composables/useToast'
 import {
   useCampaign,
@@ -170,7 +171,7 @@ function campaignTypeLabel(type: string | undefined): string {
     <!-- Back Button -->
     <router-link
       to="/campaigns"
-      class="inline-flex items-center gap-2 text-text-muted text-sm mb-6 hover:text-text-primary transition-colors duration-150 no-underline"
+      class="inline-flex items-center gap-2 text-muted-foreground text-sm mb-6 hover:text-foreground transition-colors duration-150 no-underline"
     >
       <ArrowLeft :size="16" />
       Back to Campaigns
@@ -188,7 +189,7 @@ function campaignTypeLabel(type: string | undefined): string {
     <AlertBanner v-else-if="campaignError" type="error">
       <div class="flex items-center gap-3">
         <span>{{ (campaignError as Error).message || 'Failed to load campaign' }}</span>
-        <button class="btn-ghost btn-sm" @click="refreshData"><RefreshCw :size="14" /> Retry</button>
+        <Button variant="ghost" size="sm" @click="refreshData"><RefreshCw :size="14" /> Retry</Button>
       </div>
     </AlertBanner>
 
@@ -198,79 +199,82 @@ function campaignTypeLabel(type: string | undefined): string {
       <header class="flex justify-between items-start mb-8 flex-wrap gap-4">
         <div>
           <div class="flex items-center gap-3 mb-2">
-            <h1 class="text-2xl font-semibold m-0 text-text-primary">{{ campaign.name }}</h1>
+            <h1 class="text-2xl font-semibold m-0 text-foreground">{{ campaign.name }}</h1>
             <StatusBadge :status="campaign.status" type="campaign" />
           </div>
-          <p class="text-text-muted text-sm m-0">
+          <p class="text-muted-foreground text-sm m-0">
             {{ campaignTypeLabel(campaign.type) }} campaign
             <span v-if="campaign.created_at"> &middot; Created {{ formatDate(campaign.created_at) }}</span>
           </p>
         </div>
 
         <div class="flex items-center gap-2 flex-wrap">
-          <button class="btn-ghost text-sm" :disabled="!!actionInProgress" @click="refreshData">
+          <Button variant="ghost" size="sm" :disabled="!!actionInProgress" @click="refreshData">
             <RefreshCw :size="14" />
-          </button>
+          </Button>
 
-          <button
+          <Button
             v-if="canLaunch"
-            class="btn-primary text-sm"
+            size="sm"
             :disabled="!!actionInProgress"
             @click="handleAction('launch')"
           >
             <Loader2 v-if="actionInProgress === 'launch'" :size="14" class="spin" />
             <Rocket v-else :size="14" />
             Launch
-          </button>
+          </Button>
 
-          <button
+          <Button
             v-if="canPause"
-            class="btn-secondary text-sm"
+            variant="secondary"
+            size="sm"
             :disabled="!!actionInProgress"
             @click="handleAction('pause')"
           >
             <Loader2 v-if="actionInProgress === 'pause'" :size="14" class="spin" />
             <Pause v-else :size="14" />
             Pause
-          </button>
+          </Button>
 
-          <button
+          <Button
             v-if="canCancel"
-            class="btn-danger text-sm"
+            variant="destructive"
+            size="sm"
             :disabled="!!actionInProgress"
             @click="handleAction('cancel')"
           >
             <Loader2 v-if="actionInProgress === 'cancel'" :size="14" class="spin" />
             <X v-else :size="14" />
             Cancel
-          </button>
+          </Button>
 
-          <button class="btn-ghost text-sm" :disabled="!!actionInProgress" @click="handleAction('clone')">
+          <Button variant="ghost" size="sm" :disabled="!!actionInProgress" @click="handleAction('clone')">
             <Loader2 v-if="actionInProgress === 'clone'" :size="14" class="spin" />
             <Copy v-else :size="14" />
             Clone
-          </button>
+          </Button>
 
-          <button
+          <Button
             v-if="canArchive"
-            class="btn-ghost text-sm"
+            variant="ghost"
+            size="sm"
             :disabled="!!actionInProgress"
             @click="handleAction('archive')"
           >
             <Loader2 v-if="actionInProgress === 'archive'" :size="14" class="spin" />
             <Archive v-else :size="14" />
             Archive
-          </button>
+          </Button>
         </div>
       </header>
 
       <!-- Progress Bar -->
-      <div class="bg-bg-card border border-border rounded-xl p-5 mb-6">
+      <div class="bg-card border border-border rounded-xl p-5 mb-6">
         <div class="flex items-center justify-between mb-3">
-          <span class="text-sm text-text-muted font-medium">Send Progress</span>
-          <span class="text-sm font-semibold text-text-primary">
+          <span class="text-sm text-muted-foreground font-medium">Send Progress</span>
+          <span class="text-sm font-semibold text-foreground">
             {{ formatNumber(campaign.sent_count) }} / {{ formatNumber(campaign.total_recipients) }}
-            <span class="text-text-muted font-normal ml-1">({{ progressPercent }}%)</span>
+            <span class="text-muted-foreground font-normal ml-1">({{ progressPercent }}%)</span>
           </span>
         </div>
         <ProgressBar :value="progressPercent" variant="accent" size="md" />
@@ -293,71 +297,71 @@ function campaignTypeLabel(type: string | undefined): string {
       </div>
 
       <!-- Campaign Details -->
-      <div class="bg-bg-card border border-border rounded-xl p-6">
-        <h2 class="text-sm font-semibold text-text-primary mb-5">Campaign Details</h2>
+      <div class="bg-card border border-border rounded-xl p-6">
+        <h2 class="text-sm font-semibold text-foreground mb-5">Campaign Details</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
           <div class="flex items-start gap-3">
-            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
-              <Mail :size="14" class="text-text-muted" />
+            <div class="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <Mail :size="14" class="text-muted-foreground" />
             </div>
             <div>
-              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">Subject</div>
-              <div class="text-sm text-text-primary">{{ campaign.subject || '-' }}</div>
+              <div class="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Subject</div>
+              <div class="text-sm text-foreground">{{ campaign.subject || '-' }}</div>
             </div>
           </div>
 
           <div class="flex items-start gap-3">
-            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
-              <Tag :size="14" class="text-text-muted" />
+            <div class="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <Tag :size="14" class="text-muted-foreground" />
             </div>
             <div>
-              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">Type</div>
-              <div class="text-sm text-text-primary">{{ campaignTypeLabel(campaign.type) }}</div>
+              <div class="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Type</div>
+              <div class="text-sm text-foreground">{{ campaignTypeLabel(campaign.type) }}</div>
             </div>
           </div>
 
           <div class="flex items-start gap-3">
-            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
-              <Send :size="14" class="text-text-muted" />
+            <div class="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <Send :size="14" class="text-muted-foreground" />
             </div>
             <div>
-              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">From</div>
-              <div class="text-sm text-text-primary">
+              <div class="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">From</div>
+              <div class="text-sm text-foreground">
                 {{ campaign.from_name || '-' }}
-                <span class="text-text-muted">&lt;{{ campaign.from_email }}&gt;</span>
+                <span class="text-muted-foreground">&lt;{{ campaign.from_email }}&gt;</span>
               </div>
             </div>
           </div>
 
           <div class="flex items-start gap-3">
-            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
-              <Mail :size="14" class="text-text-muted" />
+            <div class="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <Mail :size="14" class="text-muted-foreground" />
             </div>
             <div>
-              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">Reply-To</div>
-              <div class="text-sm text-text-primary">
+              <div class="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Reply-To</div>
+              <div class="text-sm text-foreground">
                 {{ (campaign as any).reply_to || campaign.from_email || '-' }}
               </div>
             </div>
           </div>
 
           <div class="flex items-start gap-3">
-            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
-              <Clock :size="14" class="text-text-muted" />
+            <div class="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <Clock :size="14" class="text-muted-foreground" />
             </div>
             <div>
-              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">Created</div>
-              <div class="text-sm text-text-primary">{{ formatDate(campaign.created_at) }}</div>
+              <div class="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Created</div>
+              <div class="text-sm text-foreground">{{ formatDate(campaign.created_at) }}</div>
             </div>
           </div>
 
           <div class="flex items-start gap-3">
-            <div class="w-8 h-8 rounded-lg bg-bg-tertiary flex items-center justify-center shrink-0">
-              <CalendarDays :size="14" class="text-text-muted" />
+            <div class="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <CalendarDays :size="14" class="text-muted-foreground" />
             </div>
             <div>
-              <div class="text-[11px] text-text-muted font-medium uppercase tracking-wider mb-0.5">Scheduled At</div>
-              <div class="text-sm text-text-primary">{{ formatDate(campaign.scheduled_at) }}</div>
+              <div class="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Scheduled At</div>
+              <div class="text-sm text-foreground">{{ formatDate(campaign.scheduled_at) }}</div>
             </div>
           </div>
         </div>

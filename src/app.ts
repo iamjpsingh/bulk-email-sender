@@ -12,7 +12,7 @@ import { mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
 
 // Configuration
-import { SERVER, CORS, AUTH, OAUTH, API, DIRECTORIES, ENV, COOKIE, WORKERS } from './config'
+import { SERVER, CORS, AUTH, API, DIRECTORIES, ENV, COOKIE, WORKERS } from './config'
 import { logger } from './utils/logger'
 
 // Database initialization (must run before services)
@@ -102,9 +102,15 @@ app.use('/api/auth/register', authRateLimit)
 app.use('/api/send', sendRateLimit)
 app.use('/api/parse-excel', uploadRateLimit)
 
-// Authentication
+// Authentication — only protect /api routes; SPA routes are handled by the frontend
 app.use('*', async (c, next) => {
   const path = c.req.path
+
+  // Skip auth for non-API routes (SPA pages, static assets)
+  if (!path.startsWith('/api') && path !== '/health') {
+    return next()
+  }
+
   const isPublic = AUTH.PUBLIC_PATHS.some((p) => path.startsWith(p)) || path === '/'
 
   // Public form submission endpoints (POST /api/forms/:id/submit)
@@ -190,6 +196,30 @@ app.get('/api/user/info', (c) => {
 })
 
 // ============================================================================
+// SPA Fallback — serve frontend/dist in production
+// ============================================================================
+
+// Serve built frontend assets (JS, CSS, images, etc.)
+app.use('/*', serveStatic({ root: './frontend/dist' }))
+
+// SPA catch-all: any non-API GET that didn't match a static file → index.html
+app.get('*', async (c) => {
+  const path = c.req.path
+  // Don't catch API routes or health endpoint
+  if (path.startsWith('/api') || path === '/health') {
+    return c.json({ success: false, message: `Not found: ${path}` }, 404)
+  }
+  // Serve index.html for SPA client-side routing
+  try {
+    const html = await Bun.file('./frontend/dist/index.html').text()
+    return c.html(html)
+  } catch {
+    // Frontend not built yet — return helpful message
+    return c.json({ success: false, message: 'Frontend not built. Run: cd frontend && npm run build' }, 404)
+  }
+})
+
+// ============================================================================
 // Error Handlers
 // ============================================================================
 
@@ -244,10 +274,9 @@ async function initialize() {
 
   // Log startup info
   logger.startup(`\n🚀 ${API.NAME} v${API.VERSION}`)
-  logger.startup(`   Google Gmail: ${OAUTH.GOOGLE.isConfigured() ? '✅' : '⚠️  not configured'}`)
-  logger.startup(`   Microsoft Outlook: ${OAUTH.MICROSOFT.isConfigured() ? '✅' : '⚠️  not configured'}`)
-  logger.startup(`   Tracking: ${trackingConfigured ? '✅' : '⚠️  (set TRACKING_WORKER_URL)'}`)
+  logger.startup(`   Tracking: ${trackingConfigured ? '✅' : '⚠️  (configure via Settings → Tracking or set TRACKING_WORKER_URL)'}`)
   logger.startup(`   Queue: ✅ SQLite${recovered > 0 ? ` — recovered ${recovered} interrupted job(s)` : ''}`)
+  logger.startup(`   OAuth: Configure via Platform Settings → System Mailer`)
   logger.startup(`   API: http://localhost:${SERVER.PORT}`)
   logger.startup(`   Frontend: ${SERVER.FRONTEND_URL}`)
   logger.startup('✅ Ready\n')

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { contactsApi, type TimelineEvent } from '../../lib/api'
-import { Mail, MousePointer, AlertTriangle, Tag, UserCog, Loader2, Clock, Link, FormInput, Zap, MessageSquare } from 'lucide-vue-next'
+import { Mail, AlertTriangle, Tag, UserCog, Loader2, Clock, Link, FormInput, Zap, MessageSquare } from 'lucide-vue-next'
 
 const props = defineProps<{
   contactId: string
@@ -85,12 +85,12 @@ onMounted(loadTimeline)
 <template>
   <div>
     <div v-if="loading" class="flex items-center justify-center py-8">
-      <Loader2 :size="18" class="animate-spin text-text-muted" />
+      <Loader2 :size="18" class="animate-spin text-muted-foreground" />
     </div>
 
-    <div v-else-if="error" class="text-sm text-text-muted text-center py-6">{{ error }}</div>
+    <div v-else-if="error" class="text-sm text-muted-foreground text-center py-6">{{ error }}</div>
 
-    <div v-else-if="events.length === 0" class="text-sm text-text-muted text-center py-6">No activity yet</div>
+    <div v-else-if="events.length === 0" class="text-sm text-muted-foreground text-center py-6">No activity yet</div>
 
     <div v-else class="relative pl-6">
       <!-- Timeline line -->
@@ -106,12 +106,12 @@ onMounted(loadTimeline)
         </div>
 
         <!-- Content -->
-        <div class="bg-surface-1 border border-border rounded-lg px-3 py-2.5">
+        <div class="bg-secondary border border-border rounded-lg px-3 py-2.5">
           <div class="flex items-center justify-between gap-2">
-            <span class="text-sm text-text-primary">{{ event.description }}</span>
-            <span class="text-[10px] text-text-muted whitespace-nowrap shrink-0">{{ formatDate(event.created_at) }}</span>
+            <span class="text-sm text-foreground">{{ event.description }}</span>
+            <span class="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">{{ formatDate(event.created_at) }}</span>
           </div>
-          <div v-if="event.metadata" class="mt-1 text-[11px] text-text-muted">
+          <div v-if="event.metadata" class="mt-1 text-[11px] text-muted-foreground">
             <template v-if="event.metadata.subject">Subject: {{ event.metadata.subject }}</template>
             <template v-else-if="event.metadata.url">URL: {{ event.metadata.url }}</template>
             <template v-else-if="event.metadata.tag">Tag: {{ event.metadata.tag }}</template>

@@ -5,11 +5,17 @@ import { adminApi } from '../../lib/api/admin'
 import type { SystemMailerConfig, ProviderType } from '../../lib/api/admin'
 import { cloudflareApi } from '../../lib/api/cloudflare'
 import { useToast } from '../../composables/useToast'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Skeleton from '../../components/ui/Skeleton.vue'
 import InfoTip from '../../components/ui/InfoTip.vue'
 import {
-  Mail, Loader2, CheckCircle, XCircle, Send, Trash2, Server, Cloud, Globe, Zap,
-  Settings, Link2, AlertTriangle, Radio, Webhook, Copy,
+  Mail, CheckCircle, XCircle, Send, Trash2, Server, Cloud, Globe, Zap,
+  Settings, Link2, AlertTriangle, Copy,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -108,8 +114,6 @@ const setupStatus = computed(() => ({
   tracking: cfConnected.value,
   webhooks: webhookRegistered.value,
 }))
-
-const setupComplete = computed(() => setupStatus.value.mailer)
 
 // Base URL for redirect URIs (use backend URL, not frontend URL)
 const baseUrl = computed(() => {
@@ -275,11 +279,11 @@ onMounted(() => {
   <div>
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-base font-semibold text-text-primary flex items-center gap-2">
+        <h2 class="text-base font-semibold text-foreground flex items-center gap-2">
           <Settings :size="18" class="text-accent" />
           Platform Settings
         </h2>
-        <p class="text-sm text-text-muted mt-0.5">Configure system email and OAuth for the entire platform</p>
+        <p class="text-sm text-muted-foreground mt-0.5">Configure system email and OAuth for the entire platform</p>
       </div>
     </div>
 
@@ -288,8 +292,8 @@ onMounted(() => {
     <div v-else class="max-w-2xl space-y-6">
 
       <!-- Setup Status -->
-      <div class="bg-bg-card border border-border rounded-xl p-5">
-        <h3 class="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2">
+      <div class="bg-card border border-border rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
           Setup Status
           <InfoTip text="Complete these steps to enable all platform features" />
         </h3>
@@ -297,35 +301,35 @@ onMounted(() => {
           <div class="flex items-center gap-3 text-sm">
             <CheckCircle v-if="setupStatus.mailer" :size="16" class="text-success shrink-0" />
             <XCircle v-else :size="16" class="text-error shrink-0" />
-            <span :class="setupStatus.mailer ? 'text-text-primary' : 'text-text-muted'">
+            <span :class="setupStatus.mailer ? 'text-foreground' : 'text-muted-foreground'">
               System Mailer — {{ setupStatus.mailer ? 'Configured' : 'Required for password reset, invitations' }}
             </span>
           </div>
           <div class="flex items-center gap-3 text-sm">
             <CheckCircle v-if="setupStatus.googleOAuth" :size="16" class="text-success shrink-0" />
             <AlertTriangle v-else :size="16" class="text-warning shrink-0" />
-            <span :class="setupStatus.googleOAuth ? 'text-text-primary' : 'text-text-muted'">
+            <span :class="setupStatus.googleOAuth ? 'text-foreground' : 'text-muted-foreground'">
               Google OAuth — {{ setupStatus.googleOAuth ? 'Configured' : 'Optional — enables Gmail campaign sending' }}
             </span>
           </div>
           <div class="flex items-center gap-3 text-sm">
             <CheckCircle v-if="setupStatus.microsoftOAuth" :size="16" class="text-success shrink-0" />
             <AlertTriangle v-else :size="16" class="text-warning shrink-0" />
-            <span :class="setupStatus.microsoftOAuth ? 'text-text-primary' : 'text-text-muted'">
+            <span :class="setupStatus.microsoftOAuth ? 'text-foreground' : 'text-muted-foreground'">
               Microsoft OAuth — {{ setupStatus.microsoftOAuth ? 'Configured' : 'Optional — enables Outlook campaign sending' }}
             </span>
           </div>
           <div class="flex items-center gap-3 text-sm">
             <CheckCircle v-if="setupStatus.webhooks" :size="16" class="text-success shrink-0" />
             <AlertTriangle v-else :size="16" class="text-warning shrink-0" />
-            <span :class="setupStatus.webhooks ? 'text-text-primary' : 'text-text-muted'">
+            <span :class="setupStatus.webhooks ? 'text-foreground' : 'text-muted-foreground'">
               Bounce Webhooks — {{ setupStatus.webhooks ? `Auto-registered (${webhookProvider})` : 'Auto-registers when mailer is saved' }}
             </span>
           </div>
           <div class="flex items-center gap-3 text-sm">
             <CheckCircle v-if="setupStatus.tracking" :size="16" class="text-success shrink-0" />
             <AlertTriangle v-else :size="16" class="text-warning shrink-0" />
-            <span :class="setupStatus.tracking ? 'text-text-primary' : 'text-text-muted'">
+            <span :class="setupStatus.tracking ? 'text-foreground' : 'text-muted-foreground'">
               Email Tracking — {{ setupStatus.tracking ? `Cloudflare connected (${cfAccountName})` : 'Optional — deploy Workers for open/click tracking' }}
             </span>
           </div>
@@ -333,116 +337,116 @@ onMounted(() => {
       </div>
 
       <!-- OAuth Credentials (Google & Microsoft) -->
-      <div class="bg-bg-card border border-border rounded-xl p-5">
-        <h3 class="text-sm font-semibold text-text-primary mb-1 flex items-center gap-2">
+      <div class="bg-card border border-border rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
           <Link2 :size="16" class="text-accent" />
           OAuth App Credentials
           <InfoTip text="Required for Gmail/Outlook OAuth flows — both for campaign sending (per-user) and system mailer. Create apps in Google Cloud Console and Azure AD." />
         </h3>
-        <p class="text-xs text-text-muted mb-4">These enable users to connect Gmail/Outlook for campaign sending. You'll need the redirect URLs below when creating your OAuth apps.</p>
+        <p class="text-xs text-muted-foreground mb-4">These enable users to connect Gmail/Outlook for campaign sending. You'll need the redirect URLs below when creating your OAuth apps.</p>
 
         <!-- Google -->
-        <div class="mb-4 p-3 bg-bg-tertiary rounded-lg">
+        <div class="mb-4 p-3 bg-muted rounded-lg">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-medium text-text-primary">Google OAuth</span>
-            <span v-if="googleOAuthSaved" class="badge-sm badge-success">Saved</span>
+            <span class="text-sm font-medium text-foreground">Google OAuth</span>
+            <Badge v-if="googleOAuthSaved" variant="success">Saved</Badge>
           </div>
 
           <!-- Redirect URLs -->
-          <div class="mb-3 p-2.5 bg-surface-0 rounded-lg">
-            <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1.5">Add these redirect URIs in Google Cloud Console</div>
+          <div class="mb-3 p-2.5 bg-background rounded-lg">
+            <div class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Add these redirect URIs in Google Cloud Console</div>
             <div class="flex items-center gap-2 mb-1">
               <code class="text-[11px] text-accent font-mono flex-1 break-all">{{ baseUrl }}/api/auth/google/callback</code>
-              <button class="text-text-muted hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/auth/google/callback`)"><Copy :size="11" /></button>
+              <button class="text-muted-foreground hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/auth/google/callback`)"><Copy :size="11" /></button>
             </div>
             <div class="flex items-center gap-2">
               <code class="text-[11px] text-accent font-mono flex-1 break-all">{{ baseUrl }}/api/admin/platform/settings/mailer/oauth/callback</code>
-              <button class="text-text-muted hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/admin/platform/settings/mailer/oauth/callback`)"><Copy :size="11" /></button>
+              <button class="text-muted-foreground hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/admin/platform/settings/mailer/oauth/callback`)"><Copy :size="11" /></button>
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
-            <div class="form-group mb-0">
-              <label class="form-label text-xs">Client ID</label>
-              <input v-model="googleClientId" type="text" class="form-input text-sm" placeholder="xxx.apps.googleusercontent.com" />
+            <div class="mb-0">
+              <Label class="text-xs">Client ID</Label>
+              <Input v-model="googleClientId" type="text" class="text-sm" placeholder="xxx.apps.googleusercontent.com" />
             </div>
-            <div class="form-group mb-0">
-              <label class="form-label text-xs">Client Secret</label>
-              <input v-model="googleClientSecret" type="password" class="form-input text-sm" placeholder="********" />
+            <div class="mb-0">
+              <Label class="text-xs">Client Secret</Label>
+              <Input v-model="googleClientSecret" type="password" class="text-sm" placeholder="********" />
             </div>
           </div>
-          <button class="btn-secondary btn-sm mt-2" :disabled="savingOAuth || !googleClientId || !googleClientSecret" @click="saveOAuthCreds('google')">
-            <Loader2 v-if="savingOAuth" :size="14" class="animate-spin" /> Save Google Credentials
-          </button>
+          <Button variant="secondary" size="sm" class="mt-2" :disabled="savingOAuth || !googleClientId || !googleClientSecret" :loading="savingOAuth" @click="saveOAuthCreds('google')">
+            Save Google Credentials
+          </Button>
         </div>
 
         <!-- Microsoft -->
-        <div class="mb-4 p-3 bg-bg-tertiary rounded-lg">
+        <div class="mb-4 p-3 bg-muted rounded-lg">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-medium text-text-primary">Microsoft OAuth</span>
-            <span v-if="msOAuthSaved" class="badge-sm badge-success">Saved</span>
+            <span class="text-sm font-medium text-foreground">Microsoft OAuth</span>
+            <Badge v-if="msOAuthSaved" variant="success">Saved</Badge>
           </div>
 
           <!-- Redirect URLs -->
-          <div class="mb-3 p-2.5 bg-surface-0 rounded-lg">
-            <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1.5">Add these redirect URIs in Azure AD App Registration</div>
+          <div class="mb-3 p-2.5 bg-background rounded-lg">
+            <div class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Add these redirect URIs in Azure AD App Registration</div>
             <div class="flex items-center gap-2 mb-1">
               <code class="text-[11px] text-accent font-mono flex-1 break-all">{{ baseUrl }}/api/auth/microsoft/callback</code>
-              <button class="text-text-muted hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/auth/microsoft/callback`)"><Copy :size="11" /></button>
+              <button class="text-muted-foreground hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/auth/microsoft/callback`)"><Copy :size="11" /></button>
             </div>
             <div class="flex items-center gap-2">
               <code class="text-[11px] text-accent font-mono flex-1 break-all">{{ baseUrl }}/api/admin/platform/settings/mailer/oauth/callback</code>
-              <button class="text-text-muted hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/admin/platform/settings/mailer/oauth/callback`)"><Copy :size="11" /></button>
+              <button class="text-muted-foreground hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/admin/platform/settings/mailer/oauth/callback`)"><Copy :size="11" /></button>
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
-            <div class="form-group mb-0">
-              <label class="form-label text-xs">Client ID</label>
-              <input v-model="msClientId" type="text" class="form-input text-sm" placeholder="Application (client) ID" />
+            <div class="mb-0">
+              <Label class="text-xs">Client ID</Label>
+              <Input v-model="msClientId" type="text" class="text-sm" placeholder="Application (client) ID" />
             </div>
-            <div class="form-group mb-0">
-              <label class="form-label text-xs">Client Secret</label>
-              <input v-model="msClientSecret" type="password" class="form-input text-sm" placeholder="********" />
+            <div class="mb-0">
+              <Label class="text-xs">Client Secret</Label>
+              <Input v-model="msClientSecret" type="password" class="text-sm" placeholder="********" />
             </div>
           </div>
-          <button class="btn-secondary btn-sm mt-2" :disabled="savingOAuth || !msClientId || !msClientSecret" @click="saveOAuthCreds('microsoft')">
-            <Loader2 v-if="savingOAuth" :size="14" class="animate-spin" /> Save Microsoft Credentials
-          </button>
+          <Button variant="secondary" size="sm" class="mt-2" :disabled="savingOAuth || !msClientId || !msClientSecret" :loading="savingOAuth" @click="saveOAuthCreds('microsoft')">
+            Save Microsoft Credentials
+          </Button>
         </div>
 
         <!-- Cloudflare -->
-        <div class="p-3 bg-bg-tertiary rounded-lg">
+        <div class="p-3 bg-muted rounded-lg">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-medium text-text-primary">Cloudflare OAuth</span>
-            <span v-if="cfConnected" class="badge-sm badge-success">Connected</span>
+            <span class="text-sm font-medium text-foreground">Cloudflare OAuth</span>
+            <Badge v-if="cfConnected" variant="success">Connected</Badge>
           </div>
 
           <!-- Redirect URL -->
-          <div class="mb-3 p-2.5 bg-surface-0 rounded-lg">
-            <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1.5">Add this redirect URI in Cloudflare Developer Dashboard</div>
+          <div class="mb-3 p-2.5 bg-background rounded-lg">
+            <div class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Add this redirect URI in Cloudflare Developer Dashboard</div>
             <div class="flex items-center gap-2">
               <code class="text-[11px] text-accent font-mono flex-1 break-all">{{ baseUrl }}/api/admin/cloudflare/callback</code>
-              <button class="text-text-muted hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/admin/cloudflare/callback`)"><Copy :size="11" /></button>
+              <button class="text-muted-foreground hover:text-accent p-0.5" @click="copyToClipboard(`${baseUrl}/api/admin/cloudflare/callback`)"><Copy :size="11" /></button>
             </div>
           </div>
 
-          <p class="text-xs text-text-muted mb-3">Required for one-click Cloudflare Worker deployment for email tracking. Create an OAuth app in Cloudflare and add the redirect URI above.</p>
+          <p class="text-xs text-muted-foreground mb-3">Required for one-click Cloudflare Worker deployment for email tracking. Create an OAuth app in Cloudflare and add the redirect URI above.</p>
           <p v-if="cfConnected" class="text-xs text-green-400 mb-2">Connected to {{ cfAccountName }}</p>
         </div>
       </div>
 
       <!-- System Mailer -->
-      <div class="bg-bg-card border border-border rounded-xl p-5">
+      <div class="bg-card border border-border rounded-xl p-5">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-semibold text-text-primary flex items-center gap-2">
+          <h3 class="text-sm font-semibold text-foreground flex items-center gap-2">
             <Mail :size="16" class="text-accent" />
             System Mailer
             <InfoTip text="Used for password reset, invitation, and notification emails. Separate from campaign sending." />
           </h3>
-          <span v-if="isConfigured" class="badge-sm badge-success flex items-center gap-1">
+          <Badge v-if="isConfigured" variant="success" class="flex items-center gap-1">
             <CheckCircle :size="12" /> Active
-          </span>
+          </Badge>
         </div>
 
         <!-- Provider Selection -->
@@ -459,8 +463,8 @@ onMounted(() => {
             ]"
             @click="provider = p.value"
           >
-            <component :is="p.icon" :size="16" :class="provider === p.value ? 'text-accent' : 'text-text-muted'" />
-            <span class="text-xs font-medium" :class="provider === p.value ? 'text-accent' : 'text-text-primary'">{{ p.label }}</span>
+            <component :is="p.icon" :size="16" :class="provider === p.value ? 'text-accent' : 'text-muted-foreground'" />
+            <span class="text-xs font-medium" :class="provider === p.value ? 'text-accent' : 'text-foreground'">{{ p.label }}</span>
           </button>
         </div>
 
@@ -471,115 +475,125 @@ onMounted(() => {
 
         <!-- Sender Details (non-OAuth providers) -->
         <div v-if="!isOAuthProvider" class="grid grid-cols-2 gap-3 mb-4">
-          <div class="form-group mb-0">
-            <label class="form-label">From Name</label>
-            <input v-model="fromName" type="text" class="form-input" placeholder="Dispatch" />
+          <div class="mb-0">
+            <Label>From Name</Label>
+            <Input v-model="fromName" type="text" placeholder="Dispatch" />
           </div>
-          <div class="form-group mb-0">
-            <label class="form-label flex items-center gap-1">
+          <div class="mb-0">
+            <Label class="flex items-center gap-1">
               From Email
               <InfoTip v-if="isDomainLevel" text="Any email on your verified domain" :size="12" />
-            </label>
-            <input v-model="fromEmail" type="email" class="form-input" placeholder="noreply@yourdomain.com" />
+            </Label>
+            <Input v-model="fromEmail" type="email" placeholder="noreply@yourdomain.com" />
           </div>
         </div>
 
         <!-- SMTP -->
         <div v-if="provider === 'smtp'" class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
-            <div class="form-group mb-0">
-              <label class="form-label">Host</label>
-              <input v-model="smtpHost" type="text" class="form-input" placeholder="smtp.example.com" />
+            <div class="mb-0">
+              <Label>Host</Label>
+              <Input v-model="smtpHost" type="text" placeholder="smtp.example.com" />
             </div>
-            <div class="form-group mb-0">
-              <label class="form-label">Port</label>
-              <input v-model.number="smtpPort" type="number" class="form-input" placeholder="587" />
+            <div class="mb-0">
+              <Label>Port</Label>
+              <Input v-model="smtpPort" type="number" placeholder="587" />
             </div>
-            <div class="form-group mb-0">
-              <label class="form-label">Username</label>
-              <input v-model="smtpUsername" type="text" class="form-input" />
+            <div class="mb-0">
+              <Label>Username</Label>
+              <Input v-model="smtpUsername" type="text" />
             </div>
-            <div class="form-group mb-0">
-              <label class="form-label">Password</label>
-              <input v-model="smtpPassword" type="password" class="form-input" />
+            <div class="mb-0">
+              <Label>Password</Label>
+              <Input v-model="smtpPassword" type="password" />
             </div>
           </div>
           <label class="flex items-center gap-2 cursor-pointer">
-            <input v-model="smtpSecure" type="checkbox" class="form-checkbox" />
-            <span class="text-sm text-text-primary">SSL/TLS (port 465)</span>
+            <Checkbox v-model="smtpSecure" />
+            <span class="text-sm text-foreground">SSL/TLS (port 465)</span>
           </label>
         </div>
 
         <!-- SES -->
         <div v-if="provider === 'ses'" class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
-            <div class="form-group mb-0">
-              <label class="form-label">IAM Access Key ID</label>
-              <input v-model="sesAccessKey" type="text" class="form-input" placeholder="AKIA..." />
+            <div class="mb-0">
+              <Label>IAM Access Key ID</Label>
+              <Input v-model="sesAccessKey" type="text" placeholder="AKIA..." />
             </div>
-            <div class="form-group mb-0">
-              <label class="form-label">IAM Secret Access Key</label>
-              <input v-model="sesSecretKey" type="password" class="form-input" />
+            <div class="mb-0">
+              <Label>IAM Secret Access Key</Label>
+              <Input v-model="sesSecretKey" type="password" />
             </div>
           </div>
-          <div class="form-group mb-0">
-            <label class="form-label">Region</label>
-            <select v-model="sesRegion" class="form-input">
-              <option value="us-east-1">US East (N. Virginia)</option>
-              <option value="us-east-2">US East (Ohio)</option>
-              <option value="us-west-2">US West (Oregon)</option>
-              <option value="eu-west-1">EU (Ireland)</option>
-              <option value="eu-central-1">EU (Frankfurt)</option>
-              <option value="ap-south-1">Asia Pacific (Mumbai)</option>
-              <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
-              <option value="ap-southeast-2">Asia Pacific (Sydney)</option>
-              <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
-            </select>
+          <div class="mb-0">
+            <Label>Region</Label>
+            <Select v-model="sesRegion">
+              <SelectTrigger>
+                <SelectValue placeholder="Select region..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="us-east-1">US East (N. Virginia)</SelectItem>
+                <SelectItem value="us-east-2">US East (Ohio)</SelectItem>
+                <SelectItem value="us-west-2">US West (Oregon)</SelectItem>
+                <SelectItem value="eu-west-1">EU (Ireland)</SelectItem>
+                <SelectItem value="eu-central-1">EU (Frankfurt)</SelectItem>
+                <SelectItem value="ap-south-1">Asia Pacific (Mumbai)</SelectItem>
+                <SelectItem value="ap-southeast-1">Asia Pacific (Singapore)</SelectItem>
+                <SelectItem value="ap-southeast-2">Asia Pacific (Sydney)</SelectItem>
+                <SelectItem value="ap-northeast-1">Asia Pacific (Tokyo)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         <!-- SendGrid -->
         <div v-if="provider === 'sendgrid'">
-          <div class="form-group mb-0">
-            <label class="form-label">API Key</label>
-            <input v-model="sgApiKey" type="password" class="form-input" placeholder="SG.xxxxx" />
+          <div class="mb-0">
+            <Label>API Key</Label>
+            <Input v-model="sgApiKey" type="password" placeholder="SG.xxxxx" />
           </div>
         </div>
 
         <!-- Mailgun -->
         <div v-if="provider === 'mailgun'" class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
-            <div class="form-group mb-0">
-              <label class="form-label">API Key</label>
-              <input v-model="mgApiKey" type="password" class="form-input" placeholder="key-xxxxx" />
+            <div class="mb-0">
+              <Label>API Key</Label>
+              <Input v-model="mgApiKey" type="password" placeholder="key-xxxxx" />
             </div>
-            <div class="form-group mb-0">
-              <label class="form-label">Sending Domain</label>
-              <input v-model="mgDomain" type="text" class="form-input" placeholder="mg.yourdomain.com" />
+            <div class="mb-0">
+              <Label>Sending Domain</Label>
+              <Input v-model="mgDomain" type="text" placeholder="mg.yourdomain.com" />
             </div>
           </div>
-          <div class="form-group mb-0">
-            <label class="form-label">Region</label>
-            <select v-model="mgRegion" class="form-input">
-              <option value="us">US</option>
-              <option value="eu">EU</option>
-            </select>
+          <div class="mb-0">
+            <Label>Region</Label>
+            <Select v-model="mgRegion">
+              <SelectTrigger>
+                <SelectValue placeholder="Select region..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="us">US</SelectItem>
+                <SelectItem value="eu">EU</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         <!-- Postmark -->
         <div v-if="provider === 'postmark'">
-          <div class="form-group mb-0">
-            <label class="form-label">Server API Token</label>
-            <input v-model="pmServerToken" type="password" class="form-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          <div class="mb-0">
+            <Label>Server API Token</Label>
+            <Input v-model="pmServerToken" type="password" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
           </div>
         </div>
 
         <!-- SparkPost -->
         <div v-if="provider === 'sparkpost'">
-          <div class="form-group mb-0">
-            <label class="form-label">API Key</label>
-            <input v-model="spApiKey" type="password" class="form-input" />
+          <div class="mb-0">
+            <Label>API Key</Label>
+            <Input v-model="spApiKey" type="password" />
           </div>
         </div>
 
@@ -591,16 +605,15 @@ onMounted(() => {
             </div>
           </div>
           <div v-else>
-            <p class="text-sm text-text-muted mb-3">Connect your Google account via OAuth. Requires Google OAuth credentials saved above.</p>
-            <button
-              class="btn-primary"
+            <p class="text-sm text-muted-foreground mb-3">Connect your Google account via OAuth. Requires Google OAuth credentials saved above.</p>
+            <Button
               :disabled="!googleOAuthSaved || connectingOAuth === 'gmail'"
+              :loading="connectingOAuth === 'gmail'"
               @click="connectOAuth('gmail')"
             >
-              <Loader2 v-if="connectingOAuth === 'gmail'" :size="16" class="animate-spin" />
-              <Globe v-else :size="16" />
+              <Globe v-if="connectingOAuth !== 'gmail'" :size="16" />
               Connect Gmail
-            </button>
+            </Button>
             <p v-if="!googleOAuthSaved" class="text-xs text-warning mt-2">Save Google OAuth credentials first</p>
           </div>
         </div>
@@ -613,42 +626,39 @@ onMounted(() => {
             </div>
           </div>
           <div v-else>
-            <p class="text-sm text-text-muted mb-3">Connect your Microsoft account via OAuth. Requires Microsoft OAuth credentials saved above.</p>
-            <button
-              class="btn-primary"
+            <p class="text-sm text-muted-foreground mb-3">Connect your Microsoft account via OAuth. Requires Microsoft OAuth credentials saved above.</p>
+            <Button
               :disabled="!msOAuthSaved || connectingOAuth === 'outlook'"
+              :loading="connectingOAuth === 'outlook'"
               @click="connectOAuth('outlook')"
             >
-              <Loader2 v-if="connectingOAuth === 'outlook'" :size="16" class="animate-spin" />
-              <Globe v-else :size="16" />
+              <Globe v-if="connectingOAuth !== 'outlook'" :size="16" />
               Connect Outlook
-            </button>
+            </Button>
             <p v-if="!msOAuthSaved" class="text-xs text-warning mt-2">Save Microsoft OAuth credentials first</p>
           </div>
         </div>
 
         <!-- Actions -->
         <div class="flex items-center gap-3 flex-wrap mt-5 pt-4 border-t border-border">
-          <button v-if="!isOAuthProvider" class="btn-primary" :disabled="!canSave || saving" @click="handleSave">
-            <Loader2 v-if="saving" :size="16" class="animate-spin" /> Save Configuration
-          </button>
-          <button v-if="isConfigured" class="btn-secondary" :disabled="testing" @click="handleTest">
-            <Loader2 v-if="testing" :size="16" class="animate-spin" />
-            <CheckCircle v-else :size="16" /> Test Connection
-          </button>
-          <button v-if="isConfigured" class="btn-secondary" :disabled="sendingTest" @click="handleSendTest">
-            <Loader2 v-if="sendingTest" :size="16" class="animate-spin" />
-            <Send v-else :size="16" /> Send Test Email
-          </button>
-          <button v-if="isConfigured" class="btn-ghost text-error" :disabled="removing" @click="handleRemove">
-            <Trash2 :size="16" /> Remove
-          </button>
+          <Button v-if="!isOAuthProvider" :disabled="!canSave || saving" :loading="saving" @click="handleSave">
+            Save Configuration
+          </Button>
+          <Button v-if="isConfigured" variant="secondary" :disabled="testing" :loading="testing" @click="handleTest">
+            <CheckCircle v-if="!testing" :size="16" /> Test Connection
+          </Button>
+          <Button v-if="isConfigured" variant="secondary" :disabled="sendingTest" :loading="sendingTest" @click="handleSendTest">
+            <Send v-if="!sendingTest" :size="16" /> Send Test Email
+          </Button>
+          <Button v-if="isConfigured" variant="ghost" class="text-error" :disabled="removing" :loading="removing" @click="handleRemove">
+            <Trash2 v-if="!removing" :size="16" /> Remove
+          </Button>
         </div>
       </div>
 
       <!-- Info -->
-      <div class="bg-bg-tertiary border border-border rounded-lg p-4 text-sm text-text-muted">
-        <p class="font-medium text-text-secondary mb-1">What uses this mailer?</p>
+      <div class="bg-muted border border-border rounded-lg p-4 text-sm text-muted-foreground">
+        <p class="font-medium text-muted-foreground mb-1">What uses this mailer?</p>
         <ul class="list-disc list-inside space-y-0.5">
           <li>Password reset emails</li>
           <li>Organization invitation emails</li>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { Calendar } from 'lucide-vue-next'
+import { Input } from '@/components/ui/input'
 import DatePickerModal from './DatePickerModal.vue'
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 
 interface Emits {
   (e: 'update:modelValue', value: string): void
+  (e: 'change'): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -25,7 +27,7 @@ const showModal = ref(false)
 const displayValue = computed(() => {
   const value = props.modelValue
   if (!value) return ''
-  
+
   try {
     const date = new Date(value)
     if (isNaN(date.getTime())) return ''
@@ -47,6 +49,7 @@ function handleInputClick() {
 
 function handleDateUpdate(value: string) {
   emit('update:modelValue', value)
+  emit('change')
 }
 
 function handleModalClose() {
@@ -55,17 +58,17 @@ function handleModalClose() {
 </script>
 
 <template>
-  <div class="date-input-wrapper">
-    <input
-      :value="displayValue"
+  <div class="relative">
+    <Input
+      :model-value="displayValue"
       :placeholder="placeholder"
       :disabled="disabled"
-      class="date-input"
+      class="pr-10 cursor-pointer"
       readonly
       @click="handleInputClick"
     />
-    <Calendar :size="18" class="date-icon" />
-    
+    <Calendar :size="16" class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+
     <DatePickerModal
       :show="showModal"
       :model-value="modelValue"
@@ -74,24 +77,3 @@ function handleModalClose() {
     />
   </div>
 </template>
-
-<style scoped>
-.date-input-wrapper { position: relative; }
-.date-input {
-  width: 100%;
-  padding: 14px 48px 14px 16px;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  color: var(--color-text-primary);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-.date-input::placeholder { color: var(--color-text-muted); }
-.date-input:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1); background: var(--color-bg-primary); }
-.date-input:hover:not(:focus) { border-color: rgba(99, 102, 241, 0.3); }
-.date-input:disabled { opacity: 0.6; cursor: not-allowed; background: var(--color-bg-card); }
-.date-icon { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--color-accent); pointer-events: none; transition: color 0.2s ease; }
-</style>

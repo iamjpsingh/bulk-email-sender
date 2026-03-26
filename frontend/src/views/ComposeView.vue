@@ -11,6 +11,11 @@ import HtmlCodeEditor from '../components/compose/HtmlCodeEditor.vue'
 import Stepper from '../components/ui/Stepper.vue'
 import AlertBanner from '../components/ui/AlertBanner.vue'
 import InfoTip from '../components/ui/InfoTip.vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Send,
   Calendar,
@@ -301,10 +306,10 @@ onMounted(() => { fetchTemplates() })
           <input
             v-model="campaignName"
             type="text"
-            class="text-2xl font-semibold text-text-primary bg-transparent border-none outline-none w-full placeholder:text-text-muted/60"
+            class="text-2xl font-semibold text-foreground bg-transparent border-none outline-none w-full placeholder:text-muted-foreground/60"
             placeholder="Untitled Campaign"
           />
-          <p class="text-text-muted text-sm mt-0.5">Name your campaign so you can find it later in reports</p>
+          <p class="text-muted-foreground text-sm mt-0.5">Name your campaign so you can find it later in reports</p>
         </div>
       </div>
       <Stepper :steps="stepperSteps" :currentStep="activeStep" class="mt-5" @step-click="goToStep" />
@@ -333,16 +338,18 @@ onMounted(() => { fetchTemplates() })
             Email Provider
             <InfoTip text="Choose the SMTP configuration or connected email account to send from" side="right" />
           </h3>
-          <select v-model="selectedConfigId" class="form-select">
-            <option value="">Select provider...</option>
-            <option v-for="config in smtpConfigs" :key="config.id" :value="config.id">
-              {{ config.name }}
-              <template v-if="config.provider_type === 'google'">(Gmail)</template>
-              <template v-else-if="config.provider_type === 'microsoft'">(Outlook)</template>
-              <template v-else>({{ config.host }})</template>
-            </option>
-          </select>
-          <p v-if="smtpConfigs.length === 0" class="text-text-muted text-[13px] mt-2">
+          <Select v-model="selectedConfigId">
+            <SelectTrigger><SelectValue placeholder="Select provider..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="config in smtpConfigs" :key="config.id" :value="config.id">
+                {{ config.name }}
+                <template v-if="config.provider_type === 'google'">(Gmail)</template>
+                <template v-else-if="config.provider_type === 'microsoft'">(Outlook)</template>
+                <template v-else>({{ config.host }})</template>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p v-if="smtpConfigs.length === 0" class="text-muted-foreground text-[13px] mt-2">
             No providers configured. <router-link to="/settings/smtp" class="text-accent hover:underline">Add one</router-link>
           </p>
           <div v-else-if="selectedConfigId" class="mt-2 flex items-center gap-1.5 text-[13px] text-success">
@@ -359,31 +366,33 @@ onMounted(() => { fetchTemplates() })
           </h3>
 
           <!-- Mode toggle -->
-          <div class="flex gap-1 mb-4 p-0.5 bg-bg-tertiary rounded-lg">
+          <div class="flex gap-1 mb-4 p-0.5 bg-muted rounded-lg">
             <button
               class="flex-1 text-[13px] font-medium py-1.5 rounded-md transition-all"
-              :class="recipientMode === 'list' ? 'bg-accent text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'"
+              :class="recipientMode === 'list' ? 'bg-accent text-white shadow-sm' : 'text-muted-foreground hover:text-muted-foreground'"
               @click="recipientMode = 'list'"
             >Contact List</button>
             <button
               class="flex-1 text-[13px] font-medium py-1.5 rounded-md transition-all"
-              :class="recipientMode === 'upload' ? 'bg-accent text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'"
+              :class="recipientMode === 'upload' ? 'bg-accent text-white shadow-sm' : 'text-muted-foreground hover:text-muted-foreground'"
               @click="recipientMode = 'upload'"
             ><Upload :size="13" class="inline -mt-px mr-1" />Upload File</button>
           </div>
 
           <!-- Contact list -->
           <div v-if="recipientMode === 'list'">
-            <select v-model="selectedListId" class="form-select" :disabled="loadingContacts">
-              <option value="">Select a contact list...</option>
-              <option v-for="list in lists" :key="list.id" :value="list.id">
-                {{ list.name }} ({{ list.contact_count }} contacts)
-              </option>
-            </select>
-            <p v-if="lists.length === 0" class="text-text-muted text-[13px] mt-2">
+            <Select v-model="selectedListId" :disabled="loadingContacts">
+              <SelectTrigger><SelectValue placeholder="Select a contact list..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="list in lists" :key="list.id" :value="list.id">
+                  {{ list.name }} ({{ list.contact_count }} contacts)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-if="lists.length === 0" class="text-muted-foreground text-[13px] mt-2">
               No lists yet. <router-link to="/contacts" class="text-accent hover:underline">Create one</router-link>
             </p>
-            <p v-if="loadingContacts" class="text-text-muted text-[13px] mt-2 flex items-center gap-1">
+            <p v-if="loadingContacts" class="text-muted-foreground text-[13px] mt-2 flex items-center gap-1">
               <Loader2 :size="12" class="animate-spin" /> Loading contacts...
             </p>
             <div v-else-if="contacts.length > 0 && selectedListId" class="mt-2 flex items-center gap-1.5 text-[13px] text-success">
@@ -393,10 +402,10 @@ onMounted(() => { fetchTemplates() })
 
           <!-- File upload -->
           <div v-else>
-            <label class="flex flex-col items-center gap-2 p-5 border-2 border-dashed border-border rounded-xl bg-bg-primary cursor-pointer transition-all hover:border-accent hover:bg-accent/3 group">
-              <Upload :size="24" class="text-text-muted group-hover:text-accent transition-colors" />
-              <span class="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
-                Click to upload <span class="text-text-muted">CSV, XLSX, or XLS</span>
+            <label class="flex flex-col items-center gap-2 p-5 border-2 border-dashed border-border rounded-xl bg-background cursor-pointer transition-all hover:border-accent hover:bg-accent/3 group">
+              <Upload :size="24" class="text-muted-foreground group-hover:text-accent transition-colors" />
+              <span class="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                Click to upload <span class="text-muted-foreground">CSV, XLSX, or XLS</span>
               </span>
               <input type="file" class="hidden" accept=".csv,.xlsx,.xls"
                 @change="(e: Event) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleFileSelected(f) }" />
@@ -433,33 +442,35 @@ onMounted(() => { fetchTemplates() })
           <FileText :size="16" class="text-accent" />
           Start from Template
           <InfoTip text="Templates pre-fill your email content. You can edit it after applying." side="right" />
-          <span class="text-[11px] font-normal text-text-muted ml-auto">(optional)</span>
+          <span class="text-[11px] font-normal text-muted-foreground ml-auto">(optional)</span>
         </h3>
-        <select v-model="selectedTemplateId" class="form-select" :disabled="loadingTemplates">
-          <option value="">{{ loadingTemplates ? 'Loading...' : 'Choose a template or start blank...' }}</option>
-          <option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">
-            {{ tpl.name }}
-            <template v-if="tpl.category !== 'general'"> ({{ tpl.category }})</template>
-          </option>
-        </select>
-        <p v-if="loadingTemplate" class="text-text-muted text-[13px] mt-2 flex items-center gap-1">
+        <Select v-model="selectedTemplateId" :disabled="loadingTemplates">
+          <SelectTrigger><SelectValue :placeholder="loadingTemplates ? 'Loading...' : 'Choose a template or start blank...'" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="tpl in templates" :key="tpl.id" :value="tpl.id">
+              {{ tpl.name }}
+              <template v-if="tpl.category !== 'general'"> ({{ tpl.category }})</template>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p v-if="loadingTemplate" class="text-muted-foreground text-[13px] mt-2 flex items-center gap-1">
           <Loader2 :size="12" class="animate-spin" /> Applying template...
         </p>
       </div>
 
       <!-- Mode switcher -->
       <div class="flex justify-between items-center mb-3" v-if="selectedTemplateId">
-        <span class="text-[13px] text-text-muted">Editor mode:</span>
+        <span class="text-[13px] text-muted-foreground">Editor mode:</span>
         <div class="flex gap-1.5">
-          <button class="btn-ghost btn-sm" :class="{ '!text-accent !bg-accent/8': editorMode === 'preview' }" @click="editorMode = 'preview'">
+          <Button variant="ghost" size="sm" :class="{ '!text-accent !bg-accent/8': editorMode === 'preview' }" @click="editorMode = 'preview'">
             <LayoutTemplate :size="14" /> Preview
-          </button>
-          <button class="btn-ghost btn-sm" :class="{ '!text-accent !bg-accent/8': editorMode === 'rich' }" @click="editorMode = 'rich'">
+          </Button>
+          <Button variant="ghost" size="sm" :class="{ '!text-accent !bg-accent/8': editorMode === 'rich' }" @click="editorMode = 'rich'">
             <Send :size="14" /> Rich Editor
-          </button>
-          <button class="btn-ghost btn-sm" :class="{ '!text-accent !bg-accent/8': editorMode === 'html' }" @click="editorMode = 'html'">
+          </Button>
+          <Button variant="ghost" size="sm" :class="{ '!text-accent !bg-accent/8': editorMode === 'html' }" @click="editorMode = 'html'">
             <Code :size="14" /> HTML
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -467,15 +478,15 @@ onMounted(() => { fetchTemplates() })
       <div v-if="editorMode === 'preview'" class="card">
         <div class="flex items-start justify-between gap-3 mb-4">
           <div>
-            <p class="text-[11px] text-text-muted uppercase tracking-wider font-medium mb-1">Template Preview</p>
-            <h3 class="text-base font-semibold m-0 text-text-primary">{{ previewSubject || subject || 'Untitled Subject' }}</h3>
-            <p class="text-sm text-text-muted mt-1">
+            <p class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Template Preview</p>
+            <h3 class="text-base font-semibold m-0 text-foreground">{{ previewSubject || subject || 'Untitled Subject' }}</h3>
+            <p class="text-sm text-muted-foreground mt-1">
               Showing preview with {{ contacts.length > 0 ? 'first contact' : 'sample data' }}.
             </p>
           </div>
           <div class="flex gap-2 shrink-0">
-            <button class="btn-secondary btn-sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</button>
-            <button class="btn-primary btn-sm" @click="editorMode = 'rich'">Edit Content</button>
+            <Button variant="secondary" size="sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</Button>
+            <Button size="sm" @click="editorMode = 'rich'">Edit Content</Button>
           </div>
         </div>
         <div class="border border-border rounded-xl overflow-hidden bg-white text-[#0f172a]">
@@ -486,28 +497,28 @@ onMounted(() => { fetchTemplates() })
           <div class="px-4 py-3 border-b border-gray-200 text-[13px]"><strong>Subject:</strong> {{ previewSubject }}</div>
           <div class="p-5 text-[14px] leading-[1.7]" v-html="templatePreviewHtml || previewContent"></div>
         </div>
-        <div class="flex items-center justify-between mt-3 text-[12px] text-text-muted">
+        <div class="flex items-center justify-between mt-3 text-[12px] text-muted-foreground">
           <span>Template content is locked. Click "Edit Content" to modify.</span>
-          <button class="btn-ghost btn-sm" @click="editorMode = 'rich'">Switch to Editor</button>
+          <Button variant="ghost" size="sm" @click="editorMode = 'rich'">Switch to Editor</Button>
         </div>
       </div>
 
       <!-- Rich editor -->
       <div v-else-if="editorMode === 'rich'" class="flex flex-col gap-2">
-        <div v-if="selectedTemplateId" class="flex justify-end gap-2 text-sm text-text-muted">
-          <button class="btn-ghost btn-sm" @click="editorMode = 'preview'">View HTML Preview</button>
-          <button class="btn-secondary btn-sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</button>
+        <div v-if="selectedTemplateId" class="flex justify-end gap-2 text-sm text-muted-foreground">
+          <Button variant="ghost" size="sm" @click="editorMode = 'preview'">View HTML Preview</Button>
+          <Button variant="secondary" size="sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</Button>
         </div>
         <EmailEditor v-model:subject="subject" v-model:content="htmlContent" v-model:delay="delay" :columns="columns" @preview="showPreview = true" />
       </div>
 
       <!-- HTML editor -->
       <div v-else-if="editorMode === 'html'" class="flex flex-col gap-3">
-        <div class="flex items-center justify-between text-sm text-text-muted">
+        <div class="flex items-center justify-between text-sm text-muted-foreground">
           <span v-text="'Raw HTML editor (placeholders like {{FirstName}} stay intact)'" />
           <div class="flex gap-2">
-            <button class="btn-ghost btn-sm" @click="editorMode = 'preview'">Preview</button>
-            <button class="btn-secondary btn-sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</button>
+            <Button variant="ghost" size="sm" @click="editorMode = 'preview'">Preview</Button>
+            <Button variant="secondary" size="sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</Button>
           </div>
         </div>
         <HtmlCodeEditor v-model:content="htmlContent" />
@@ -541,28 +552,28 @@ onMounted(() => { fetchTemplates() })
             <InfoTip text="Choose to send to all contacts, only the first N, or a specific range. Useful for testing with a small batch first." side="right" />
           </h3>
           <div class="flex flex-col gap-3 mb-4">
-            <label class="form-checkbox">
-              <input type="radio" v-model="rangeType" value="all" />
-              <span>Send to all ({{ contacts.length }})</span>
+            <label class="flex items-center gap-2.5 cursor-pointer py-1">
+              <input type="radio" v-model="rangeType" value="all" class="accent-accent w-4 h-4" />
+              <span class="text-sm text-muted-foreground">Send to all ({{ contacts.length }})</span>
             </label>
-            <label class="form-checkbox">
-              <input type="radio" v-model="rangeType" value="first" />
-              <span>First N contacts</span>
+            <label class="flex items-center gap-2.5 cursor-pointer py-1">
+              <input type="radio" v-model="rangeType" value="first" class="accent-accent w-4 h-4" />
+              <span class="text-sm text-muted-foreground">First N contacts</span>
             </label>
-            <label class="form-checkbox">
-              <input type="radio" v-model="rangeType" value="range" />
-              <span>Specific range</span>
+            <label class="flex items-center gap-2.5 cursor-pointer py-1">
+              <input type="radio" v-model="rangeType" value="range" class="accent-accent w-4 h-4" />
+              <span class="text-sm text-muted-foreground">Specific range</span>
             </label>
           </div>
           <div v-if="rangeType === 'first'" class="mb-3">
-            <input v-model.number="firstN" type="number" class="form-input" min="1" :max="contacts.length" placeholder="Number of contacts" />
+            <Input type="number" :model-value="firstN" @update:model-value="firstN = Number($event)" min="1" :max="contacts.length" placeholder="Number of contacts" />
           </div>
           <div v-if="rangeType === 'range'" class="flex items-center gap-3 mb-3">
-            <input v-model.number="rangeFrom" type="number" class="form-input w-[100px]" min="1" placeholder="From" />
-            <span class="text-text-muted text-sm">to</span>
-            <input v-model.number="rangeTo" type="number" class="form-input w-[100px]" min="1" placeholder="To" />
+            <Input type="number" :model-value="rangeFrom" @update:model-value="rangeFrom = Number($event)" class="w-[100px]" min="1" placeholder="From" />
+            <span class="text-muted-foreground text-sm">to</span>
+            <Input type="number" :model-value="rangeTo" @update:model-value="rangeTo = Number($event)" class="w-[100px]" min="1" placeholder="To" />
           </div>
-          <div class="p-3 bg-bg-tertiary rounded-lg text-sm text-text-secondary">
+          <div class="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
             Will send to <strong class="text-accent">{{ selectedCount }}</strong> contacts
           </div>
         </div>
@@ -574,31 +585,31 @@ onMounted(() => { fetchTemplates() })
             Batch Sending
             <InfoTip text="Split your campaign into smaller batches with delays between them. Helps avoid rate limits and improves deliverability." side="right" />
           </h3>
-          <label class="form-checkbox">
-            <input type="checkbox" v-model="useBatch" />
-            <span>Enable batch sending</span>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <Checkbox v-model="useBatch" />
+            <span class="text-sm text-muted-foreground">Enable batch sending</span>
           </label>
           <div v-if="useBatch" class="mt-4 pt-4 border-t border-border flex flex-col gap-3">
-            <div class="form-group !mb-0">
-              <label class="form-label flex items-center gap-1.5">
+            <div class="!mb-0">
+              <Label class="flex items-center gap-1.5">
                 Batch Size
                 <InfoTip text="Number of emails to send in each batch before pausing" :size="12" />
-              </label>
-              <input v-model.number="batchSize" type="number" class="form-input" min="1" max="100" />
+              </Label>
+              <Input type="number" :model-value="batchSize" @update:model-value="batchSize = Number($event)" min="1" max="100" />
             </div>
-            <div class="form-group !mb-0">
-              <label class="form-label flex items-center gap-1.5">
+            <div class="!mb-0">
+              <Label class="flex items-center gap-1.5">
                 Batch Delay (seconds)
                 <InfoTip text="Wait time between batches. 60+ seconds recommended." :size="12" />
-              </label>
-              <input v-model.number="batchDelay" type="number" class="form-input" min="1" />
+              </Label>
+              <Input type="number" :model-value="batchDelay" @update:model-value="batchDelay = Number($event)" min="1" />
             </div>
-            <div class="form-group !mb-0">
-              <label class="form-label flex items-center gap-1.5">
+            <div class="!mb-0">
+              <Label class="flex items-center gap-1.5">
                 Email Delay (seconds)
                 <InfoTip text="Wait time between individual emails within a batch" :size="12" />
-              </label>
-              <input v-model.number="emailDelay" type="number" class="form-input" min="1" />
+              </Label>
+              <Input type="number" :model-value="emailDelay" @update:model-value="emailDelay = Number($event)" min="1" />
             </div>
           </div>
         </div>
@@ -610,22 +621,22 @@ onMounted(() => { fetchTemplates() })
             Schedule
             <InfoTip text="Schedule your campaign to send at a specific date and time instead of sending immediately" side="right" />
           </h3>
-          <label class="form-checkbox">
-            <input type="checkbox" v-model="useSchedule" />
-            <span>Schedule for later</span>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <Checkbox v-model="useSchedule" />
+            <span class="text-sm text-muted-foreground">Schedule for later</span>
           </label>
           <div v-if="useSchedule" class="mt-4 pt-4 border-t border-border flex flex-col gap-3">
-            <div class="form-group !mb-0">
-              <label class="form-label">Scheduled Time</label>
-              <input v-model="scheduledTime" type="datetime-local" class="form-input" />
+            <div class="!mb-0">
+              <Label>Scheduled Time</Label>
+              <Input v-model="scheduledTime" type="datetime-local" />
             </div>
-            <div class="form-group !mb-0">
-              <label class="form-label flex items-center gap-1.5">
+            <div class="!mb-0">
+              <Label class="flex items-center gap-1.5">
                 Notification Email
                 <InfoTip text="Get notified by email when the scheduled campaign finishes sending" :size="12" />
-                <span class="text-[11px] font-normal text-text-muted">(optional)</span>
-              </label>
-              <input v-model="notifyEmail" type="email" class="form-input" placeholder="you@example.com" />
+                <span class="text-[11px] font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <Input v-model="notifyEmail" type="email" placeholder="you@example.com" />
             </div>
           </div>
         </div>
@@ -645,8 +656,8 @@ onMounted(() => { fetchTemplates() })
             ]" :key="mode.value" class="flex items-start gap-2.5 p-2.5 rounded-lg border border-border cursor-pointer hover:border-accent/30 transition" :class="rotationMode === mode.value ? 'border-accent/40 bg-accent/5' : ''">
               <input type="radio" :value="mode.value" v-model="rotationMode" class="mt-0.5 accent-accent" />
               <div>
-                <div class="text-xs font-medium" :class="rotationMode === mode.value ? 'text-accent' : 'text-text-primary'">{{ mode.label }}</div>
-                <div class="text-[10px] text-text-muted">{{ mode.desc }}</div>
+                <div class="text-xs font-medium" :class="rotationMode === mode.value ? 'text-accent' : 'text-foreground'">{{ mode.label }}</div>
+                <div class="text-[10px] text-muted-foreground">{{ mode.desc }}</div>
               </div>
             </label>
           </div>
@@ -659,10 +670,10 @@ onMounted(() => { fetchTemplates() })
             Email Delay
             <InfoTip text="Wait time between sending individual emails. 15-30 seconds recommended to avoid rate limits." side="right" />
           </h3>
-          <div class="form-group !mb-0">
-            <label class="form-label">Delay Between Emails (seconds)</label>
-            <input v-model.number="delay" type="number" class="form-input" min="15" max="60" />
-            <p class="text-text-muted text-[12px] mt-1.5">15-30 seconds recommended to avoid rate limits</p>
+          <div class="!mb-0">
+            <Label>Delay Between Emails (seconds)</Label>
+            <Input type="number" :model-value="delay" @update:model-value="delay = Number($event)" min="15" max="60" />
+            <p class="text-muted-foreground text-[12px] mt-1.5">15-30 seconds recommended to avoid rate limits</p>
           </div>
         </div>
       </div>
@@ -683,35 +694,35 @@ onMounted(() => { fetchTemplates() })
           <!-- Provider -->
           <button class="card text-left hover:border-accent/40 transition-colors" @click="activeStep = 0">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-[11px] text-text-muted uppercase tracking-wider font-medium">Provider</span>
-              <ChevronRight :size="14" class="text-text-muted" />
+              <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Provider</span>
+              <ChevronRight :size="14" class="text-muted-foreground" />
             </div>
-            <p class="text-sm font-medium text-text-primary truncate">{{ selectedConfigName || 'Not selected' }}</p>
+            <p class="text-sm font-medium text-foreground truncate">{{ selectedConfigName || 'Not selected' }}</p>
           </button>
 
           <!-- Recipients -->
           <button class="card text-left hover:border-accent/40 transition-colors" @click="activeStep = 0">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-[11px] text-text-muted uppercase tracking-wider font-medium">Recipients</span>
-              <ChevronRight :size="14" class="text-text-muted" />
+              <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Recipients</span>
+              <ChevronRight :size="14" class="text-muted-foreground" />
             </div>
-            <p class="text-sm font-medium text-text-primary">
+            <p class="text-sm font-medium text-foreground">
               <span class="text-accent">{{ selectedCount }}</span> contacts
-              <span v-if="rangeType !== 'all'" class="text-text-muted font-normal">({{ rangeType === 'first' ? `first ${firstN}` : `${rangeFrom}-${rangeTo}` }})</span>
+              <span v-if="rangeType !== 'all'" class="text-muted-foreground font-normal">({{ rangeType === 'first' ? `first ${firstN}` : `${rangeFrom}-${rangeTo}` }})</span>
             </p>
           </button>
 
           <!-- Schedule -->
           <button class="card text-left hover:border-accent/40 transition-colors" @click="activeStep = 2">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-[11px] text-text-muted uppercase tracking-wider font-medium">Delivery</span>
-              <ChevronRight :size="14" class="text-text-muted" />
+              <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Delivery</span>
+              <ChevronRight :size="14" class="text-muted-foreground" />
             </div>
-            <p class="text-sm font-medium text-text-primary">
+            <p class="text-sm font-medium text-foreground">
               <template v-if="useSchedule && scheduledTime">Scheduled: {{ new Date(scheduledTime).toLocaleString() }}</template>
               <template v-else>Send immediately</template>
             </p>
-            <p v-if="useBatch" class="text-[12px] text-text-muted mt-0.5">Batch: {{ batchSize }} per batch, {{ batchDelay }}s delay</p>
+            <p v-if="useBatch" class="text-[12px] text-muted-foreground mt-0.5">Batch: {{ batchSize }} per batch, {{ batchDelay }}s delay</p>
           </button>
         </div>
 
@@ -723,8 +734,8 @@ onMounted(() => { fetchTemplates() })
               Email Preview
             </h3>
             <div class="flex gap-2">
-              <button class="btn-ghost btn-sm" @click="activeStep = 1">Edit Content</button>
-              <button class="btn-secondary btn-sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</button>
+              <Button variant="ghost" size="sm" @click="activeStep = 1">Edit Content</Button>
+              <Button variant="secondary" size="sm" @click="showPreview = true"><Eye :size="14" /> Full Preview</Button>
             </div>
           </div>
           <div class="border border-border rounded-xl overflow-hidden bg-white text-[#0f172a]">
@@ -740,7 +751,7 @@ onMounted(() => { fetchTemplates() })
         <!-- Send button -->
         <div class="card !p-6">
           <div class="flex items-center justify-between mb-4">
-            <div class="text-sm text-text-secondary">
+            <div class="text-sm text-muted-foreground">
               <span v-if="canSend" class="text-success flex items-center gap-1.5">
                 <CheckCircle :size="16" /> Ready to send
               </span>
@@ -749,13 +760,13 @@ onMounted(() => { fetchTemplates() })
               </span>
             </div>
           </div>
-          <button class="btn btn-primary btn-lg w-full" :disabled="!canSend || sending" @click="handleSend">
+          <Button size="lg" class="w-full" :disabled="!canSend || sending" @click="handleSend">
             <Loader2 v-if="sending" :size="18" class="animate-spin" />
             <Calendar v-else-if="useSchedule" :size="18" />
             <Send v-else :size="18" />
             {{ useSchedule ? 'Schedule' : 'Send' }} Campaign to {{ selectedCount }} contacts
-          </button>
-          <p class="text-[12px] text-text-muted text-center mt-3">
+          </Button>
+          <p class="text-[12px] text-muted-foreground text-center mt-3">
             <template v-if="useSchedule">Your campaign will be queued and sent at the scheduled time.</template>
             <template v-else>Emails will start sending immediately after you click the button.</template>
           </p>
@@ -765,21 +776,20 @@ onMounted(() => { fetchTemplates() })
 
     <!-- ═══════════════ Navigation ═══════════════ -->
     <div class="flex items-center justify-between mt-8 pt-5 border-t border-border">
-      <button v-if="activeStep > 0" class="btn btn-secondary" @click="goBack">
+      <Button v-if="activeStep > 0" variant="secondary" @click="goBack">
         <ArrowLeft :size="16" /> Back
-      </button>
+      </Button>
       <div v-else />
 
       <div class="flex items-center gap-3">
-        <span class="text-[13px] text-text-muted">Step {{ activeStep + 1 }} of 4</span>
-        <button
+        <span class="text-[13px] text-muted-foreground">Step {{ activeStep + 1 }} of 4</span>
+        <Button
           v-if="activeStep < 3"
-          class="btn btn-primary"
           :disabled="!canProceed"
           @click="goNext"
         >
           Continue <ArrowRight :size="16" />
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -815,7 +825,7 @@ onMounted(() => { fetchTemplates() })
 .step-title {
   font-size: 18px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--color-foreground);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -823,11 +833,11 @@ onMounted(() => { fetchTemplates() })
 }
 .step-desc {
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--color-muted-foreground);
   margin: 0;
 }
 .card {
-  background: var(--color-bg-card);
+  background: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 20px;
@@ -835,7 +845,7 @@ onMounted(() => { fetchTemplates() })
 .card-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--color-foreground);
   display: flex;
   align-items: center;
   gap: 8px;

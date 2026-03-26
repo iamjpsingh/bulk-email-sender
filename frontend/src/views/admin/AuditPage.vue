@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { adminApi } from '../../lib/api/admin'
 import type { AuditLog, ActivityLog } from '../../lib/api/admin'
 import { useToast } from '../../composables/useToast'
+import { Button } from '@/components/ui/button'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import EmptyState from '../../components/ui/EmptyState.vue'
 import Skeleton from '../../components/ui/Skeleton.vue'
 import { ScrollText, ChevronLeft, ChevronRight } from 'lucide-vue-next'
@@ -55,11 +57,11 @@ onMounted(() => loadAuditLogs(1))
 <template>
   <div>
     <div class="flex items-center gap-4 mb-4">
-      <div class="flex bg-bg-tertiary rounded-lg p-0.5">
+      <div class="flex bg-muted rounded-lg p-0.5">
         <button
           :class="[
             'px-3 py-1.5 text-sm rounded-md transition-all',
-            auditLogType === 'audit' ? 'bg-bg-card text-text-primary font-medium shadow-xs' : 'text-text-muted hover:text-text-primary'
+            auditLogType === 'audit' ? 'bg-card text-foreground font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground'
           ]"
           @click="switchLogType('audit')"
         >
@@ -68,75 +70,75 @@ onMounted(() => loadAuditLogs(1))
         <button
           :class="[
             'px-3 py-1.5 text-sm rounded-md transition-all',
-            auditLogType === 'activity' ? 'bg-bg-card text-text-primary font-medium shadow-xs' : 'text-text-muted hover:text-text-primary'
+            auditLogType === 'activity' ? 'bg-card text-foreground font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground'
           ]"
           @click="switchLogType('activity')"
         >
           Activity
         </button>
       </div>
-      <span class="text-sm text-text-muted">{{ auditTotal }} total</span>
+      <span class="text-sm text-muted-foreground">{{ auditTotal }} total</span>
     </div>
 
     <div v-if="auditLoading" class="space-y-2">
       <Skeleton variant="text" :count="8" />
     </div>
 
-    <div v-else-if="(auditLogType === 'audit' ? auditLogs : activityLogs).length === 0" class="bg-bg-card border border-border rounded-xl">
+    <div v-else-if="(auditLogType === 'audit' ? auditLogs : activityLogs).length === 0" class="bg-card border border-border rounded-xl">
       <EmptyState :icon="ScrollText" title="No logs yet" description="Actions will appear here as your team works" />
     </div>
 
-    <div v-else class="bg-bg-card border border-border rounded-xl overflow-hidden">
+    <div v-else class="bg-card border border-border rounded-xl overflow-hidden">
       <!-- Audit Logs Table -->
-      <table v-if="auditLogType === 'audit'" class="data-table w-full">
-        <thead>
-          <tr>
-            <th scope="col">Action</th>
-            <th scope="col">Entity</th>
-            <th scope="col">Actor</th>
-            <th scope="col">Time</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="log in auditLogs" :key="log.id">
-            <td><span class="text-sm font-mono text-text-primary">{{ log.action }}</span></td>
-            <td class="text-sm text-text-muted">{{ log.entity_type }}{{ log.entity_id ? `: ${log.entity_id.substring(0, 16)}...` : '' }}</td>
-            <td class="text-sm text-text-muted">{{ log.actor_email || log.actor_id.substring(0, 12) }}</td>
-            <td class="text-sm text-text-muted">{{ formatDate(log.created_at) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <Table v-if="auditLogType === 'audit'">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Action</TableHead>
+            <TableHead>Entity</TableHead>
+            <TableHead>Actor</TableHead>
+            <TableHead>Time</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="log in auditLogs" :key="log.id">
+            <TableCell><span class="text-sm font-mono text-foreground">{{ log.action }}</span></TableCell>
+            <TableCell class="text-sm text-muted-foreground">{{ log.entity_type }}{{ log.entity_id ? `: ${log.entity_id.substring(0, 16)}...` : '' }}</TableCell>
+            <TableCell class="text-sm text-muted-foreground">{{ log.actor_email || log.actor_id.substring(0, 12) }}</TableCell>
+            <TableCell class="text-sm text-muted-foreground">{{ formatDate(log.created_at) }}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
 
       <!-- Activity Logs Table -->
-      <table v-else class="data-table w-full">
-        <thead>
-          <tr>
-            <th scope="col">Action</th>
-            <th scope="col">Description</th>
-            <th scope="col">Actor</th>
-            <th scope="col">Time</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="log in activityLogs" :key="log.id">
-            <td><span class="text-sm font-mono text-text-primary">{{ log.action }}</span></td>
-            <td class="text-sm text-text-muted">{{ log.description }}</td>
-            <td class="text-sm text-text-muted">{{ log.actor_email || log.actor_id.substring(0, 12) }}</td>
-            <td class="text-sm text-text-muted">{{ formatDate(log.created_at) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <Table v-else>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Action</TableHead>
+            <TableHead>Description</TableHead>
+            <TableHead>Actor</TableHead>
+            <TableHead>Time</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="log in activityLogs" :key="log.id">
+            <TableCell><span class="text-sm font-mono text-foreground">{{ log.action }}</span></TableCell>
+            <TableCell class="text-sm text-muted-foreground">{{ log.description }}</TableCell>
+            <TableCell class="text-sm text-muted-foreground">{{ log.actor_email || log.actor_id.substring(0, 12) }}</TableCell>
+            <TableCell class="text-sm text-muted-foreground">{{ formatDate(log.created_at) }}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </div>
 
     <!-- Pagination -->
     <div v-if="auditTotalPages > 1" class="flex items-center justify-center gap-2 mt-4">
-      <button class="btn-ghost btn-sm" :disabled="auditPage <= 1" @click="loadAuditLogs(auditPage - 1)">
+      <Button variant="ghost" size="sm" :disabled="auditPage <= 1" @click="loadAuditLogs(auditPage - 1)">
         <ChevronLeft :size="16" />
-      </button>
-      <span class="text-sm text-text-muted">Page {{ auditPage }} of {{ auditTotalPages }}</span>
-      <button class="btn-ghost btn-sm" :disabled="auditPage >= auditTotalPages" @click="loadAuditLogs(auditPage + 1)">
+      </Button>
+      <span class="text-sm text-muted-foreground">Page {{ auditPage }} of {{ auditTotalPages }}</span>
+      <Button variant="ghost" size="sm" :disabled="auditPage >= auditTotalPages" @click="loadAuditLogs(auditPage + 1)">
         <ChevronRight :size="16" />
-      </button>
+      </Button>
     </div>
   </div>
 </template>

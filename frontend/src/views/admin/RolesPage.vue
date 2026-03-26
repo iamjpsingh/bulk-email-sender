@@ -31,7 +31,7 @@ onMounted(loadRoles)
     </div>
 
     <template v-else>
-      <div v-if="roles.length === 0" class="bg-bg-card border border-border rounded-xl">
+      <div v-if="roles.length === 0" class="bg-card border border-border rounded-xl">
         <EmptyState :icon="Shield" title="No roles defined" description="System roles are created during setup" />
       </div>
 
@@ -39,15 +39,15 @@ onMounted(loadRoles)
         <div
           v-for="role in roles"
           :key="role.id"
-          class="bg-bg-card border border-border rounded-xl p-5"
+          class="bg-card border border-border rounded-xl p-5"
         >
           <div class="flex items-center gap-3 mb-3">
             <div class="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center">
               <Shield :size="18" class="text-accent" />
             </div>
             <div>
-              <h3 class="text-[15px] font-semibold text-text-primary">{{ role.name }}</h3>
-              <p v-if="role.description" class="text-sm text-text-muted">{{ role.description }}</p>
+              <h3 class="text-[15px] font-semibold text-foreground">{{ role.name }}</h3>
+              <p v-if="role.description" class="text-sm text-muted-foreground">{{ role.description }}</p>
             </div>
           </div>
 
@@ -55,13 +55,13 @@ onMounted(loadRoles)
             <span
               v-for="perm in role.permissions.slice(0, 12)"
               :key="perm"
-              class="text-xs px-2 py-0.5 rounded-md bg-bg-tertiary text-text-muted font-mono"
+              class="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-mono"
             >
               {{ perm }}
             </span>
             <span
               v-if="role.permissions.length > 12"
-              class="text-xs px-2 py-0.5 rounded-md bg-bg-tertiary text-text-muted"
+              class="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground"
             >
               +{{ role.permissions.length - 12 }} more
             </span>

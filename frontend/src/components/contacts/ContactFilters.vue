@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Search, Upload, Plus } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
 
 const searchQuery = defineModel<string>('searchQuery', { required: true })
 
@@ -13,32 +14,26 @@ const emit = defineEmits<{
 <template>
   <div class="flex justify-between items-center mb-4 gap-3">
     <div class="flex-1">
-      <div class="flex items-center gap-2 bg-bg-secondary border border-border rounded-lg px-3 py-2 max-w-[360px]">
-        <Search :size="16" class="text-text-muted" />
+      <div class="flex items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-2 max-w-[360px]">
+        <Search :size="16" class="text-muted-foreground" />
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Search contacts..."
-          class="flex-1 bg-transparent border-none outline-none text-text-primary text-sm"
+          class="flex-1 bg-transparent border-none outline-none text-foreground text-sm"
           @input="emit('search-input')"
         />
       </div>
     </div>
     <div class="flex gap-2">
-      <button
-        class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium"
-        @click="emit('import')"
-      >
+      <Button variant="ghost" size="sm" @click="emit('import')">
         <Upload :size="14" />
         Import
-      </button>
-      <button
-        class="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium"
-        @click="emit('add')"
-      >
+      </Button>
+      <Button size="sm" @click="emit('add')">
         <Plus :size="14" />
         Add
-      </button>
+      </Button>
     </div>
   </div>
 </template>

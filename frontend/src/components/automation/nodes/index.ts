@@ -1,6 +1,6 @@
 // Custom Vue Flow node components for automation builder
 
-import { markRaw, type Component, h } from 'vue'
+import { markRaw } from 'vue'
 import BaseNode from './BaseNode.vue'
 import {
   Workflow, Mail, Clock, GitBranch, Filter, Shuffle, Globe, Tag, Minus, UserCog, ArrowRightLeft,

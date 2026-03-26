@@ -10,6 +10,9 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
 import Highlight from '@tiptap/extension-highlight'
 import Placeholder from '@tiptap/extension-placeholder'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Mail, Clock, Eye,
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
@@ -120,30 +123,30 @@ function clearFormatting() {
 </script>
 
 <template>
-  <div class="email-editor glass-card">
+  <div class="email-editor bg-card border border-border rounded-xl">
     <div class="editor-header">
       <h3>
         <Mail :size="18" class="header-icon" />
         Email Content
       </h3>
-      <button
-        class="btn btn-secondary btn-sm preview-btn"
+      <Button
+        variant="secondary"
+        size="sm"
         @click="emit('preview')"
         :disabled="!props.subject && !props.content"
       >
         <Eye :size="16" />
         Preview
-      </button>
+      </Button>
     </div>
 
     <!-- Subject -->
-    <div class="form-group">
-      <label class="form-label">Subject *</label>
-      <input
-        :value="subject"
-        @input="emit('update:subject', ($event.target as HTMLInputElement).value)"
+    <div class="mb-5">
+      <Label>Subject *</Label>
+      <Input
+        :model-value="subject"
+        @update:model-value="emit('update:subject', $event)"
         type="text"
-        class="form-input"
         placeholder="Enter email subject..."
       />
     </div>
@@ -296,16 +299,15 @@ function clearFormatting() {
     </div>
 
     <!-- Delay -->
-    <div class="form-group">
-      <label class="form-label">
+    <div class="mb-5">
+      <Label class="flex items-center gap-1.5">
         <Clock :size="14" />
         Delay Between Emails (seconds)
-      </label>
-      <input
-        :value="delay"
-        @input="emit('update:delay', Number(($event.target as HTMLInputElement).value))"
+      </Label>
+      <Input
+        :model-value="delay"
+        @update:model-value="emit('update:delay', Number($event))"
         type="number"
-        class="form-input"
         min="15"
         max="60"
       />
@@ -333,7 +335,7 @@ function clearFormatting() {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--color-text-primary);
+  color: var(--color-foreground);
 }
 
 .header-icon {
@@ -347,7 +349,7 @@ function clearFormatting() {
   gap: 12px;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: var(--color-bg-secondary);
+  background: var(--color-secondary);
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   flex-wrap: wrap;
@@ -355,7 +357,7 @@ function clearFormatting() {
 
 .placeholder-label {
   font-size: 13px;
-  color: var(--color-text-muted);
+  color: var(--color-muted-foreground);
   font-weight: 500;
 }
 
@@ -389,7 +391,7 @@ function clearFormatting() {
   border-radius: var(--radius-lg);
   overflow: hidden;
   border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  background: var(--color-secondary);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -405,7 +407,7 @@ function clearFormatting() {
   flex-wrap: wrap;
   gap: 2px;
   padding: 6px 8px;
-  background: var(--color-bg-primary);
+  background: var(--color-background);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -423,7 +425,7 @@ function clearFormatting() {
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-muted-foreground);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -432,7 +434,7 @@ function clearFormatting() {
 
 .toolbar-btn:hover:not(:disabled) {
   background: rgba(99, 102, 241, 0.1);
-  color: var(--color-text-primary);
+  color: var(--color-foreground);
 }
 
 .toolbar-btn.active {
@@ -459,12 +461,12 @@ function clearFormatting() {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--color-bg-primary);
+  background: var(--color-background);
   border-bottom: 1px solid var(--color-border);
 }
 
 .link-input-icon {
-  color: var(--color-text-muted);
+  color: var(--color-muted-foreground);
   flex-shrink: 0;
 }
 
@@ -473,8 +475,8 @@ function clearFormatting() {
   padding: 6px 10px;
   font-size: 13px;
   font-family: var(--font-mono);
-  color: var(--color-text-primary);
-  background: var(--color-bg-secondary);
+  color: var(--color-foreground);
+  background: var(--color-secondary);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   outline: none;
@@ -506,11 +508,11 @@ function clearFormatting() {
 
 .link-cancel {
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-muted-foreground);
 }
 
 .link-cancel:hover {
-  color: var(--color-text-primary);
+  color: var(--color-foreground);
 }
 
 /* Editor content area */
@@ -521,7 +523,7 @@ function clearFormatting() {
 .editor-content :deep(.tiptap) {
   min-height: 300px;
   padding: 20px;
-  color: var(--color-text-primary);
+  color: var(--color-foreground);
   font-size: 15px;
   line-height: 1.7;
   outline: none;
@@ -530,7 +532,7 @@ function clearFormatting() {
 .editor-content :deep(.tiptap p.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);
   float: left;
-  color: var(--color-text-muted);
+  color: var(--color-muted-foreground);
   pointer-events: none;
   height: 0;
 }
@@ -541,7 +543,7 @@ function clearFormatting() {
 .editor-content :deep(.tiptap h4),
 .editor-content :deep(.tiptap h5),
 .editor-content :deep(.tiptap h6) {
-  color: var(--color-text-primary);
+  color: var(--color-foreground);
   margin-bottom: 12px;
   line-height: 1.3;
 }
@@ -572,14 +574,14 @@ function clearFormatting() {
   border-left: 3px solid var(--color-accent);
   padding: 12px 16px;
   margin: 16px 0;
-  color: var(--color-text-secondary);
+  color: var(--color-muted-foreground);
   background: rgba(99, 102, 241, 0.04);
   border-radius: 0 8px 8px 0;
 }
 
 .editor-content :deep(.tiptap pre) {
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+  background: var(--color-background);
+  color: var(--color-foreground);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 16px;

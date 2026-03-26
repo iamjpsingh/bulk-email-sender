@@ -1,11 +1,14 @@
 /**
  * OAuth Utilities
- * Shared OAuth handling logic
+ * Shared OAuth handling logic — unified callback for both user and platform admin flows
  */
 import { SERVER } from '../config'
 import { logger } from './logger'
 import { d1UserDatabase } from '../services/d1UserDatabase'
 import { oauthService } from '../services/oauthService'
+import { systemMailerService } from '../services/systemMailerService'
+import type { SystemMailerConfig } from '../services/systemMailerService'
+import { systemSettingsService } from '../services/systemSettingsService'
 
 export type OAuthProvider = 'google' | 'microsoft'
 
@@ -22,7 +25,7 @@ interface OAuthCallbackResult {
 
 /**
  * Handle OAuth callback for any provider
- * Eliminates duplicate code between Google and Microsoft callbacks
+ * Routes to user OAuth or platform mailer based on state.purpose
  */
 export async function handleOAuthCallback(
   provider: OAuthProvider,
@@ -56,21 +59,23 @@ export async function handleOAuthCallback(
     }
   }
 
+  // Route to platform mailer handler if this is a platform admin flow
+  if (stateData.purpose === 'platform_mailer') {
+    return handlePlatformMailerCallback(provider, code, stateData.userId)
+  }
+
+  // User-level OAuth flow
   try {
-    // Exchange code for tokens
     const tokens = provider === 'google'
       ? await oauthService.exchangeGoogleCode(code)
       : await oauthService.exchangeMicrosoftCode(code)
 
-    // Get existing configs
     const existingConfigs = await d1UserDatabase.getUserSMTPConfigs(stateData.userId)
     const existingConfig = existingConfigs.find(
       (cfg) => cfg.provider_type === provider && cfg.oauth_email === tokens.email
     )
 
-    // Update or create config
     if (existingConfig) {
-      // Update all OAuth tokens, not just access token
       await d1UserDatabase.updateSMTPConfig(existingConfig.id, stateData.userId, {
         oauth_access_token: tokens.access_token,
         oauth_refresh_token: tokens.refresh_token,
@@ -101,6 +106,68 @@ export async function handleOAuthCallback(
     return {
       success: false,
       redirectUrl: `${frontendUrl}/configs?error=${provider}_failed`,
+    }
+  }
+}
+
+/**
+ * Handle platform system mailer OAuth callback
+ * Saves tokens to systemMailerService instead of user SMTP configs
+ */
+async function handlePlatformMailerCallback(
+  provider: OAuthProvider,
+  code: string,
+  userId: string
+): Promise<OAuthCallbackResult> {
+  const frontendUrl = SERVER.FRONTEND_URL
+  const mailerProvider = provider === 'google' ? 'gmail' : 'outlook'
+
+  try {
+    const tokens = provider === 'google'
+      ? await oauthService.exchangeGoogleCode(code)
+      : await oauthService.exchangeMicrosoftCode(code)
+
+    const oauthCreds = systemSettingsService.getJson<{ clientId: string; clientSecret: string }>(`oauth_${provider}`)
+    if (!oauthCreds) {
+      return { success: false, redirectUrl: `${frontendUrl}/admin/platform-settings?oauth_error=no_credentials` }
+    }
+
+    const existing = systemMailerService.getConfig()
+    const config: SystemMailerConfig = {
+      fromName: existing?.fromName || 'Dispatch',
+      fromEmail: tokens.email,
+      providerConfig: provider === 'google'
+        ? {
+            provider: 'gmail',
+            email: tokens.email,
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token,
+            expiresAt: tokens.expires_at,
+            clientId: oauthCreds.clientId,
+            clientSecret: oauthCreds.clientSecret,
+          }
+        : {
+            provider: 'outlook',
+            email: tokens.email,
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token,
+            expiresAt: tokens.expires_at,
+            clientId: oauthCreds.clientId,
+            clientSecret: oauthCreds.clientSecret,
+          },
+    }
+    systemMailerService.saveConfig(config, userId)
+    logger.info(`Platform mailer connected: ${mailerProvider} — ${tokens.email}`)
+
+    return {
+      success: true,
+      redirectUrl: `${frontendUrl}/admin/platform-settings?oauth_success=${mailerProvider}&email=${encodeURIComponent(tokens.email)}`,
+    }
+  } catch (err) {
+    logger.error(`Platform mailer ${mailerProvider} OAuth error:`, err)
+    return {
+      success: false,
+      redirectUrl: `${frontendUrl}/admin/platform-settings?oauth_error=${encodeURIComponent(err instanceof Error ? err.message : 'failed')}`,
     }
   }
 }

@@ -114,9 +114,9 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
     :class="cn(
       'fixed top-4 left-4 z-200 flex items-center justify-center',
       'w-10 h-10 rounded-lg',
-      'bg-surface-1 border border-border text-text-primary',
+      'bg-secondary border border-border text-foreground',
       'transition-colors duration-fast',
-      'hover:bg-surface-2',
+      'hover:bg-card',
       'md:hidden'
     )"
     @click="mobileOpen = !mobileOpen"
@@ -180,7 +180,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
         </div>
         <span
           v-if="!collapsed"
-          class="text-lg font-bold tracking-tight text-text-primary whitespace-nowrap"
+          class="text-lg font-bold tracking-tight text-foreground whitespace-nowrap"
         >
           Dispatch
         </span>
@@ -197,7 +197,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
           :class="cn(
             'hidden md:flex items-center justify-center shrink-0',
             'w-6 h-6 rounded-md',
-            'text-sidebar-muted hover:text-text-primary',
+            'text-sidebar-muted hover:text-foreground',
             'hover:bg-white/[0.06]',
             'transition-all duration-fast cursor-pointer'
           )"
@@ -215,8 +215,8 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
           'hidden md:flex items-center justify-center absolute -right-3',
           'w-6 h-6 rounded-full',
           'bg-sidebar border border-sidebar-border',
-          'text-sidebar-muted hover:text-text-primary',
-          'hover:bg-surface-2',
+          'text-sidebar-muted hover:text-foreground',
+          'hover:bg-card',
           'transition-all duration-fast cursor-pointer',
           'shadow-xs'
         )"
@@ -252,7 +252,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
             <Building2 :size="14" />
           </div>
           <template v-if="!collapsed">
-            <span class="flex-1 text-left text-[13px] font-medium text-text-primary truncate">
+            <span class="flex-1 text-left text-[13px] font-medium text-foreground truncate">
               {{ currentOrg?.name || 'Select org' }}
             </span>
             <ChevronsUpDown :size="14" class="shrink-0 text-sidebar-muted" />
@@ -270,7 +270,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
             v-if="orgSwitcherOpen"
             :class="cn(
               'absolute z-200 mt-1 rounded-lg overflow-hidden',
-              'bg-surface-2 border border-border shadow-dropdown',
+              'bg-card border border-border shadow-dropdown',
               collapsed ? 'left-full ml-2 top-0 w-52' : 'left-0 right-0'
             )"
           >
@@ -283,7 +283,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
                   'text-[13px] text-left transition-colors cursor-pointer',
                   org.id === orgId
                     ? 'bg-accent/10 text-accent font-medium'
-                    : 'text-text-secondary hover:bg-white/[0.04] hover:text-text-primary'
+                    : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
                 )"
                 @click="handleSwitchOrg(org.id)"
               >
@@ -326,7 +326,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
             collapsed ? 'justify-center px-2 py-2' : 'px-2.5 py-[7px]',
             isActive(item.path)
               ? 'bg-sidebar-accent text-accent'
-              : 'text-sidebar-muted-foreground hover:bg-white/[0.04] hover:text-text-primary'
+              : 'text-sidebar-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
           )"
           :title="collapsed ? item.label : undefined"
           @click="handleNavClick"
@@ -344,7 +344,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
             v-if="collapsed"
             :class="cn(
               'absolute left-full ml-2 px-2.5 py-1.5 rounded-md',
-              'bg-surface-3 text-text-primary text-xs font-medium',
+              'bg-muted text-foreground text-xs font-medium',
               'shadow-dropdown whitespace-nowrap',
               'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
               'transition-all duration-fast pointer-events-none',
@@ -379,7 +379,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
             collapsed ? 'justify-center px-2 py-2' : 'px-2.5 py-[7px]',
             isActive(item.path)
               ? 'bg-sidebar-accent text-accent'
-              : 'text-sidebar-muted-foreground hover:bg-white/[0.04] hover:text-text-primary'
+              : 'text-sidebar-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
           )"
           :title="collapsed ? item.label : undefined"
           @click="handleNavClick"
@@ -395,7 +395,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
             v-if="collapsed"
             :class="cn(
               'absolute left-full ml-2 px-2.5 py-1.5 rounded-md',
-              'bg-surface-3 text-text-primary text-xs font-medium',
+              'bg-muted text-foreground text-xs font-medium',
               'shadow-dropdown whitespace-nowrap',
               'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
               'transition-all duration-fast pointer-events-none',
@@ -422,7 +422,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
             collapsed ? 'justify-center px-2 py-2' : 'px-2.5 py-[7px]',
             isActive(item.path)
               ? 'bg-sidebar-accent text-accent'
-              : 'text-sidebar-muted-foreground hover:bg-white/[0.04] hover:text-text-primary'
+              : 'text-sidebar-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
           )"
           :title="collapsed ? item.label : undefined"
           @click="handleNavClick"
@@ -438,7 +438,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
             v-if="collapsed"
             :class="cn(
               'absolute left-full ml-2 px-2.5 py-1.5 rounded-md',
-              'bg-surface-3 text-text-primary text-xs font-medium',
+              'bg-muted text-foreground text-xs font-medium',
               'shadow-dropdown whitespace-nowrap',
               'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
               'transition-all duration-fast pointer-events-none',
@@ -479,7 +479,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
           </div>
 
           <div v-if="!collapsed" class="flex-1 min-w-0">
-            <div class="text-[13px] font-semibold text-text-primary truncate leading-tight">
+            <div class="text-[13px] font-semibold text-foreground truncate leading-tight">
               {{ user.name || 'User' }}
             </div>
             <div class="text-[11px] text-sidebar-muted truncate leading-tight mt-0.5">
@@ -492,7 +492,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
             v-if="collapsed"
             :class="cn(
               'absolute left-full ml-2 px-2.5 py-1.5 rounded-md',
-              'bg-surface-3 text-text-primary text-xs font-medium',
+              'bg-muted text-foreground text-xs font-medium',
               'shadow-dropdown whitespace-nowrap',
               'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
               'transition-all duration-fast pointer-events-none',
@@ -524,7 +524,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
             v-if="collapsed"
             :class="cn(
               'absolute left-full ml-2 px-2.5 py-1.5 rounded-md',
-              'bg-surface-3 text-text-primary text-xs font-medium',
+              'bg-muted text-foreground text-xs font-medium',
               'shadow-dropdown whitespace-nowrap',
               'opacity-0 invisible group-hover/logout:opacity-100 group-hover/logout:visible',
               'transition-all duration-fast pointer-events-none',
