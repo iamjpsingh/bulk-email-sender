@@ -222,7 +222,17 @@ app.put('/admin/platform/settings/oauth', requirePlatformAdmin(), async (c) => {
     if (!body.provider || !body.clientId || !body.clientSecret) {
       return error(c, 'provider, clientId, and clientSecret required', 400)
     }
-    systemSettingsService.setJson(`oauth_${body.provider}`, { clientId: body.clientId, clientSecret: body.clientSecret }, user.id)
+    // If secret is masked placeholder, preserve the existing secret
+    let finalSecret = body.clientSecret
+    if (finalSecret === '********') {
+      const existing = systemSettingsService.getJson<{ clientId: string; clientSecret: string }>(`oauth_${body.provider}`)
+      if (existing?.clientSecret && existing.clientSecret !== '********') {
+        finalSecret = existing.clientSecret
+      } else {
+        return error(c, 'Please enter the actual client secret', 400)
+      }
+    }
+    systemSettingsService.setJson(`oauth_${body.provider}`, { clientId: body.clientId, clientSecret: finalSecret }, user.id)
     return success(c, undefined, `${body.provider} OAuth credentials saved`)
   } catch (e: any) {
     return error(c, e.message || 'Failed', 500)

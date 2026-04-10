@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   useConfigs, useCreateConfig, useUpdateConfig, useDeleteConfig,
   useTestConfig, useConnectOAuth,
@@ -24,8 +25,26 @@ import {
   ShieldCheck, ShieldAlert, ExternalLink, Check,
 } from 'lucide-vue-next'
 
+const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 const { data: configs, isLoading: loading } = useConfigs()
+
+// Handle OAuth callback query params
+onMounted(() => {
+  const q = route.query
+  if (q.success) {
+    const provider = String(q.success).replace('_connected', '')
+    toast.success(`${provider.charAt(0).toUpperCase() + provider.slice(1)} account connected successfully`)
+    router.replace({ query: {} })
+  } else if (q.error) {
+    const err = String(q.error)
+    if (err.includes('denied')) toast.error('OAuth authorization was denied')
+    else if (err.includes('failed')) toast.error('OAuth connection failed. Please try again.')
+    else toast.error(`OAuth error: ${err}`)
+    router.replace({ query: {} })
+  }
+})
 const createMutation = useCreateConfig()
 const updateMutation = useUpdateConfig()
 const deleteMutation = useDeleteConfig()

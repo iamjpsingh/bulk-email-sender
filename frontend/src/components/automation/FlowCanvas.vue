@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onBeforeUnmount } from 'vue'
 import { VueFlow, useVueFlow, type Node, type Edge, type Connection, MarkerType } from '@vue-flow/core'
 import { MiniMap } from '@vue-flow/minimap'
 import { Controls } from '@vue-flow/controls'
@@ -8,8 +8,9 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/minimap/dist/style.css'
 import '@vue-flow/controls/dist/style.css'
 import BaseNode from './nodes/BaseNode.vue'
-import { NODE_TYPES, NODE_PALETTE, type NodeTypeName } from './nodes'
-import { Plus, Save, Loader2 } from 'lucide-vue-next'
+import { NODE_TYPES, NODE_PALETTE, getNodeSummary, isConnectionAllowed, type NodeTypeName } from './nodes'
+import { useFlowHistory } from '../../composables/useFlowHistory'
+import { Plus, Save, Loader2, Undo2, Redo2, AlignVerticalSpaceAround } from 'lucide-vue-next'
 
 const props = defineProps<{
   automationId: string
@@ -26,7 +27,7 @@ const emit = defineEmits<{
 const saving = ref(false)
 const showPalette = ref(false)
 
-const { nodes, edges, addNodes, addEdges, removeNodes, removeEdges, onConnect, onNodeClick, onPaneClick, fitView, getNode } = useVueFlow({
+const { nodes, edges, addNodes, addEdges, removeNodes, removeEdges, onConnect, onNodeClick, onPaneClick, onNodesChange, fitView, getNode } = useVueFlow({
   nodes: props.initialNodes || [],
   edges: props.initialEdges || [],
   defaultEdgeOptions: {
@@ -35,6 +36,41 @@ const { nodes, edges, addNodes, addEdges, removeNodes, removeEdges, onConnect, o
     markerEnd: MarkerType.ArrowClosed,
   },
 })
+
+// Undo/redo history
+const { pushState, undo, redo, canUndo, canRedo } = useFlowHistory(nodes, edges)
+
+// Push initial state
+pushState()
+
+// Track node changes for undo
+onNodesChange(() => {
+  // We'll push state on meaningful actions (add/delete), not every drag
+})
+
+// Keyboard shortcuts for undo/redo
+const handleFlowKey = (e: KeyboardEvent) => {
+  if (!(e.metaKey || e.ctrlKey)) return
+  if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+  if (e.key === 'z' && e.shiftKey) { e.preventDefault(); redo() }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', handleFlowKey)
+}
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleFlowKey)
+})
+
+// Auto-layout: simple vertical tree layout
+function autoLayout() {
+  pushState()
+  const sorted = [...nodes.value].sort((a, b) => a.position.y - b.position.y)
+  const xCenter = 250
+  sorted.forEach((node, idx) => {
+    node.position = { x: xCenter, y: 50 + idx * 130 }
+  })
+  nextTick(() => fitView({ padding: 0.2 }))
+}
 
 // Ensure trigger node exists
 if (!nodes.value.find(n => n.type === 'trigger')) {
@@ -79,6 +115,7 @@ function addFlowNode(type: NodeTypeName) {
   const maxY = yPositions.length ? Math.max(...yPositions) : 0
   const xCenter = 250
 
+  pushState()
   addNodes([{
     id,
     type,
@@ -97,6 +134,7 @@ function deleteNode(nodeId: string) {
   const node = getNode.value(nodeId)
   if (!node || node.type === 'trigger') return
 
+  pushState()
   // Remove connected edges
   const connectedEdges = edges.value.filter(e => e.source === nodeId || e.target === nodeId)
   removeEdges(connectedEdges.map(e => e.id))
@@ -133,27 +171,60 @@ defineExpose({ deleteNode, addFlowNode, fitView })
         <Save v-else :size="14" />
         Save
       </button>
+      <div class="w-px h-5 bg-border" />
+      <button
+        @click="undo"
+        :disabled="!canUndo"
+        class="p-1.5 bg-secondary border border-border rounded-lg text-muted-foreground hover:text-foreground transition shadow-sm disabled:opacity-30 disabled:cursor-not-allowed"
+        title="Undo (Ctrl+Z)"
+      >
+        <Undo2 :size="14" />
+      </button>
+      <button
+        @click="redo"
+        :disabled="!canRedo"
+        class="p-1.5 bg-secondary border border-border rounded-lg text-muted-foreground hover:text-foreground transition shadow-sm disabled:opacity-30 disabled:cursor-not-allowed"
+        title="Redo (Ctrl+Shift+Z)"
+      >
+        <Redo2 :size="14" />
+      </button>
+      <div class="w-px h-5 bg-border" />
+      <button
+        @click="autoLayout"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-secondary border border-border rounded-lg text-xs text-muted-foreground hover:text-foreground transition shadow-sm"
+        title="Auto Layout"
+      >
+        <AlignVerticalSpaceAround :size="14" />
+        Layout
+      </button>
       <button
         @click="fitView({ padding: 0.2 })"
-        class="px-2.5 py-1.5 bg-secondary border border-border rounded-lg text-xs text-muted-foreground hover:text-muted-foreground transition shadow-sm"
+        class="px-2.5 py-1.5 bg-secondary border border-border rounded-lg text-xs text-muted-foreground hover:text-foreground transition shadow-sm"
       >
         Fit
       </button>
     </div>
 
     <!-- Node Palette -->
-    <div v-if="showPalette" class="absolute top-12 left-3 z-20 bg-secondary border border-border rounded-xl shadow-lg p-3 w-56">
+    <div v-if="showPalette" class="absolute top-12 left-3 z-20 bg-card border border-border rounded-xl shadow-xl p-3 w-64 max-h-[70vh] overflow-y-auto">
+      <div class="text-xs font-semibold text-foreground mb-2">Add Node</div>
       <div v-for="group in NODE_PALETTE" :key="group.category" class="mb-3 last:mb-0">
-        <div class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{{ group.category }}</div>
-        <div class="flex flex-wrap gap-1.5">
+        <div class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">{{ group.category }}</div>
+        <div class="text-[9px] text-muted-foreground mb-1.5">{{ group.description }}</div>
+        <div class="flex flex-col gap-1">
           <button
             v-for="type in group.items"
             :key="type"
             @click="addFlowNode(type as NodeTypeName)"
-            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] font-medium text-muted-foreground hover:border-accent/40 hover:text-accent transition"
+            class="flex items-center gap-2.5 px-2.5 py-2 bg-background border border-border rounded-lg text-left hover:border-accent/40 hover:bg-accent/5 transition cursor-pointer group"
           >
-            <component :is="NODE_TYPES[type as NodeTypeName].icon" :size="12" :style="{ color: NODE_TYPES[type as NodeTypeName].color }" />
-            {{ NODE_TYPES[type as NodeTypeName].label }}
+            <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0" :style="{ backgroundColor: NODE_TYPES[type as NodeTypeName].color + '15' }">
+              <component :is="NODE_TYPES[type as NodeTypeName].icon" :size="12" :style="{ color: NODE_TYPES[type as NodeTypeName].color }" />
+            </div>
+            <div class="min-w-0">
+              <div class="text-[11px] font-medium text-foreground group-hover:text-accent truncate">{{ NODE_TYPES[type as NodeTypeName].label }}</div>
+              <div class="text-[9px] text-muted-foreground truncate">{{ NODE_TYPES[type as NodeTypeName].description }}</div>
+            </div>
           </button>
         </div>
       </div>
@@ -171,35 +242,21 @@ defineExpose({ deleteNode, addFlowNode, fitView })
       :edges-updatable="true"
       class="w-full h-full"
     >
-      <!-- Custom node rendering -->
-      <template #node-trigger="{ data, selected }">
-        <BaseNode
-          :label="data.label || 'Trigger'"
-          :icon="NODE_TYPES.trigger.icon"
-          :color="NODE_TYPES.trigger.color"
-          :bg-color="NODE_TYPES.trigger.bgColor"
-          :border-color="NODE_TYPES.trigger.borderColor"
-          :selected="selected"
-          :has-target-handle="false"
-        >
-          {{ data.triggerType || 'Manual' }}
-        </BaseNode>
-      </template>
-
+      <!-- Dynamic node rendering for all types -->
       <template v-for="(cfg, type) in NODE_TYPES" :key="type" #[`node-${type}`]="{ data, selected }">
         <BaseNode
-          v-if="type !== 'trigger'"
           :label="data.label || cfg.label"
           :icon="cfg.icon"
           :color="cfg.color"
           :bg-color="cfg.bgColor"
           :border-color="cfg.borderColor"
+          :category="cfg.category"
           :selected="selected"
-          :has-source-handle="(cfg as any).hasSourceHandle !== false"
-          :has-true-handle="(cfg as any).hasTrueHandle === true"
-          :has-false-handle="(cfg as any).hasFalseHandle === true"
+          :has-target-handle="cfg.hasTargetHandle"
+          :outputs="[...cfg.outputs]"
+          :configured="data.config && Object.keys(data.config).length > 0"
         >
-          {{ data.summary || '' }}
+          {{ data.summary || (type === 'trigger' ? (data.triggerType || 'Manual') : '') }}
         </BaseNode>
       </template>
 

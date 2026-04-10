@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTheme } from '../../composables/useTheme'
 import {
   Search,
   LayoutDashboard,
@@ -19,17 +20,55 @@ import {
   MessageCircle,
   ArrowRight,
   Hash,
+  Clock,
+  Plus,
+  Upload,
+  Palette,
 } from 'lucide-vue-next'
+
+interface CommandItem {
+  label: string
+  path: string
+  icon: any
+  section: string
+  action?: () => void
+}
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 
 const router = useRouter()
+const { toggleTheme } = useTheme()
 const query = ref('')
 const selectedIndex = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
 
-const navItems = [
+const RECENT_KEY = 'dispatch-recent-commands'
+const MAX_RECENT = 5
+
+function getRecent(): CommandItem[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY)
+    if (!raw) return []
+    const paths: string[] = JSON.parse(raw)
+    return paths
+      .map(p => navItems.find(item => item.path === p))
+      .filter(Boolean) as CommandItem[]
+  } catch { return [] }
+}
+
+function addRecent(path: string) {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY)
+    let paths: string[] = raw ? JSON.parse(raw) : []
+    paths = paths.filter(p => p !== path)
+    paths.unshift(path)
+    paths = paths.slice(0, MAX_RECENT)
+    localStorage.setItem(RECENT_KEY, JSON.stringify(paths))
+  } catch { /* ignore */ }
+}
+
+const navItems: CommandItem[] = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard, section: 'Navigation' },
   { label: 'Compose Email', path: '/compose', icon: PenSquare, section: 'Navigation' },
   { label: 'Campaigns', path: '/campaigns', icon: Send, section: 'Navigation' },
@@ -53,23 +92,53 @@ const navItems = [
   { label: 'Audit Logs', path: '/admin/audit', icon: BarChart3, section: 'Admin' },
 ]
 
+const actionItems: CommandItem[] = [
+  { label: 'New Campaign', path: '/compose', icon: Plus, section: 'Actions', action: () => router.push('/compose') },
+  { label: 'New Template', path: '/templates', icon: Plus, section: 'Actions', action: () => router.push('/templates') },
+  { label: 'Import Contacts', path: '/contacts', icon: Upload, section: 'Actions', action: () => router.push('/contacts') },
+  { label: 'Toggle Theme', path: '', icon: Palette, section: 'Actions', action: () => toggleTheme() },
+]
+
+const allItems = [...navItems, ...actionItems]
+
+function fuzzyMatch(text: string, terms: string[]): boolean {
+  const lower = text.toLowerCase()
+  return terms.every(term => lower.includes(term))
+}
+
 const filtered = computed(() => {
-  if (!query.value.trim()) return navItems
-  const q = query.value.toLowerCase()
-  return navItems.filter(item =>
-    item.label.toLowerCase().includes(q) ||
-    item.section.toLowerCase().includes(q) ||
-    item.path.toLowerCase().includes(q)
+  const q = query.value.trim()
+  if (!q) {
+    // Show recent items + all nav items
+    const recent = getRecent()
+    const recentWithSection = recent.map(r => ({ ...r, section: 'Recent' }))
+    return [...recentWithSection, ...navItems, ...actionItems]
+  }
+  const terms = q.toLowerCase().split(/\s+/)
+  return allItems.filter(item =>
+    fuzzyMatch(item.label, terms) ||
+    fuzzyMatch(item.section, terms) ||
+    fuzzyMatch(item.path, terms)
   )
 })
 
 const groupedResults = computed(() => {
-  const groups: Record<string, typeof navItems> = {}
+  const groups: Record<string, CommandItem[]> = {}
+  // Maintain section order: Recent, Actions, Navigation, Settings, Admin
+  const sectionOrder = ['Recent', 'Actions', 'Navigation', 'Settings', 'Admin']
   for (const item of filtered.value) {
     if (!groups[item.section]) groups[item.section] = []
     groups[item.section]!.push(item)
   }
-  return groups
+  const ordered: Record<string, CommandItem[]> = {}
+  for (const section of sectionOrder) {
+    if (groups[section]) ordered[section] = groups[section]
+  }
+  // Any remaining sections
+  for (const key of Object.keys(groups)) {
+    if (!ordered[key]) ordered[key] = groups[key]
+  }
+  return ordered
 })
 
 const flatResults = computed(() => filtered.value)
@@ -90,8 +159,13 @@ function close() {
   emit('update:open', false)
 }
 
-function navigate(path: string) {
-  router.push(path)
+function executeItem(item: CommandItem) {
+  if (item.action) {
+    item.action()
+  } else {
+    addRecent(item.path)
+    router.push(item.path)
+  }
   close()
 }
 
@@ -106,7 +180,7 @@ function handleKeydown(e: KeyboardEvent) {
   } else if (e.key === 'Enter') {
     e.preventDefault()
     const item = items[selectedIndex.value]
-    if (item) navigate(item.path)
+    if (item) executeItem(item)
   } else if (e.key === 'Escape') {
     close()
   }
@@ -141,7 +215,7 @@ function handleKeydown(e: KeyboardEvent) {
               ref="inputRef"
               v-model="query"
               type="text"
-              class="flex-1 h-12 bg-transparent text-[15px] text-foreground placeholder-text-muted outline-none border-none"
+              class="flex-1 h-12 bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground outline-none border-none"
               placeholder="Type a command or search..."
             />
             <kbd class="hidden sm:flex items-center h-5 px-1.5 rounded bg-muted border border-border text-[10px] font-mono text-muted-foreground">
@@ -165,14 +239,14 @@ function handleKeydown(e: KeyboardEvent) {
               </div>
               <div
                 v-for="item in items"
-                :key="item.path"
+                :key="`${section}-${item.path}-${item.label}`"
                 :class="[
                   'flex items-center gap-3 mx-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors',
                   flatResults.indexOf(item) === selectedIndex
                     ? 'bg-accent/10 text-accent'
                     : 'text-muted-foreground hover:bg-secondary'
                 ]"
-                @click="navigate(item.path)"
+                @click="executeItem(item)"
                 @mouseenter="selectedIndex = flatResults.indexOf(item)"
               >
                 <component

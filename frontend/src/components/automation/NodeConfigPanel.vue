@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Node } from '@vue-flow/core'
-import { NODE_TYPES, type NodeTypeName } from './nodes'
-import { X, Trash2 } from 'lucide-vue-next'
+import { NODE_TYPES, OPERATORS, CONTACT_FIELDS, getNodeSummary, type NodeTypeName, type NodeFieldDef } from './nodes'
+import { X, Trash2, Settings, Clock } from 'lucide-vue-next'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const props = defineProps<{
@@ -18,231 +19,217 @@ const emit = defineEmits<{
 }>()
 
 const nodeType = computed(() => props.node?.type as NodeTypeName | undefined)
-const nodeConfig = computed(() => NODE_TYPES[nodeType.value as NodeTypeName])
+const nodeDef = computed(() => nodeType.value ? NODE_TYPES[nodeType.value] : null)
 const config = computed(() => props.node?.data?.config || {})
 
 function updateConfig(key: string, value: any) {
   if (!props.node) return
-  const updated = { ...props.node.data, config: { ...config.value, [key]: value } }
-  // Also update summary for display
-  updated.summary = getSummary(props.node.type as string, { ...config.value, [key]: value })
+  const newConfig = { ...config.value, [key]: value }
+  const updated = {
+    ...props.node.data,
+    config: newConfig,
+    summary: getNodeSummary(props.node.type as string, newConfig),
+  }
   emit('update', props.node.id, updated)
 }
 
-function getSummary(type: string, cfg: Record<string, any>): string {
-  switch (type) {
-    case 'send_email': return cfg.subject || 'No subject'
-    case 'wait': return `${cfg.duration || 1} ${cfg.unit || 'days'}`
-    case 'delay_until': return cfg.date || 'Not set'
-    case 'condition': return cfg.field ? `${cfg.field} ${cfg.operator || '='} ${cfg.value || ''}` : 'Not configured'
-    case 'filter': return cfg.field ? `${cfg.field} ${cfg.operator || '='} ${cfg.value || ''}` : 'Not configured'
-    case 'split_test': return `${cfg.percentage_a || 50}% / ${cfg.percentage_b || 50}%`
-    case 'add_tag': return cfg.tag || 'No tag'
-    case 'remove_tag': return cfg.tag || 'No tag'
-    case 'update_contact': return cfg.field ? `${cfg.field} = ${cfg.value || ''}` : 'Not configured'
-    case 'move_to_list': return cfg.list_id || 'No list'
-    case 'score_change': return cfg.amount ? `${cfg.amount > 0 ? '+' : ''}${cfg.amount}` : 'Not set'
-    case 'http_request': return cfg.url || 'No URL'
-    case 'webhook': return cfg.url || 'No URL'
-    default: return ''
-  }
+function getFieldValue(field: NodeFieldDef): any {
+  return config.value[field.key] ?? ''
 }
 </script>
 
 <template>
-  <div v-if="node && nodeConfig" class="bg-secondary border border-border rounded-xl p-4 w-72">
+  <div v-if="node && nodeDef" class="bg-card border border-border rounded-xl w-80 shadow-lg overflow-hidden">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-4">
-      <div class="flex items-center gap-2">
-        <div class="w-6 h-6 rounded flex items-center justify-center" :style="{ backgroundColor: nodeConfig.color + '20' }">
-          <component :is="nodeConfig.icon" :size="12" :style="{ color: nodeConfig.color }" />
+    <div class="flex items-center justify-between px-4 py-3 border-b border-border" :style="{ backgroundColor: nodeDef.color + '08' }">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" :style="{ backgroundColor: nodeDef.color + '20' }">
+          <component :is="nodeDef.icon" :size="14" :style="{ color: nodeDef.color }" />
         </div>
-        <span class="text-sm font-semibold text-foreground">{{ nodeConfig.label }}</span>
+        <div class="min-w-0">
+          <div class="text-sm font-semibold text-foreground truncate">{{ nodeDef.label }}</div>
+          <div class="text-[10px] text-muted-foreground">{{ nodeDef.description }}</div>
+        </div>
       </div>
-      <div class="flex items-center gap-1">
-        <button v-if="node.type !== 'trigger'" @click="emit('delete', node.id)" class="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition">
+      <div class="flex items-center gap-0.5 shrink-0">
+        <button
+          v-if="node.type !== 'trigger'"
+          @click="emit('delete', node.id)"
+          class="p-1.5 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition cursor-pointer"
+          title="Delete node"
+        >
           <Trash2 :size="14" />
         </button>
-        <button @click="emit('close')" class="p-1 rounded hover:bg-card text-muted-foreground hover:text-muted-foreground transition">
+        <button
+          @click="emit('close')"
+          class="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition cursor-pointer"
+        >
           <X :size="14" />
         </button>
       </div>
     </div>
 
-    <!-- Trigger config -->
+    <!-- Trigger info -->
     <template v-if="node.type === 'trigger'">
-      <p class="text-xs text-muted-foreground">Trigger type is set when creating the automation.</p>
-    </template>
-
-    <!-- Send Email -->
-    <template v-else-if="node.type === 'send_email'">
-      <div class="space-y-3">
-        <div class="mb-0">
-          <Label class="text-xs">Subject Line</Label>
-          <Input class="text-sm" :model-value="config.subject" @update:model-value="updateConfig('subject', $event)" placeholder="Email subject..." />
-        </div>
-        <div class="mb-0">
-          <Label class="text-xs">Template ID</Label>
-          <Input class="text-sm" :model-value="config.template_id" @update:model-value="updateConfig('template_id', $event)" placeholder="Select template..." />
+      <div class="p-4">
+        <p class="text-xs text-muted-foreground">Trigger type is set when creating the automation. Contacts enter the flow through this node.</p>
+        <div v-if="node.data?.triggerType" class="mt-3 px-3 py-2 bg-secondary rounded-lg">
+          <span class="text-xs font-medium text-foreground">{{ node.data.triggerType }}</span>
         </div>
       </div>
     </template>
 
-    <!-- Wait -->
-    <template v-else-if="node.type === 'wait'">
-      <div class="flex gap-2">
-        <div class="flex-1">
-          <Label class="text-xs">Duration</Label>
-          <Input class="text-sm" type="number" min="1" :model-value="config.duration || 1" @update:model-value="updateConfig('duration', Number($event))" />
-        </div>
-        <div class="flex-1">
-          <Label class="text-xs">Unit</Label>
-          <Select :model-value="config.unit || 'days'" @update:model-value="updateConfig('unit', $event)">
-            <SelectTrigger class="text-sm"><SelectValue placeholder="Unit" /></SelectTrigger>
+    <!-- End info -->
+    <template v-else-if="node.type === 'end'">
+      <div class="p-4">
+        <p class="text-xs text-muted-foreground">Contacts reaching this node will complete and exit the automation.</p>
+      </div>
+    </template>
+
+    <!-- Dynamic config fields -->
+    <template v-else-if="nodeDef.fields.length > 0">
+      <div class="p-4 space-y-3.5 max-h-[60vh] overflow-y-auto">
+        <div v-for="field in nodeDef.fields" :key="field.key">
+          <Label class="text-xs mb-1.5 block">
+            {{ field.label }}
+            <span v-if="field.required" class="text-danger">*</span>
+          </Label>
+
+          <!-- Text input -->
+          <Input
+            v-if="field.type === 'text'"
+            :model-value="getFieldValue(field)"
+            @update:model-value="updateConfig(field.key, $event)"
+            :placeholder="field.placeholder"
+            class="text-sm"
+          />
+
+          <!-- Number input -->
+          <Input
+            v-else-if="field.type === 'number'"
+            type="number"
+            :model-value="getFieldValue(field)"
+            @update:model-value="updateConfig(field.key, Number($event))"
+            :placeholder="field.placeholder"
+            class="text-sm"
+          />
+
+          <!-- Textarea -->
+          <Textarea
+            v-else-if="field.type === 'textarea'"
+            :model-value="getFieldValue(field)"
+            @update:model-value="updateConfig(field.key, $event)"
+            :placeholder="field.placeholder"
+            rows="3"
+            class="text-sm resize-none"
+          />
+
+          <!-- DateTime -->
+          <Input
+            v-else-if="field.type === 'datetime'"
+            type="datetime-local"
+            :model-value="getFieldValue(field)"
+            @update:model-value="updateConfig(field.key, $event)"
+            class="text-sm"
+          />
+
+          <!-- Select with static options -->
+          <Select
+            v-else-if="field.type === 'select' && field.options"
+            :model-value="getFieldValue(field) || field.options[0]?.value"
+            @update:model-value="updateConfig(field.key, $event)"
+          >
+            <SelectTrigger class="text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="minutes">Minutes</SelectItem>
-              <SelectItem value="hours">Hours</SelectItem>
-              <SelectItem value="days">Days</SelectItem>
-              <SelectItem value="weeks">Weeks</SelectItem>
+              <SelectItem v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-      </div>
-    </template>
 
-    <!-- Delay Until -->
-    <template v-else-if="node.type === 'delay_until'">
-      <div class="mb-0">
-        <Label class="text-xs">Wait until date/time</Label>
-        <Input class="text-sm" type="datetime-local" :model-value="config.date" @update:model-value="updateConfig('date', $event)" />
-      </div>
-    </template>
+          <!-- Operator select -->
+          <Select
+            v-else-if="field.type === 'operator-select'"
+            :model-value="getFieldValue(field) || 'equals'"
+            @update:model-value="updateConfig(field.key, $event)"
+          >
+            <SelectTrigger class="text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="op in OPERATORS" :key="op.value" :value="op.value">{{ op.label }}</SelectItem>
+            </SelectContent>
+          </Select>
 
-    <!-- Condition / Filter -->
-    <template v-else-if="node.type === 'condition' || node.type === 'filter'">
-      <div class="space-y-3">
-        <div class="mb-0">
-          <Label class="text-xs">Contact Field</Label>
-          <Select :model-value="config.field || ''" @update:model-value="updateConfig('field', $event)">
+          <!-- Field picker (contact fields) -->
+          <Select
+            v-else-if="field.type === 'field-picker'"
+            :model-value="getFieldValue(field)"
+            @update:model-value="updateConfig(field.key, $event)"
+          >
             <SelectTrigger class="text-sm"><SelectValue placeholder="Select field..." /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="email">Email</SelectItem>
-              <SelectItem value="first_name">First Name</SelectItem>
-              <SelectItem value="last_name">Last Name</SelectItem>
-              <SelectItem value="company">Company</SelectItem>
-              <SelectItem value="engagement_score">Engagement Score</SelectItem>
-              <SelectItem value="status">Status</SelectItem>
-              <SelectItem value="tags">Tags</SelectItem>
+              <SelectItem v-for="f in CONTACT_FIELDS" :key="f.value" :value="f.value">{{ f.label }}</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div class="mb-0">
-          <Label class="text-xs">Operator</Label>
-          <Select :model-value="config.operator || 'equals'" @update:model-value="updateConfig('operator', $event)">
-            <SelectTrigger class="text-sm"><SelectValue placeholder="Operator" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="equals">Equals</SelectItem>
-              <SelectItem value="not_equals">Not Equals</SelectItem>
-              <SelectItem value="contains">Contains</SelectItem>
-              <SelectItem value="not_contains">Not Contains</SelectItem>
-              <SelectItem value="greater_than">Greater Than</SelectItem>
-              <SelectItem value="less_than">Less Than</SelectItem>
-              <SelectItem value="exists">Exists</SelectItem>
-              <SelectItem value="not_exists">Not Exists</SelectItem>
-              <SelectItem value="has_tag">Has Tag</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div class="mb-0">
-          <Label class="text-xs">Value</Label>
-          <Input class="text-sm" :model-value="config.value" @update:model-value="updateConfig('value', $event)" placeholder="Comparison value..." />
+
+          <!-- Tag picker (text input for now — can be enhanced to autocomplete) -->
+          <Input
+            v-else-if="field.type === 'tag-picker'"
+            :model-value="getFieldValue(field)"
+            @update:model-value="updateConfig(field.key, $event)"
+            placeholder="Enter tag name..."
+            class="text-sm"
+          />
+
+          <!-- List picker (text input for now — can be enhanced to fetch real lists) -->
+          <Input
+            v-else-if="field.type === 'list-picker'"
+            :model-value="getFieldValue(field)"
+            @update:model-value="updateConfig(field.key, $event)"
+            placeholder="Enter list ID..."
+            class="text-sm"
+          />
+
+          <!-- Template picker (text input for now — can be enhanced to fetch real templates) -->
+          <Input
+            v-else-if="field.type === 'template-picker'"
+            :model-value="getFieldValue(field)"
+            @update:model-value="updateConfig(field.key, $event)"
+            placeholder="Template ID..."
+            class="text-sm"
+          />
+
+          <!-- WhatsApp template picker -->
+          <Input
+            v-else-if="field.type === 'wa-template-picker'"
+            :model-value="getFieldValue(field)"
+            @update:model-value="updateConfig(field.key, $event)"
+            placeholder="Template name (must be Meta-approved)..."
+            class="text-sm"
+          />
+
+          <!-- Duration (two fields: number + unit) -->
+          <template v-else-if="field.type === 'duration'">
+            <div class="flex gap-2">
+              <Input type="number" min="1" :model-value="config[field.key + '_value'] || 1" @update:model-value="updateConfig(field.key + '_value', Number($event))" class="text-sm flex-1" />
+              <Select :model-value="config[field.key + '_unit'] || 'days'" @update:model-value="updateConfig(field.key + '_unit', $event)">
+                <SelectTrigger class="text-sm w-24"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="minutes">Min</SelectItem>
+                  <SelectItem value="hours">Hours</SelectItem>
+                  <SelectItem value="days">Days</SelectItem>
+                  <SelectItem value="weeks">Weeks</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </template>
+
+          <!-- Help text -->
+          <p v-if="field.helpText" class="text-[10px] text-muted-foreground mt-1">{{ field.helpText }}</p>
         </div>
       </div>
     </template>
 
-    <!-- Split Test -->
-    <template v-else-if="node.type === 'split_test'">
-      <div class="flex gap-2">
-        <div class="flex-1">
-          <Label class="text-xs">Path A %</Label>
-          <Input class="text-sm" type="number" min="1" max="99" :model-value="config.percentage_a || 50" @update:model-value="updateConfig('percentage_a', Number($event))" />
-        </div>
-        <div class="flex-1">
-          <Label class="text-xs">Path B %</Label>
-          <Input class="text-sm" type="number" min="1" max="99" :model-value="config.percentage_b || 50" @update:model-value="updateConfig('percentage_b', Number($event))" />
-        </div>
-      </div>
-    </template>
-
-    <!-- Add/Remove Tag -->
-    <template v-else-if="node.type === 'add_tag' || node.type === 'remove_tag'">
-      <div class="mb-0">
-        <Label class="text-xs">Tag Name</Label>
-        <Input class="text-sm" :model-value="config.tag" @update:model-value="updateConfig('tag', $event)" placeholder="Enter tag name..." />
-      </div>
-    </template>
-
-    <!-- Update Contact -->
-    <template v-else-if="node.type === 'update_contact'">
-      <div class="space-y-3">
-        <div class="mb-0">
-          <Label class="text-xs">Field</Label>
-          <Input class="text-sm" :model-value="config.field" @update:model-value="updateConfig('field', $event)" placeholder="e.g. status" />
-        </div>
-        <div class="mb-0">
-          <Label class="text-xs">New Value</Label>
-          <Input class="text-sm" :model-value="config.value" @update:model-value="updateConfig('value', $event)" placeholder="New value..." />
-        </div>
-      </div>
-    </template>
-
-    <!-- Move to List -->
-    <template v-else-if="node.type === 'move_to_list'">
-      <div class="mb-0">
-        <Label class="text-xs">Target List ID</Label>
-        <Input class="text-sm" :model-value="config.list_id" @update:model-value="updateConfig('list_id', $event)" placeholder="List ID..." />
-      </div>
-    </template>
-
-    <!-- Score Change -->
-    <template v-else-if="node.type === 'score_change'">
-      <div class="mb-0">
-        <Label class="text-xs">Score Change</Label>
-        <Input class="text-sm" type="number" :model-value="config.amount || 0" @update:model-value="updateConfig('amount', Number($event))" placeholder="+10 or -5" />
-      </div>
-      <p class="text-[10px] text-muted-foreground mt-1">Positive to add, negative to subtract</p>
-    </template>
-
-    <!-- HTTP Request / Webhook -->
-    <template v-else-if="node.type === 'http_request' || node.type === 'webhook'">
-      <div class="space-y-3">
-        <div class="mb-0">
-          <Label class="text-xs">URL</Label>
-          <Input class="text-sm" :model-value="config.url" @update:model-value="updateConfig('url', $event)" placeholder="https://..." />
-        </div>
-        <div class="mb-0">
-          <Label class="text-xs">Method</Label>
-          <Select :model-value="config.method || 'POST'" @update:model-value="updateConfig('method', $event)">
-            <SelectTrigger class="text-sm"><SelectValue placeholder="Method" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="GET">GET</SelectItem>
-              <SelectItem value="POST">POST</SelectItem>
-              <SelectItem value="PUT">PUT</SelectItem>
-              <SelectItem value="DELETE">DELETE</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    </template>
-
-    <!-- End -->
-    <template v-else-if="node.type === 'end'">
-      <p class="text-xs text-muted-foreground">Contacts reaching this node exit the automation.</p>
-    </template>
-
-    <!-- Node ID (debug) -->
-    <div class="mt-4 pt-3 border-t border-border">
-      <span class="text-[10px] text-muted-foreground font-mono">{{ node.id }}</span>
+    <!-- Footer: Node ID -->
+    <div class="px-4 py-2.5 border-t border-border bg-muted/30">
+      <span class="text-[9px] text-muted-foreground font-mono">{{ node.id }}</span>
     </div>
   </div>
 </template>

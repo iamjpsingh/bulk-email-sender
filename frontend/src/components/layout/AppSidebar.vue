@@ -32,8 +32,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const { user, logout, orgs, orgId, isPlatformAdmin, switchOrg } = useAuth()
-const mobileOpen = ref(false)
-const { collapsed, toggle: toggleCollapse } = useSidebar()
+const { collapsed, mobileOpen, toggle: toggleCollapse, closeMobile, toggleMobile } = useSidebar()
 const headerHovered = ref(false)
 const { isAdmin, can } = usePermissions()
 const orgSwitcherOpen = ref(false)
@@ -90,7 +89,7 @@ async function handleLogout() {
 }
 
 function handleNavClick() {
-  mobileOpen.value = false
+  closeMobile()
   orgSwitcherOpen.value = false
 }
 
@@ -119,7 +118,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
       'hover:bg-card',
       'md:hidden'
     )"
-    @click="mobileOpen = !mobileOpen"
+    @click="toggleMobile()"
     :aria-label="mobileOpen ? 'Close menu' : 'Open menu'"
   >
     <X v-if="mobileOpen" :size="18" />
@@ -136,7 +135,7 @@ onUnmounted(() => document.removeEventListener('click', handleDocClick))
     <div
       v-if="mobileOpen"
       class="fixed inset-0 bg-black/60 backdrop-blur-sm z-149 md:hidden"
-      @click="mobileOpen = false"
+      @click="closeMobile()"
     />
   </Transition>
 

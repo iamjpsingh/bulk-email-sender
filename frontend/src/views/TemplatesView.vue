@@ -381,101 +381,81 @@ fetchStarters()
       </div>
     </Modal>
 
-    <!-- Editor Slide-out (full width) -->
-  <SlidePanel :show="showEditor" :title="editingId ? 'Edit Template' : 'New Template'" size="xl" @close="closeEditor">
-    <div class="flex flex-1 overflow-hidden max-md:flex-col -m-6 h-[calc(100%+48px)]">
-      <!-- Left: Form + Monaco Editor -->
-      <div class="flex-1 flex flex-col overflow-hidden">
-        <!-- Top fields row -->
-        <div class="p-5 pb-0 shrink-0">
-          <div class="grid grid-cols-[1fr_1fr_auto] max-md:grid-cols-1 gap-3 mb-3">
-            <div class="flex flex-col gap-2">
-              <Label>Name *</Label>
-              <Input v-model="form.name" type="text" placeholder="Template name" required />
-            </div>
-            <div class="flex flex-col gap-2">
-              <Label>Subject Line *</Label>
-              <Input v-model="form.subject" type="text" placeholder="Email subject" required />
-            </div>
-            <div class="flex flex-col gap-2">
-              <Label>Category</Label>
-              <Select v-model="form.category">
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="cat in categories.filter((c) => c !== 'all')" :key="cat" :value="cat">
-                    {{ categoryLabel(cat) }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+    <!-- Editor Slide-out (full width ~80% of viewport) -->
+  <SlidePanel :show="showEditor" :title="editingId ? 'Edit Template' : 'New Template'" size="full" flush @close="closeEditor">
+    <div class="flex flex-col h-full">
+      <!-- Top fields row -->
+      <div class="p-5 pb-0 shrink-0">
+        <div class="grid grid-cols-[1fr_1fr_auto] max-md:grid-cols-1 gap-3 mb-3">
+          <div class="flex flex-col gap-2">
+            <Label>Name *</Label>
+            <Input v-model="form.name" type="text" placeholder="Template name" required />
           </div>
-          <div class="flex flex-col gap-2 mb-3">
-            <Label>Description</Label>
-            <Input v-model="form.description" type="text" placeholder="Brief description (optional)" />
+          <div class="flex flex-col gap-2">
+            <Label>Subject Line *</Label>
+            <Input v-model="form.subject" type="text" placeholder="Email subject" required />
+          </div>
+          <div class="flex flex-col gap-2">
+            <Label>Category</Label>
+            <Select v-model="form.category">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="cat in categories.filter((c) => c !== 'all')" :key="cat" :value="cat">
+                  {{ categoryLabel(cat) }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
+        <div class="flex flex-col gap-2 mb-3">
+          <Label>Description</Label>
+          <Input v-model="form.description" type="text" placeholder="Brief description (optional)" />
+        </div>
+      </div>
 
-        <!-- Editor mode toggle + content -->
-        <div class="flex-1 px-5 pb-0 min-h-0 flex flex-col">
-          <div class="flex items-center gap-2 mb-1.5">
-            <Label class="mb-0">Content</Label>
-            <div class="flex gap-1 ml-auto">
-              <Button
-                size="sm"
-                :variant="editorMode === 'code' ? 'default' : 'secondary'"
-                class="h-6 px-2 text-[11px]"
-                @click="editorMode = 'code'"
-              ><Code2 :size="11" /> Code</Button>
-              <Button
-                size="sm"
-                :variant="editorMode === 'visual' ? 'default' : 'secondary'"
-                class="h-6 px-2 text-[11px]"
-                @click="editorMode = 'visual'"
-              ><Paintbrush :size="11" /> Visual</Button>
-            </div>
+      <!-- Editor mode toggle + content -->
+      <div class="flex-1 px-5 pb-0 min-h-0 flex flex-col overflow-hidden">
+        <div class="flex items-center gap-2 mb-2">
+          <Label class="mb-0">Content</Label>
+          <div class="flex gap-1 ml-auto">
+            <Button
+              size="sm"
+              :variant="editorMode === 'visual' ? 'default' : 'secondary'"
+              class="h-7 px-3 text-xs"
+              @click="editorMode = 'visual'"
+            ><Paintbrush :size="12" /> Visual</Button>
+            <Button
+              size="sm"
+              :variant="editorMode === 'code' ? 'default' : 'secondary'"
+              class="h-7 px-3 text-xs"
+              @click="editorMode = 'code'"
+            ><Code2 :size="12" /> Code</Button>
           </div>
+        </div>
+        <div class="flex-1 min-h-0 overflow-hidden rounded-lg border border-border">
           <HtmlCodeEditor
             v-if="editorMode === 'code'"
             :content="form.html_content"
             @update:content="form.html_content = $event"
-            class="flex-1 min-h-0"
+            class="h-full"
           />
           <EmailBuilder
             v-if="editorMode === 'visual'"
             :content="form.html_content"
             @save="(html) => { form.html_content = html }"
             @change="(html) => { form.html_content = html }"
-            class="flex-1 min-h-0"
+            class="h-full"
           />
-        </div>
-
-        <!-- Footer actions -->
-        <div class="flex justify-end gap-3 px-5 py-4 border-t border-border shrink-0">
-          <Button variant="ghost" @click="closeEditor">Cancel</Button>
-          <Button @click="saveTemplate" :disabled="saving || !form.name || !form.subject">
-            <Loader2 v-if="saving" :size="16" class="spin" />
-            {{ editingId ? 'Update' : 'Create' }}
-          </Button>
         </div>
       </div>
 
-      <!-- Right: Live Preview (auto-updates) -->
-      <div class="w-[40%] max-md:w-full max-md:h-[300px] flex flex-col overflow-hidden border-l border-border">
-        <div class="px-5 py-3 border-b border-border shrink-0">
-          <span class="text-muted-foreground text-sm font-medium">Live Preview</span>
-        </div>
-        <div class="flex-1 overflow-hidden bg-white">
-          <iframe
-            v-if="previewHtml"
-            :srcdoc="previewHtml"
-            sandbox="allow-same-origin"
-            class="w-full h-full border-none"
-          ></iframe>
-          <div v-else class="flex flex-col items-center justify-center h-full gap-3 bg-secondary">
-            <FileText :size="32" class="text-muted-foreground" />
-            <p class="text-muted-foreground text-sm">Write HTML to see a live preview</p>
-          </div>
-        </div>
+      <!-- Footer actions -->
+      <div class="flex justify-end gap-3 px-5 py-4 border-t border-border shrink-0">
+        <Button variant="ghost" @click="closeEditor">Cancel</Button>
+        <Button @click="saveTemplate" :disabled="saving || !form.name || !form.subject">
+          <Loader2 v-if="saving" :size="16" class="spin" />
+          {{ editingId ? 'Update' : 'Create' }}
+        </Button>
       </div>
     </div>
   </SlidePanel>

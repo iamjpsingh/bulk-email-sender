@@ -19,6 +19,18 @@ export const emailApi = {
     return res.data
   },
 
+  sendTestEmail: async (html: string, to: string, subject: string) => {
+    const res = await api.post<{ message: string }>('/send-test', { html, to, subject })
+    if (!res.success) throw new Error(res.message || 'Failed to send test email')
+    return res.data
+  },
+
+  checkSpamScore: async (html: string) => {
+    const res = await api.post<{ score: number; details: string[] }>('/spam-check', { html })
+    if (!res.success) throw new Error(res.message || 'Failed to check spam score')
+    return res.data
+  },
+
   getProviderInfo: async (host: string, hasNotification: boolean) => {
     const formData = new FormData()
     formData.append('smtpHost', host)

@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { computed, provide, ref } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../../stores/auth'
 import { useSidebar } from '../../composables/useSidebar'
 import { useTheme } from '../../composables/useTheme'
+import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { cn } from '../../lib/utils'
 import AppSidebar from './AppSidebar.vue'
+import BottomNav from './BottomNav.vue'
+import NotificationBell from './NotificationBell.vue'
 import CommandPalette from '../command/CommandPalette.vue'
+import KeyboardShortcutsModal from '../ui/KeyboardShortcutsModal.vue'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -22,12 +26,18 @@ import {
 } from 'lucide-vue-next'
 
 const route = useRoute()
+const router = useRouter()
 const { user } = useAuth()
 const { collapsed } = useSidebar()
 const { theme, toggleTheme } = useTheme()
 
 const showCommandPalette = ref(false)
+const showShortcutsModal = ref(false)
 provide('commandPalette', { open: () => { showCommandPalette.value = true } })
+
+// Ctrl+S save injection point — views can set their save function
+const ctrlSaveHandler = ref<(() => void) | null>(null)
+provide('ctrlSave', ctrlSaveHandler)
 
 const userInitial = computed(() => user.value?.name?.charAt(0).toUpperCase() || '?')
 
@@ -59,15 +69,34 @@ const breadcrumbs = computed(() => {
   return crumbs
 })
 
-// Keyboard shortcut for command palette
-if (typeof window !== 'undefined') {
-  window.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault()
-      showCommandPalette.value = !showCommandPalette.value
-    }
-  })
-}
+// Register keyboard shortcuts
+const { register } = useKeyboardShortcuts()
+
+// Global shortcuts
+register('mod+k', () => { showCommandPalette.value = !showCommandPalette.value }, { scope: 'General', description: 'Command palette' })
+register('mod+s', () => { ctrlSaveHandler.value?.() }, { scope: 'General', description: 'Save' })
+register('?', () => { showShortcutsModal.value = true }, { scope: 'General', description: 'Show shortcuts' })
+register('/', () => { showCommandPalette.value = true }, { scope: 'General', description: 'Focus search' })
+
+// Navigation shortcuts (g then *)
+register('g d', () => router.push('/'), { scope: 'Navigation', description: 'Go to Dashboard' })
+register('g c', () => router.push('/contacts'), { scope: 'Navigation', description: 'Go to Contacts' })
+register('g m', () => router.push('/campaigns'), { scope: 'Navigation', description: 'Go to Campaigns' })
+register('g t', () => router.push('/templates'), { scope: 'Navigation', description: 'Go to Templates' })
+register('g a', () => router.push('/automations'), { scope: 'Navigation', description: 'Go to Automations' })
+register('g r', () => router.push('/reports'), { scope: 'Navigation', description: 'Go to Reports' })
+register('g s', () => router.push('/settings'), { scope: 'Navigation', description: 'Go to Settings' })
+register('g e', () => router.push('/compose'), { scope: 'Navigation', description: 'Go to Compose' })
+
+// Context-aware "new" shortcut
+register('n', () => {
+  const path = route.path
+  if (path.startsWith('/campaigns')) router.push('/compose')
+  else if (path.startsWith('/contacts')) router.push('/contacts')
+  else if (path.startsWith('/templates')) router.push('/templates')
+  else if (path.startsWith('/automations')) router.push('/automations')
+  else router.push('/compose')
+}, { scope: 'Actions', description: 'New item (context-aware)' })
 </script>
 
 <template>
@@ -169,6 +198,9 @@ if (typeof window !== 'undefined') {
             <Search :size="16" />
           </button>
 
+          <!-- Notifications -->
+          <NotificationBell />
+
           <!-- Theme toggle -->
           <button
             @click="toggleTheme"
@@ -218,7 +250,7 @@ if (typeof window !== 'undefined') {
       <!-- Page content — RouterView replaces <slot> -->
       <main
         id="main-content"
-        class="flex-1 px-6 py-6"
+        class="flex-1 px-6 py-6 pb-20 md:pb-6"
       >
         <div class="max-w-[1400px] mx-auto">
           <RouterView />
@@ -226,7 +258,13 @@ if (typeof window !== 'undefined') {
       </main>
     </div>
 
+    <!-- Bottom nav for mobile -->
+    <BottomNav />
+
     <!-- Command Palette -->
     <CommandPalette v-model:open="showCommandPalette" />
+
+    <!-- Keyboard Shortcuts Help -->
+    <KeyboardShortcutsModal v-model:show="showShortcutsModal" />
   </div>
 </template>

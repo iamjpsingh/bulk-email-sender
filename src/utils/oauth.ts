@@ -6,6 +6,7 @@ import { SERVER } from '../config'
 import { logger } from './logger'
 import { d1UserDatabase } from '../services/d1UserDatabase'
 import { oauthService } from '../services/oauthService'
+import { rbacService } from '../services/rbacService'
 import { systemMailerService } from '../services/systemMailerService'
 import type { SystemMailerConfig } from '../services/systemMailerService'
 import { systemSettingsService } from '../services/systemSettingsService'
@@ -36,9 +37,10 @@ export async function handleOAuthCallback(
 
   // Handle OAuth errors
   if (error) {
+    // No state to determine admin status, try to fall back to /settings
     return {
       success: false,
-      redirectUrl: `${frontendUrl}/configs?error=${provider}_denied`,
+      redirectUrl: `${frontendUrl}/settings/delivery-servers?error=${provider}_denied`,
     }
   }
 
@@ -46,7 +48,7 @@ export async function handleOAuthCallback(
   if (!code || !state) {
     return {
       success: false,
-      redirectUrl: `${frontendUrl}/configs?error=invalid_callback`,
+      redirectUrl: `${frontendUrl}/settings/delivery-servers?error=invalid_callback`,
     }
   }
 
@@ -55,7 +57,7 @@ export async function handleOAuthCallback(
   if (!stateData || stateData.provider !== provider) {
     return {
       success: false,
-      redirectUrl: `${frontendUrl}/configs?error=invalid_state`,
+      redirectUrl: `${frontendUrl}/settings/delivery-servers?error=invalid_state`,
     }
   }
 
@@ -97,15 +99,21 @@ export async function handleOAuthCallback(
       logger.info(`Connected ${provider} account: ${tokens.email}`)
     }
 
+    // Redirect platform admin to /platform/settings, org user to /settings
+    const isPlatformAdmin = rbacService.isPlatformAdmin(stateData.userId)
+    const settingsPath = isPlatformAdmin ? '/platform/settings/delivery-servers' : '/settings/delivery-servers'
+
     return {
       success: true,
-      redirectUrl: `${frontendUrl}/configs?success=${provider}_connected`,
+      redirectUrl: `${frontendUrl}${settingsPath}?success=${provider}_connected`,
     }
   } catch (err) {
     logger.error(`${provider} OAuth callback error:`, err)
+    const isPlatformAdmin = rbacService.isPlatformAdmin(stateData.userId)
+    const settingsPath = isPlatformAdmin ? '/platform/settings/delivery-servers' : '/settings/delivery-servers'
     return {
       success: false,
-      redirectUrl: `${frontendUrl}/configs?error=${provider}_failed`,
+      redirectUrl: `${frontendUrl}${settingsPath}?error=${provider}_failed`,
     }
   }
 }
@@ -129,7 +137,9 @@ async function handlePlatformMailerCallback(
 
     const oauthCreds = systemSettingsService.getJson<{ clientId: string; clientSecret: string }>(`oauth_${provider}`)
     if (!oauthCreds) {
-      return { success: false, redirectUrl: `${frontendUrl}/admin/platform-settings?oauth_error=no_credentials` }
+      const isPlatform = rbacService.isPlatformAdmin(userId)
+      const settingsPath = isPlatform ? '/platform/system-settings' : '/admin/platform-settings'
+      return { success: false, redirectUrl: `${frontendUrl}${settingsPath}?oauth_error=no_credentials` }
     }
 
     const existing = systemMailerService.getConfig()
@@ -159,15 +169,21 @@ async function handlePlatformMailerCallback(
     systemMailerService.saveConfig(config, userId)
     logger.info(`Platform mailer connected: ${mailerProvider} — ${tokens.email}`)
 
+    // Platform admin uses /platform/system-settings, org admin uses /admin/platform-settings
+    const isPlatform = rbacService.isPlatformAdmin(userId)
+    const settingsPath = isPlatform ? '/platform/system-settings' : '/admin/platform-settings'
+
     return {
       success: true,
-      redirectUrl: `${frontendUrl}/admin/platform-settings?oauth_success=${mailerProvider}&email=${encodeURIComponent(tokens.email)}`,
+      redirectUrl: `${frontendUrl}${settingsPath}?oauth_success=${mailerProvider}&email=${encodeURIComponent(tokens.email)}`,
     }
   } catch (err) {
     logger.error(`Platform mailer ${mailerProvider} OAuth error:`, err)
+    const isPlatform = rbacService.isPlatformAdmin(userId)
+    const settingsPath = isPlatform ? '/platform/system-settings' : '/admin/platform-settings'
     return {
       success: false,
-      redirectUrl: `${frontendUrl}/admin/platform-settings?oauth_error=${encodeURIComponent(err instanceof Error ? err.message : 'failed')}`,
+      redirectUrl: `${frontendUrl}${settingsPath}?oauth_error=${encodeURIComponent(err instanceof Error ? err.message : 'failed')}`,
     }
   }
 }

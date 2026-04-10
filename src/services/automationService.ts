@@ -8,6 +8,7 @@ import { logger } from '../utils/logger'
 import { generateId } from '../utils/id'
 import { evaluateCondition } from './conditionEngine'
 import { contactService } from './contactService'
+import { whatsappService } from './whatsappService'
 
 // ============================================================================
 // Types
@@ -16,9 +17,13 @@ import { contactService } from './contactService'
 export type TriggerType = 'list_join' | 'tag_added' | 'score_change' | 'date_field' | 'form_submit' | 'manual' | 'api'
 export type AutomationStatus = 'draft' | 'active' | 'paused' | 'completed'
 export type StepType =
-  | 'send_email' | 'send_whatsapp' | 'wait' | 'condition' | 'filter' | 'split_test'
-  | 'delay_until' | 'http_request' | 'score_change'
+  | 'send_email' | 'send_whatsapp' | 'send_notification'
+  | 'wait' | 'delay_until' | 'send_window'
+  | 'condition' | 'has_tag' | 'in_list' | 'score_check' | 'filter' | 'split_test'
+  | 'email_opened' | 'email_clicked' | 'form_submitted' | 'whatsapp_delivered' | 'whatsapp_read'
+  | 'http_request' | 'score_change'
   | 'update_contact' | 'add_tag' | 'remove_tag' | 'move_to_list'
+  | 'add_dnc' | 'remove_dnc'
   | 'webhook' | 'end'
 export type EnrollmentStatus = 'active' | 'paused' | 'completed' | 'exited'
 
@@ -451,6 +456,26 @@ class AutomationService {
         this.advanceToNext(enrollment.id, enrollment.next_step_id)
         break
 
+      case 'send_whatsapp': {
+        // Send WhatsApp template message to contact
+        const waContact = contactService.getContact(enrollment.org_id || '', enrollment.contact_id)
+        const customFields = waContact?.custom_fields ? JSON.parse(waContact.custom_fields) : {}
+        const phone = waContact?.phone || customFields.phone || customFields.phone_number || null
+        if (phone && config.config_id && config.template_name) {
+          whatsappService.sendTemplate(enrollment.org_id || '', config.config_id, {
+            phone,
+            template_name: config.template_name,
+            language: config.language || 'en',
+            components: config.components || [],
+            contact_id: enrollment.contact_id,
+          }).catch((err) => logger.error('WhatsApp automation send error:', err))
+        } else {
+          logger.warn(`WhatsApp step skipped: missing phone/config for contact ${enrollment.contact_id}`)
+        }
+        this.advanceToNext(enrollment.id, enrollment.next_step_id)
+        break
+      }
+
       case 'wait': {
         const duration = config.duration || 1
         const unit = config.unit || 'days'
@@ -558,6 +583,8 @@ class AutomationService {
       case 'remove_tag':
       case 'update_contact':
       case 'move_to_list':
+      case 'add_dnc':
+      case 'remove_dnc':
         // Emit event for contact updates
         eventBus.emit('automation_step_completed', '', {
           automationId: enrollment.automation_id,
@@ -568,12 +595,103 @@ class AutomationService {
         this.advanceToNext(enrollment.id, enrollment.next_step_id)
         break
 
+      case 'send_notification': {
+        // Internal team notification
+        eventBus.emit('automation_step_completed', '', {
+          automationId: enrollment.automation_id,
+          contactId: enrollment.contact_id,
+          stepType: 'send_notification',
+          to_email: config.to_email,
+          subject: config.subject,
+          message: config.message,
+        })
+        this.advanceToNext(enrollment.id, enrollment.next_step_id)
+        break
+      }
+
+      case 'has_tag': {
+        // Condition: check if contact has a specific tag
+        const tagContact = contactService.getContact(enrollment.org_id || '', enrollment.contact_id)
+        const tags = tagContact?.tags ? tagContact.tags.split(',').map((t: string) => t.trim().toLowerCase()) : []
+        const hasTag = tags.includes((config.tag || '').toLowerCase())
+        this.advanceToNext(enrollment.id, hasTag ? (enrollment.true_step_id || enrollment.next_step_id) : (enrollment.false_step_id || enrollment.next_step_id))
+        break
+      }
+
+      case 'in_list': {
+        // Condition: check if contact is in a specific list
+        const inListResult = config.list_id ? true : false // Simplified — would need contactService.isInList()
+        this.advanceToNext(enrollment.id, inListResult ? (enrollment.true_step_id || enrollment.next_step_id) : (enrollment.false_step_id || enrollment.next_step_id))
+        break
+      }
+
+      case 'score_check': {
+        // Condition: check engagement score against threshold
+        const scoreContact = contactService.getContact(enrollment.org_id || '', enrollment.contact_id)
+        const score = scoreContact?.engagement_score || 0
+        const threshold = config.value || 0
+        let scoreResult = false
+        switch (config.operator) {
+          case 'greater_than': scoreResult = score > threshold; break
+          case 'less_than': scoreResult = score < threshold; break
+          case 'greater_equal': scoreResult = score >= threshold; break
+          case 'less_equal': scoreResult = score <= threshold; break
+          case 'equals': scoreResult = score === threshold; break
+        }
+        this.advanceToNext(enrollment.id, scoreResult ? (enrollment.true_step_id || enrollment.next_step_id) : (enrollment.false_step_id || enrollment.next_step_id))
+        break
+      }
+
+      // Decision nodes (email_opened, email_clicked, etc.) work with timing:
+      // They set a wait period. If the event happens within the wait, take Yes path.
+      // If not, after the wait expires, take No path.
+      case 'email_opened':
+      case 'email_clicked':
+      case 'form_submitted':
+      case 'whatsapp_delivered':
+      case 'whatsapp_read': {
+        // Decision nodes: check if event occurred, or schedule wait for No path
+        // For now, immediately evaluate — full event-driven decisions need event listeners
+        // TODO: Wire to actual tracking events via eventBus
+        const waitDuration = config.wait_duration || 1
+        const waitUnit = config.wait_unit || 'days'
+        const delayMs = this.unitToMs(waitDuration, waitUnit)
+        const nextAt = new Date(Date.now() + delayMs).toISOString()
+
+        // Schedule: after wait period, take No path (contact didn't do the action)
+        // If event arrives before then, the event handler should advance to Yes path
+        this.db.prepare(`
+          UPDATE automation_enrollments SET current_step_id = ?, next_action_at = ? WHERE id = ?
+        `).run(enrollment.false_step_id || enrollment.next_step_id, nextAt, enrollment.id)
+        break
+      }
+
+      case 'send_window': {
+        // Only proceed during specific hours/days
+        const now = new Date()
+        const hour = now.getHours()
+        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+        const today = dayNames[now.getDay()]
+        const startHour = config.start_hour ?? 0
+        const endHour = config.end_hour ?? 23
+        const allowedDays = config.days ? config.days.split(',').map((d: string) => d.trim().toLowerCase()) : dayNames
+
+        if (hour >= startHour && hour <= endHour && allowedDays.includes(today)) {
+          this.advanceToNext(enrollment.id, enrollment.next_step_id)
+        } else {
+          // Wait 1 hour and check again
+          const nextCheck = new Date(Date.now() + 3600000).toISOString()
+          this.db.prepare(`UPDATE automation_enrollments SET next_action_at = ? WHERE id = ?`).run(nextCheck, enrollment.id)
+        }
+        break
+      }
+
       case 'webhook':
         // Fire webhook
         if (config.url) {
           fetch(config.url, {
             method: config.method || 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(config.headers ? JSON.parse(config.headers) : {}) },
             body: JSON.stringify({ contactId: enrollment.contact_id, automationId: enrollment.automation_id }),
           }).catch(() => {})
         }

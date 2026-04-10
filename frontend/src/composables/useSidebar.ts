@@ -8,6 +8,8 @@ const collapsed = ref(
     : false
 )
 
+const mobileOpen = ref(false)
+
 watch(collapsed, (val) => {
   try { localStorage.setItem(STORAGE_KEY, String(val)) } catch {}
 })
@@ -17,5 +19,17 @@ export function useSidebar() {
     collapsed.value = !collapsed.value
   }
 
-  return { collapsed, toggle }
+  function openMobile() {
+    mobileOpen.value = true
+  }
+
+  function closeMobile() {
+    mobileOpen.value = false
+  }
+
+  function toggleMobile() {
+    mobileOpen.value = !mobileOpen.value
+  }
+
+  return { collapsed, mobileOpen, toggle, openMobile, closeMobile, toggleMobile }
 }

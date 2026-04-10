@@ -179,8 +179,8 @@ async function loadConfig() {
     ])
     isConfigured.value = mailerData.configured
     if (mailerData.config) applyConfig(mailerData.config)
-    if (oauthData.google) { googleClientId.value = oauthData.google.clientId; googleClientSecret.value = oauthData.google.clientSecret; googleOAuthSaved.value = true }
-    if (oauthData.microsoft) { msClientId.value = oauthData.microsoft.clientId; msClientSecret.value = oauthData.microsoft.clientSecret; msOAuthSaved.value = true }
+    if (oauthData.google) { googleClientId.value = oauthData.google.clientId; googleClientSecret.value = ''; googleOAuthSaved.value = true }
+    if (oauthData.microsoft) { msClientId.value = oauthData.microsoft.clientId; msClientSecret.value = ''; msOAuthSaved.value = true }
     cfConnected.value = cfStatus.connected
     cfAccountName.value = (cfStatus as any).accountName || ''
     webhookRegistered.value = whStatus.registered
@@ -233,8 +233,12 @@ async function saveOAuthCreds(prov: 'google' | 'microsoft') {
   try {
     const id = prov === 'google' ? googleClientId.value : msClientId.value
     const secret = prov === 'google' ? googleClientSecret.value : msClientSecret.value
-    if (!id || !secret) { toast.error('Client ID and Secret are required'); return }
-    await adminApi.saveOAuthCredentials(prov, id, secret)
+    const alreadySaved = prov === 'google' ? googleOAuthSaved.value : msOAuthSaved.value
+    if (!id) { toast.error('Client ID is required'); return }
+    // If secret is empty and already saved, send masked placeholder to keep existing
+    const secretToSend = (!secret && alreadySaved) ? '********' : secret
+    if (!secretToSend) { toast.error('Client Secret is required'); return }
+    await adminApi.saveOAuthCredentials(prov, id, secretToSend)
     if (prov === 'google') googleOAuthSaved.value = true
     else msOAuthSaved.value = true
     toast.success(`${prov === 'google' ? 'Google' : 'Microsoft'} OAuth credentials saved`)

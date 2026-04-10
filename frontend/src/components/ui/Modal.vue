@@ -12,11 +12,13 @@ interface Props {
   title?: string
   size?: 'sm' | 'md' | 'lg' | 'xl'
   closable?: boolean
+  fullscreenOnMobile?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   size: 'md',
   closable: true,
+  fullscreenOnMobile: false,
 })
 
 const emit = defineEmits<{
@@ -39,8 +41,13 @@ function handleOpenChange(open: boolean) {
 
 <template>
   <Dialog :open="show" @update:open="handleOpenChange">
-    <DialogContent :class="sizeClasses[size]" @pointer-down-outside="closable ? undefined : $event.preventDefault()">
-      <DialogHeader v-if="title || closable">
+    <DialogContent
+      :class="[sizeClasses[size], fullscreenOnMobile && 'max-sm:!max-w-none max-sm:!w-screen max-sm:!h-screen max-sm:!rounded-none max-sm:!m-0']"
+      :show-close-button="closable"
+      @pointer-down-outside="closable ? undefined : $event.preventDefault()"
+      @escape-key-down="closable ? undefined : $event.preventDefault()"
+    >
+      <DialogHeader v-if="title">
         <DialogTitle>{{ title }}</DialogTitle>
       </DialogHeader>
 

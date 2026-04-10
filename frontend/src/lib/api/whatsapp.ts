@@ -129,6 +129,12 @@ export const whatsappApi = {
     return res.data?.synced || 0
   },
 
+  createTemplate: async (input: { config_id: string; name: string; language: string; category: string; components: any[] }): Promise<WhatsAppTemplate> => {
+    const res = await api.post<WhatsAppTemplate>('/whatsapp/templates', input)
+    if (!res.success) throw new Error(res.message || 'Failed to create template')
+    return res.data!
+  },
+
   deleteTemplate: async (id: string) => {
     const res = await api.delete(`/whatsapp/templates/${id}`)
     if (!res.success) throw new Error(res.message || 'Failed to delete template')

@@ -42,6 +42,7 @@ const routes = [
       { path: 'templates', name: 'PlatformTemplates', component: () => import('../views/TemplatesView.vue') },
       { path: 'contacts', name: 'PlatformContacts', component: () => import('../views/ContactsView.vue') },
       { path: 'automations', name: 'PlatformAutomations', component: () => import('../views/AutomationsView.vue') },
+      { path: 'whatsapp', name: 'PlatformWhatsApp', component: () => import('../views/WhatsAppView.vue'), meta: { breadcrumb: 'WhatsApp' } },
       { path: 'forms', name: 'PlatformForms', component: () => import('../views/FormsView.vue') },
       { path: 'forms/:id', name: 'PlatformFormDetail', component: () => import('../views/FormDetailView.vue') },
       { path: 'pages', name: 'PlatformPages', component: () => import('../views/PagesView.vue') },

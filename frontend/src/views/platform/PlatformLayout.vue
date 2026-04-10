@@ -7,7 +7,7 @@ import { cn } from '../../lib/utils'
 import {
   LayoutDashboard, PenSquare, Send as SendIcon, FileText, Users, Zap,
   FormInput, Globe, Calendar, BarChart2, BarChart3, Settings, Building2, Activity,
-  LogOut, Shield, Sun, Moon,
+  LogOut, Shield, Sun, Moon, MessageCircle,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -15,7 +15,7 @@ const router = useRouter()
 const { user, logout } = useAuth()
 const { theme, toggleTheme } = useTheme()
 
-// Same features as org users — platform admin is a solo user with all features
+// Same features as org users — platform admin has everything + platform powers
 const mainNav = [
   { path: '/platform', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/platform/compose', label: 'Compose', icon: PenSquare },
@@ -26,6 +26,7 @@ const mainNav = [
 
 const toolsNav = [
   { path: '/platform/automations', label: 'Automations', icon: Zap },
+  { path: '/platform/whatsapp', label: 'WhatsApp', icon: MessageCircle },
   { path: '/platform/forms', label: 'Forms', icon: FormInput },
   { path: '/platform/pages', label: 'Pages', icon: Globe },
   { path: '/platform/calendar', label: 'Calendar', icon: Calendar },
@@ -33,16 +34,16 @@ const toolsNav = [
   { path: '/platform/reports', label: 'Reports', icon: BarChart3 },
 ]
 
-// Platform-only extras (no org users can see these)
+const settingsNav = [
+  { path: '/platform/settings', label: 'Settings', icon: Settings },
+]
+
+// Platform-only extras (god mode — no org users see these)
 const platformNav = [
   { path: '/platform/organizations', label: 'Organizations', icon: Building2 },
   { path: '/platform/users', label: 'Users', icon: Users },
   { path: '/platform/system-settings', label: 'System Settings', icon: Settings },
   { path: '/platform/monitoring', label: 'Monitoring', icon: Activity },
-]
-
-const settingsNav = [
-  { path: '/platform/settings', label: 'Settings', icon: Settings },
 ]
 
 function isActive(path: string): boolean {
