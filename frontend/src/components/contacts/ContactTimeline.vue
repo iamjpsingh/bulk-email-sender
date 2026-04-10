@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { contactsApi, type TimelineEvent } from '../../lib/api'
-import { Mail, AlertTriangle, Tag, UserCog, Loader2, Clock, Link, FormInput, Zap, MessageSquare, Filter, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { Mail, AlertTriangle, Tag, UserCog, Clock, Link, FormInput, Zap, MessageSquare, Filter, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import Skeleton from '../ui/Skeleton.vue'
 
