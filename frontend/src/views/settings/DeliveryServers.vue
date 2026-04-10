@@ -97,7 +97,7 @@ const providerTypes = [
   { value: 'ses', label: 'Amazon SES', icon: Cloud, desc: 'IAM keys — domain-level', color: 'text-amber-400', fields: ['api_key', 'api_secret', 'api_region'] },
   { value: 'sendgrid', label: 'SendGrid', icon: Zap, desc: 'API key', color: 'text-blue-400', fields: ['api_key'] },
   { value: 'mailgun', label: 'Mailgun', icon: Mail, desc: 'API key + domain', color: 'text-red-400', fields: ['api_key', 'api_domain', 'api_region'] },
-  { value: 'postmark', label: 'Postmark', icon: Send, desc: 'Server token', color: 'text-yellow-400', fields: ['api_key'] },
+  { value: 'postmark', label: 'Postmark', icon: Send, desc: 'Server token', color: 'text-amber-400', fields: ['api_key'] },
   { value: 'sparkpost', label: 'SparkPost', icon: Zap, desc: 'API key', color: 'text-orange-400', fields: ['api_key'] },
   { value: 'google', label: 'Gmail', icon: Globe, desc: 'OAuth — one click', color: 'text-green-400', fields: [] },
   { value: 'microsoft', label: 'Outlook', icon: Globe, desc: 'OAuth — one click', color: 'text-blue-400', fields: [] },
@@ -427,22 +427,22 @@ function openAddEmail(serverId: string) {
         <div class="flex flex-col gap-2"><Label>Server Name <InfoTip text="A name to identify this server in your list" :size="12" /></Label><Input v-model="form.name" placeholder="My SES Server" /></div>
 
         <template v-if="form.provider_type === 'smtp'">
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="flex flex-col gap-2"><Label>Host</Label><Input v-model="form.host" placeholder="smtp.gmail.com" /></div>
             <div class="flex flex-col gap-2"><Label>Port</Label><Input v-model="form.port" type="number" /></div>
             <div class="flex flex-col gap-2"><Label>Username</Label><Input v-model="form.user" /></div>
             <div class="flex flex-col gap-2"><Label>Password</Label><Input v-model="form.pass" type="password" /></div>
           </div>
-          <label class="flex items-center gap-2 text-sm"><Checkbox v-model="form.secure" /> Use SSL/TLS (port 465)</label>
+          <label class="flex items-center gap-2 text-sm"><Checkbox v-model="form.secure" /> Use SSL/TLS <span class="text-muted-foreground text-xs">(enable for port 465, disable for STARTTLS on 587)</span></label>
           <!-- SMTP: needs from email here since there's no domain auto-fetch -->
-          <div class="pt-3 border-t border-border grid grid-cols-2 gap-3">
+          <div class="pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="flex flex-col gap-2"><Label>From Email</Label><Input v-model="form.from_email" placeholder="hello@example.com" /></div>
             <div class="flex flex-col gap-2"><Label>From Name</Label><Input v-model="form.from_name" placeholder="My Company" /></div>
           </div>
         </template>
 
         <template v-if="form.provider_type === 'ses'">
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="flex flex-col gap-2"><Label>IAM Access Key ID <InfoTip text="Your AWS IAM access key. Must have SES send permission." :size="12" /></Label><Input v-model="form.api_key" placeholder="AKIA..." /></div>
             <div class="flex flex-col gap-2"><Label>IAM Secret Access Key</Label><Input v-model="form.api_secret" type="password" /></div>
           </div>
@@ -524,7 +524,7 @@ function openAddEmail(serverId: string) {
             <p v-else-if="fetchedDomains.length > 0" class="text-[10px] text-green-400 mt-1">{{ fetchedDomains.length }} verified domain{{ fetchedDomains.length !== 1 ? 's' : '' }} found</p>
             <p v-else class="text-[10px] text-muted-foreground mt-1">Click "Fetch" to auto-load verified domains, or enter manually. One server = one domain.</p>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="flex flex-col gap-2"><Label>From Email <InfoTip text="Must be an address on the domain above" :size="12" /></Label><Input v-model="form.from_email" :placeholder="form.api_domain ? `hello@${form.api_domain}` : 'hello@example.com'" /></div>
             <div class="flex flex-col gap-2"><Label>From Name</Label><Input v-model="form.from_name" placeholder="My Company" /></div>
           </div>
@@ -533,7 +533,7 @@ function openAddEmail(serverId: string) {
         <!-- Limits (all providers) -->
         <div class="pt-3 border-t border-border">
           <div class="text-xs font-semibold text-muted-foreground mb-2">Sending Limits</div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="flex flex-col gap-2"><Label>Hourly Limit <InfoTip text="Max emails per hour. 0 = unlimited." :size="12" /></Label><Input v-model="form.hourly_limit" type="number" min="0" /></div>
             <div class="flex flex-col gap-2"><Label>Daily Limit <InfoTip text="Max emails per day." :size="12" /></Label><Input v-model="form.daily_limit" type="number" min="0" /></div>
           </div>

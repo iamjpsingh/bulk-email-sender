@@ -41,6 +41,7 @@ const routes = [
       { path: 'campaigns/:id', name: 'PlatformCampaignDetail', component: () => import('../views/CampaignDetailView.vue') },
       { path: 'templates', name: 'PlatformTemplates', component: () => import('../views/TemplatesView.vue') },
       { path: 'contacts', name: 'PlatformContacts', component: () => import('../views/ContactsView.vue') },
+      { path: 'contacts/:id', name: 'PlatformContactDetail', component: () => import('../views/ContactDetailView.vue'), meta: { breadcrumb: 'Contact Detail', parent: { name: 'Contacts', path: '/platform/contacts' } } },
       { path: 'automations', name: 'PlatformAutomations', component: () => import('../views/AutomationsView.vue') },
       { path: 'whatsapp', name: 'PlatformWhatsApp', component: () => import('../views/WhatsAppView.vue'), meta: { breadcrumb: 'WhatsApp' } },
       { path: 'forms', name: 'PlatformForms', component: () => import('../views/FormsView.vue') },
@@ -106,6 +107,12 @@ const routes = [
         name: 'Contacts',
         component: () => import('../views/ContactsView.vue'),
         meta: { breadcrumb: 'Contacts' },
+      },
+      {
+        path: 'contacts/:id',
+        name: 'ContactDetail',
+        component: () => import('../views/ContactDetailView.vue'),
+        meta: { breadcrumb: 'Contact Detail', parent: { name: 'Contacts', path: '/contacts' } },
       },
       {
         path: 'templates',

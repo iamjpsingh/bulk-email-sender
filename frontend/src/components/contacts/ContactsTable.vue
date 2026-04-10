@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { Contact } from '../../lib/api'
-import { Pencil, Loader2, CheckSquare, Square, Mail, Clock } from 'lucide-vue-next'
+import { Pencil, Loader2, CheckSquare, Square, Mail, Eye } from 'lucide-vue-next'
+
+const router = useRouter()
 
 const props = defineProps<{
   contacts: Contact[]
@@ -89,10 +92,11 @@ function parseTags(tagsJson: string): string[] {
         <tr
           v-for="contact in contacts"
           :key="contact.id"
-          class="transition-colors duration-100 border-b border-border last:border-b-0"
+          class="transition-colors duration-100 border-b border-border last:border-b-0 cursor-pointer"
           :class="selectedIds.includes(contact.id) ? 'bg-accent/[0.06]' : 'hover:bg-accent/[0.03]'"
+          @click="router.push(`/contacts/${contact.id}`)"
         >
-          <td class="w-10 px-3.5 py-2.5 text-left text-[13px]">
+          <td class="w-10 px-3.5 py-2.5 text-left text-[13px]" @click.stop>
             <button
               class="bg-transparent border-none cursor-pointer p-1 text-muted-foreground rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
               @click="emit('toggle-select', contact.id)"
@@ -110,7 +114,7 @@ function parseTags(tagsJson: string): string[] {
               class="inline-block px-2.5 py-0.5 rounded-[10px] text-[11px] font-semibold uppercase"
               :class="{
                 'bg-green-500/15 text-green-500': contact.status === 'active',
-                'bg-yellow-500/15 text-yellow-500': contact.status === 'unsubscribed',
+                'bg-amber-500/15 text-amber-500': contact.status === 'unsubscribed',
                 'bg-red-500/15 text-red-500': contact.status === 'bounced' || contact.status === 'complained',
               }"
               >{{ contact.status }}</span
@@ -125,14 +129,14 @@ function parseTags(tagsJson: string): string[] {
             >
             <span v-if="!parseTags(contact.tags).length" class="text-muted-foreground text-[13px]">-</span>
           </td>
-          <td class="w-[80px] px-3.5 py-2.5 text-center text-[13px]">
+          <td class="w-[80px] px-3.5 py-2.5 text-center text-[13px]" @click.stop>
             <div class="flex items-center justify-center gap-1">
               <button
                 class="bg-transparent border-none cursor-pointer p-1 text-muted-foreground rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"
-                @click="emit('timeline', contact)"
-                title="Activity"
+                @click="router.push(`/contacts/${contact.id}`)"
+                title="View Details"
               >
-                <Clock :size="14" />
+                <Eye :size="14" />
               </button>
               <button
                 class="bg-transparent border-none cursor-pointer p-1 text-muted-foreground rounded hover:bg-accent/10 hover:text-accent transition-all duration-150"

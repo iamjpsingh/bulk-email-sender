@@ -94,7 +94,7 @@ function goToDashboard() {
           <p class="text-foreground text-sm mb-2">You've joined <strong>{{ invitation?.orgName }}</strong></p>
           <p class="text-muted-foreground text-xs mb-6">Role: {{ invitation?.role }}</p>
           <button
-            class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white text-sm font-semibold rounded-lg hover:brightness-110 transition-all"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white text-sm font-semibold rounded-lg hover:bg-accent/90 transition-all"
             @click="goToDashboard"
           >
             Go to Dashboard
@@ -129,7 +129,7 @@ function goToDashboard() {
           </div>
 
           <button
-            class="flex items-center justify-center gap-2 w-full h-11 bg-accent text-white text-sm font-semibold rounded-lg transition-all duration-150 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+            class="flex items-center justify-center gap-2 w-full h-11 bg-accent text-white text-sm font-semibold rounded-lg transition-all duration-150 hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed"
             :disabled="accepting"
             @click="handleAccept"
           >

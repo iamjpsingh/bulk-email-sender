@@ -89,7 +89,7 @@ async function handleSubmit() {
             <CheckCircle :size="24" class="text-success" />
           </div>
           <p class="text-foreground text-sm mb-6">Your password has been reset successfully.</p>
-          <router-link to="/login" class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white text-sm font-semibold rounded-lg hover:brightness-110 transition-all">
+          <router-link to="/login" class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white text-sm font-semibold rounded-lg hover:bg-accent/90 transition-all">
             Sign In
           </router-link>
         </div>

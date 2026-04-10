@@ -139,13 +139,13 @@ register('n', () => {
         <!-- Left: Breadcrumbs -->
         <Breadcrumb>
           <BreadcrumbList>
-            <BreadcrumbItem class="hidden md:block">
+            <BreadcrumbItem>
               <BreadcrumbLink as-child>
                 <router-link to="/" class="text-muted-foreground hover:text-foreground">Dispatch</router-link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             <template v-for="(crumb, index) in breadcrumbs" :key="index">
-              <BreadcrumbSeparator class="hidden md:block" />
+              <BreadcrumbSeparator />
               <BreadcrumbItem>
                 <BreadcrumbLink v-if="crumb.path" as-child>
                   <router-link :to="crumb.path">{{ crumb.label }}</router-link>

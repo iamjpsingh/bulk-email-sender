@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import ContactTimeline from '../components/contacts/ContactTimeline.vue'
-import ContactPreferences from '../components/contacts/ContactPreferences.vue'
-import RecipientProfile from '../components/contacts/RecipientProfile.vue'
+import { useRouter } from 'vue-router'
 import ContactFormModal from '../components/contacts/ContactFormModal.vue'
 import ImportModal from '../components/contacts/ImportModal.vue'
 import ContactFilters from '../components/contacts/ContactFilters.vue'
@@ -61,10 +59,7 @@ const showBulkTagModal = ref(false)
 const showBulkMoveModal = ref(false)
 const showValidateModal = ref(false)
 const showDuplicatesModal = ref(false)
-const showTimelineModal = ref(false)
-const timelineContactId = ref('')
-const timelineContactName = ref('')
-const timelineTab = ref<'profile' | 'activity' | 'preferences'>('profile')
+const contactRouter = useRouter()
 const duplicates = ref<DuplicateGroup[]>([])
 const duplicatesLoading = ref(false)
 const mergingId = ref<string | null>(null)
@@ -214,10 +209,7 @@ async function handleUpdateContact(data: { id?: string } & Partial<ContactInput>
 }
 
 function openTimeline(contact: Contact) {
-  timelineContactId.value = contact.id
-  timelineContactName.value = contact.first_name ? `${contact.first_name} ${contact.last_name || ''}`.trim() : contact.email
-  timelineTab.value = 'profile'
-  showTimelineModal.value = true
+  contactRouter.push(`/contacts/${contact.id}`)
 }
 
 function handleBulkDelete() {
@@ -515,24 +507,6 @@ function toggleSelectAll() {
         @confirm="deleteConfirm.type === 'list' ? confirmDeleteList() : confirmBulkDelete()"
         @cancel="deleteConfirm.show = false"
       />
-      <!-- Contact Detail Modal (Profile / Activity / Preferences) -->
-      <Modal :show="showTimelineModal" :title="timelineContactName" size="lg" @close="showTimelineModal = false">
-        <div class="flex gap-1 mb-4 border-b border-border">
-          <Button
-            v-for="tab in [{ key: 'profile', label: 'Profile' }, { key: 'activity', label: 'Activity' }, { key: 'preferences', label: 'Preferences' }]"
-            :key="tab.key"
-            variant="ghost"
-            size="sm"
-            class="rounded-none border-b-2 text-xs"
-            :class="timelineTab === tab.key ? 'border-accent text-accent' : 'border-transparent text-muted-foreground'"
-            @click="timelineTab = tab.key as any"
-          >{{ tab.label }}</Button>
-        </div>
-        <RecipientProfile v-if="timelineTab === 'profile' && timelineContactId" :contact-id="timelineContactId" />
-        <ContactTimeline v-if="timelineTab === 'activity' && timelineContactId" :contact-id="timelineContactId" />
-        <ContactPreferences v-if="timelineTab === 'preferences' && timelineContactId" :contact-id="timelineContactId" />
-      </Modal>
-
       <!-- Duplicates Modal -->
       <Modal :show="showDuplicatesModal" title="Duplicate Contacts" size="lg" @close="showDuplicatesModal = false">
         <div v-if="duplicatesLoading" class="flex justify-center py-12">

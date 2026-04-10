@@ -19,7 +19,7 @@ export const badgeVariants = cva(
         success:
           "border-transparent bg-green-500/15 text-green-500 dark:bg-green-500/20 dark:text-green-400",
         warning:
-          "border-transparent bg-yellow-500/15 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-400",
+          "border-transparent bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400",
         danger:
           "border-transparent bg-red-500/15 text-red-500 dark:bg-red-500/20 dark:text-red-400",
         info:

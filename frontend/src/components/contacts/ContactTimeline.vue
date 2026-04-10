@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { contactsApi, type TimelineEvent } from '../../lib/api'
 import { Mail, AlertTriangle, Tag, UserCog, Loader2, Clock, Link, FormInput, Zap, MessageSquare, Filter, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
 import Skeleton from '../ui/Skeleton.vue'
 
 const props = defineProps<{
@@ -38,7 +39,7 @@ const eventColors: Record<string, string> = {
   form_submitted: '#8b5cf6',
   tag_added: '#14b8a6',
   tag_removed: '#f97316',
-  score_changed: '#eab308',
+  score_changed: '#f59e0b',
   contact_updated: '#6366f1',
   bounced: '#ef4444',
   unsubscribed: '#ef4444',
@@ -224,12 +225,9 @@ onMounted(loadTimeline)
 
       <!-- Load more -->
       <div v-if="hasMore" class="mt-4 text-center">
-        <button
-          class="text-xs text-accent hover:text-accent/80 font-medium cursor-pointer transition-colors"
-          @click="loadMore"
-        >
+        <Button variant="ghost" size="sm" @click="loadMore">
           Load more events...
-        </button>
+        </Button>
       </div>
     </div>
   </div>
