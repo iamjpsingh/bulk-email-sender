@@ -18,5 +18,9 @@
       "Bash(sed:*)",
       "WebSearch"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "claude-flow"
+  ],
+  "enableAllProjectMcpServers": true
 }
