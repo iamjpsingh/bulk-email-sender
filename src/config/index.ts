@@ -41,6 +41,8 @@ export const AUTH = {
     '/api/auth/register',
     '/api/auth/google/callback',
     '/api/auth/microsoft/callback',
+    '/auth/google/callback',
+    '/auth/microsoft/callback',
     '/api/oauth/status',
     '/api/track/open/',
     '/api/track/click/',

@@ -22,6 +22,7 @@ import { csrfTokenIssuer, csrfProtection } from './middleware/csrf'
 // Services
 import { d1Service } from './services/d1Service'
 import { d1UserDatabase } from './services/d1UserDatabase'
+import { handleOAuthCallback } from './utils/oauth'
 
 // Routes
 import indexRoutes from './routes/index'
@@ -139,6 +140,25 @@ const routes = [
 
 // Mount all API routes under /api prefix to avoid conflicts with frontend SPA routes
 routes.forEach((route) => app.route('/api', route))
+
+// OAuth provider callbacks at root path (matches Azure/Google app registrations)
+app.get('/auth/google/callback', async (c) => {
+  const result = await handleOAuthCallback('google', {
+    code: c.req.query('code'),
+    state: c.req.query('state'),
+    error: c.req.query('error'),
+  })
+  return c.redirect(result.redirectUrl)
+})
+
+app.get('/auth/microsoft/callback', async (c) => {
+  const result = await handleOAuthCallback('microsoft', {
+    code: c.req.query('code'),
+    state: c.req.query('state'),
+    error: c.req.query('error'),
+  })
+  return c.redirect(result.redirectUrl)
+})
 
 // ============================================================================
 // Health & User Endpoints

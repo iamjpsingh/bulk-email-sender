@@ -1,71 +1,91 @@
 # =============================================================================
-# Dispatch - Docker Compose Configuration
+# Dispatch — Production Compose (Contabo VPS)
 # =============================================================================
 #
-# Usage:
-#   docker compose up -d          # Start in background
-#   docker compose up --build     # Rebuild and start
-#   docker compose logs -f app    # Follow app logs
-#   docker compose down           # Stop all services
+# Architecture:
+#   Cloudflare Pages (frontend)  ──https──>  Caddy (this host, :443)
+#                                              │
+#                                              ▼
+#                                          dispatch-app (:3000, internal)
+#                                              │
+#                                              ▼
+#                                  Cloudflare Worker (tracking, separate)
 #
-# Prerequisites:
-#   - Copy .env.example to .env and fill in your configuration
-#   - Ensure data/ and logs/ directories exist (created automatically)
+# Setup:
+#   1. Point an A record (e.g. api.yourdomain.com) at this VPS
+#   2. cp .env.example .env  and fill in:
+#        BACKEND_DOMAIN=api.yourdomain.com
+#        FRONTEND_URL=https://dispatch.pages.dev   (or your Pages domain)
+#        BASE_URL=https://api.yourdomain.com
+#        SESSION_SECRET=<openssl rand -hex 32>
+#        TRACKING_WORKER_URL=https://...workers.dev
+#        GOOGLE_CLIENT_ID/SECRET, MICROSOFT_CLIENT_ID/SECRET
+#   3. docker compose up -d --build
+#   4. Caddy will auto-provision a Let's Encrypt cert for BACKEND_DOMAIN
 #
 # =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
-  # Main Application: Bun + Hono backend serving Vue 3 frontend
+  # Backend: Bun + Hono. Not exposed to the internet directly.
   # ---------------------------------------------------------------------------
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: dispatch-app
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     volumes:
-      # Persist SQLite databases across container restarts
-      - ./data:/app/data
-      # Persist email logs
-      - ./logs:/app/logs
-      # Persist uploaded files (Excel sheets, etc.)
-      - ./uploads:/app/uploads
+      - ./data:/app/data         # SQLite (users, scheduler, queue)
+      - ./logs:/app/logs         # JSON email logs
+      - ./uploads:/app/uploads   # Uploaded Excel sheets
     env_file:
       - .env
     environment:
       - NODE_ENV=production
       - PORT=3000
     restart: unless-stopped
+    networks:
+      - dispatch-net
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://localhost:3000/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 5s
-      start_period: 10s
+      start_period: 15s
       retries: 3
 
   # ---------------------------------------------------------------------------
-  # Tracking Worker (Cloudflare Worker + D1)
+  # Caddy: TLS termination + reverse proxy. Auto-renews Let's Encrypt certs.
   # ---------------------------------------------------------------------------
-  # The tracking worker runs on Cloudflare's edge network and cannot be
-  # containerized directly. Deploy it separately with wrangler:
-  #
-  #   cd tracking-worker
-  #   bun install
-  #   bunx wrangler d1 execute dispatch --file=schema.sql --remote
-  #   bunx wrangler deploy
-  #
-  # Then set TRACKING_WORKER_URL in your .env to the deployed worker URL.
-  #
-  # For local development/testing with wrangler dev:
-  #
-  # tracking-worker:
-  #   build:
-  #     context: ./tracking-worker
-  #     dockerfile: Dockerfile.worker
-  #   container_name: dispatch-tracking
-  #   ports:
-  #     - "8787:8787"
-  #   command: ["bunx", "wrangler", "dev", "--port", "8787"]
-  #   restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    container_name: dispatch-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data         # cert storage (DO NOT delete — has private keys)
+      - caddy-config:/config
+    environment:
+      - BACKEND_DOMAIN=${BACKEND_DOMAIN}
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - dispatch-net
+
+  # ---------------------------------------------------------------------------
+  # Tracking Worker is deployed separately to Cloudflare:
+  #   cd tracking-worker && bunx wrangler deploy
+  # Set TRACKING_WORKER_URL in .env to its URL.
+  # ---------------------------------------------------------------------------
+
+networks:
+  dispatch-net:
+    driver: bridge
+
+volumes:
+  caddy-data:
+  caddy-config:

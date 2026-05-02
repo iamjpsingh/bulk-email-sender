@@ -1,0 +1,22 @@
+# Caddy config for Dispatch backend.
+# {$BACKEND_DOMAIN} is substituted from the env var passed via docker-compose.
+# Caddy auto-provisions and renews Let's Encrypt certificates.
+
+{$BACKEND_DOMAIN} {
+	encode zstd gzip
+
+	# Forward all traffic to the Bun app on the internal network
+	reverse_proxy app:3000 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# Security headers
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
